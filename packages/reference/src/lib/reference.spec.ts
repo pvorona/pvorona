@@ -26,4 +26,29 @@ describe('Reference', () => {
       expect(ref.getOr(() => 99)).toBe(99);
     });
   });
+
+  describe('getOrThrow', () => {
+    it('returns the stored value when set', () => {
+      const ref = createReference('value');
+      expect(ref.getOrThrow()).toBe('value');
+    });
+
+    it('throws with a default message when unset and no argument given', () => {
+      const ref = createReference('x');
+      ref.unset();
+      expect(() => ref.getOrThrow()).toThrow();
+    });
+
+    it('throws with the provided message string when unset', () => {
+      const ref = createReference(1);
+      ref.unset();
+      expect(() => ref.getOrThrow('custom error')).toThrow('custom error');
+    });
+
+    it('throws with the message from the factory when unset', () => {
+      const ref = createReference(1);
+      ref.unset();
+      expect(() => ref.getOrThrow(() => 'lazy error')).toThrow('lazy error');
+    });
+  });
 });

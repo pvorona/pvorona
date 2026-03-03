@@ -26,8 +26,15 @@ export function createReference<T>(initialValue: T): Reference<T> {
 
   return {
     getOr,
-    getOrThrow: () => {
-      throw new Error('Not implemented');
+    getOrThrow: (messageOrFactory?: string | (() => string)) => {
+      if (hasValue) return value;
+
+      const message =
+        typeof messageOrFactory === 'function'
+          ? messageOrFactory()
+          : (messageOrFactory ?? 'Reference is not set');
+
+      throw new Error(message);
     },
     getOrSet: () => {
       throw new Error('Not implemented');
