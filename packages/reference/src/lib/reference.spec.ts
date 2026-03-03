@@ -51,4 +51,19 @@ describe('Reference', () => {
       expect(() => ref.getOrThrow(() => 'lazy error')).toThrow('lazy error');
     });
   });
+
+  describe('set', () => {
+    it('overwrites the current value', () => {
+      const ref = createReference('a');
+      ref.set('b');
+      expect(ref.getOr('fallback')).toBe('b');
+    });
+
+    it('restores a value after unset', () => {
+      const ref = createReference(1);
+      ref.unset();
+      ref.set(2);
+      expect(ref.getOrThrow()).toBe(2);
+    });
+  });
 });

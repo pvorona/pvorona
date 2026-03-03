@@ -32,15 +32,16 @@ export function createReference<T>(initialValue: T): Reference<T> {
       const message =
         typeof messageOrFactory === 'function'
           ? messageOrFactory()
-          : (messageOrFactory ?? 'Reference is not set');
+          : messageOrFactory ?? 'Reference is not set';
 
       throw new Error(message);
     },
     getOrSet: () => {
       throw new Error('Not implemented');
     },
-    set: () => {
-      throw new Error('Not implemented');
+    set: (newValue: T) => {
+      value = newValue;
+      hasValue = true;
     },
     unset: () => {
       hasValue = false;
