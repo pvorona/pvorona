@@ -1,11 +1,30 @@
-# not-implemented
+# @pvorona/not-implemented
 
-This library was generated with [Nx](https://nx.dev).
+A typed `TODO` for code paths that haven't been implemented yet.
 
-## Building
+## Usage
 
-Run `nx build not-implemented` to build the library.
+```ts
+import { notImplemented, NotImplementedError } from '@pvorona/not-implemented';
 
-## Running unit tests
+type Shape = 'circle' | 'square' | 'triangle';
 
-Run `nx test not-implemented` to execute the unit tests via [Vitest](https://vitest.dev/).
+function area(shape: Shape): number {
+  switch (shape) {
+    case 'circle':
+      return Math.PI * r * r;
+    case 'square':
+      return side * side;
+    case 'triangle':
+      notImplemented('Triangle area');
+  }
+}
+
+// Custom error handling
+try {
+  notImplemented();
+} catch (e) {
+  console.log(e instanceof NotImplementedError); // true
+  console.log(e.message); // 'Not implemented'
+}
+```
