@@ -18,9 +18,6 @@
     "dist",
     "!**/*.tsbuildinfo"
   ],
-  "nx": {
-    "name": "duration"
-  },
   "dependencies": {
     "@pvorona/assert": "^0.0.2"
   }

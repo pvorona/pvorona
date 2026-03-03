@@ -18,9 +18,6 @@
     "dist",
     "!**/*.tsbuildinfo"
   ],
-  "nx": {
-    "name": "not-implemented"
-  },
   "dependencies": {
     "@pvorona/throw-error": "^0.0.2"
   }
