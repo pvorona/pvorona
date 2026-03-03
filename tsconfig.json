@@ -17,6 +17,9 @@
     },
     {
       "path": "./packages/duration"
+    },
+    {
+      "path": "./packages/counter"
     }
   ]
 }
