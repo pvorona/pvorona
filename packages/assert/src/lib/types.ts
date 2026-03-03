@@ -1,0 +1,88 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export type Override<A, B> = Omit<A, keyof B> & B;
+
+type Error<Message extends string, Argument> = {
+  __kind: 'Error';
+  message: Message;
+  argument: Argument;
+};
+
+export type InferErrorMessage<T, V = T> = [T] extends [
+  Error<infer Message, unknown>,
+]
+  ? Message
+  : V;
+
+export type NotOnlyNull<T> = [T] extends [null]
+  ? 'Must not be null only type'
+  : T;
+
+export type NotOnlyUndefined<T> = [T] extends [undefined]
+  ? 'Must not be undefined only type'
+  : T;
+
+export type NotOnlyNullOrUndefined<T> = [T] extends [null | undefined]
+  ? 'Must not be (null | undefined) only type'
+  : T;
+
+export type NotOnlyNumber<T> = [T] extends [number]
+  ? 'Must not be number only type'
+  : T;
+
+export type NotOnlyString<T> = [T] extends [string]
+  ? Error<'Must not be string only type', T>
+  : T;
+
+export type NotOnlyArray<T> = [T] extends [unknown[]]
+  ? 'Must not be array only type'
+  : T;
+
+export type NotOnlySymbol<T> = [T] extends [symbol]
+  ? 'Must not be symbol only type'
+  : T;
+
+export type IncludesNullMember<T> = null extends T ? T : 'Must include null';
+
+export type IncludesUndefinedMember<T> = undefined extends T
+  ? T
+  : 'Must include undefined';
+
+export type IncludesNullOrUndefinedMember<T> = null | undefined extends T
+  ? T
+  : 'Must include (null | undefined)';
+
+export type IncludesNumberOrNumberLiteralMember<T> = number extends T
+  ? T
+  : T extends number
+    ? T
+    : Error<'Must include number or number literal', T>;
+
+type InferErrorArguments<T> = T extends Error<any, infer U> ? U : T;
+
+type InferErrorsArguments<T> = Error<any, any> extends T
+  ?
+      | InferErrorArguments<Extract<T, Error<any, any>>>
+      | Exclude<T, Error<any, any>>
+  : T;
+
+export type AtLeastOneValid<T> = [T] extends [Error<string, unknown>]
+  ? T
+  : InferErrorsArguments<T>;
+
+export type IncludesStringOrStringLiteralMember<T> = string extends T
+  ? T
+  : T extends string
+    ? T
+    : Error<'Must include string or string literal', T>;
+
+export type IncludesArrayOrArrayLiteralMember<T> = any[] extends T
+  ? T
+  : T extends any[]
+    ? T
+    : Error<'Must include array or array literal', T>;
+
+export type IncludesSymbolMember<T> = symbol extends T
+  ? T
+  : 'Must include symbol';
+
+export type InferArrayType<T> = T extends Array<infer U> ? U[] : never;
