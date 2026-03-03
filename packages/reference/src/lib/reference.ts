@@ -36,8 +36,18 @@ export function createReference<T>(initialValue: T): Reference<T> {
 
       throw new Error(message);
     },
-    getOrSet: () => {
-      throw new Error('Not implemented');
+    getOrSet: (valueOrGetter: T | (() => T)) => {
+      if (hasValue) return value;
+
+      const resolved =
+        typeof valueOrGetter === 'function'
+          ? (valueOrGetter as () => T)()
+          : valueOrGetter;
+
+      value = resolved;
+      hasValue = true;
+
+      return resolved;
     },
     set: (newValue: T) => {
       value = newValue;

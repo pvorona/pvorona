@@ -66,4 +66,35 @@ describe('Reference', () => {
       expect(ref.getOrThrow()).toBe(2);
     });
   });
+
+  describe('getOrSet', () => {
+    it('returns the stored value without changing it when set', () => {
+      const ref = createReference('original');
+      expect(ref.getOrSet('replacement')).toBe('original');
+      expect(ref.getOr('fallback')).toBe('original');
+    });
+
+    it('sets and returns the fallback value when unset', () => {
+      const ref = createReference('x');
+      ref.unset();
+      expect(ref.getOrSet('new')).toBe('new');
+      expect(ref.getOrThrow()).toBe('new');
+    });
+
+    it('calls the getter, sets, and returns the result when unset', () => {
+      const ref = createReference(0);
+      ref.unset();
+      const getter = vi.fn(() => 42);
+      expect(ref.getOrSet(getter)).toBe(42);
+      expect(ref.getOrThrow()).toBe(42);
+      expect(getter).toHaveBeenCalledOnce();
+    });
+
+    it('does not call the getter when set', () => {
+      const ref = createReference(5);
+      const getter = vi.fn(() => 10);
+      ref.getOrSet(getter);
+      expect(getter).not.toHaveBeenCalled();
+    });
+  });
 });
