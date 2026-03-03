@@ -1,3 +1,7 @@
+import { assert, isFunction } from '@pvorona/assert';
+
+const UNSET: unique symbol = Symbol('UNSET');
+
 export type ReadonlyReference<T> = Readonly<{
   getOr: <U>(valueOrGetter: U | (() => U)) => T | U;
   getOrThrow: (messageOrFactory?: string | (() => string)) => T;
@@ -13,51 +17,40 @@ export type Reference<T> = Readonly<{
 }>;
 
 export function createReference<T>(initialValue: T): Reference<T> {
-  let value: T = initialValue;
-  let hasValue = true;
+  let current: T | typeof UNSET = initialValue;
+
+  const isSet = (): current is T => current !== UNSET;
+
+  const resolve = <V>(valueOrGetter: V | (() => V)): V =>
+    isFunction(valueOrGetter) ? valueOrGetter() : valueOrGetter;
 
   const getOr = <U>(valueOrGetter: U | (() => U)): T | U => {
-    if (hasValue) return value;
+    if (isSet()) return current;
 
-    return typeof valueOrGetter === 'function'
-      ? (valueOrGetter as () => U)()
-      : valueOrGetter;
+    return resolve(valueOrGetter);
   };
 
   const getOrThrow = (messageOrFactory?: string | (() => string)): T => {
-    if (hasValue) return value;
+    assert(isSet(), messageOrFactory ?? 'Reference is not set');
 
-    const message =
-      typeof messageOrFactory === 'function'
-        ? messageOrFactory()
-        : (messageOrFactory ?? 'Reference is not set');
-
-    throw new Error(message);
+    return current;
   };
 
   return {
     getOr,
     getOrThrow,
     getOrSet: (valueOrGetter: T | (() => T)) => {
-      if (hasValue) return value;
+      if (isSet()) return current;
 
-      const resolved =
-        typeof valueOrGetter === 'function'
-          ? (valueOrGetter as () => T)()
-          : valueOrGetter;
+      current = resolve(valueOrGetter);
 
-      value = resolved;
-      hasValue = true;
-
-      return resolved;
+      return current;
     },
-    set: (newValue: T) => {
-      value = newValue;
-      hasValue = true;
+    set: (value: T) => {
+      current = value;
     },
     unset: () => {
-      hasValue = false;
-      value = undefined as T;
+      current = UNSET;
     },
     asReadonly: (): ReadonlyReference<T> => ({ getOr, getOrThrow }),
   };
