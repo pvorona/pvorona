@@ -52,7 +52,7 @@
     }
   ],
   "release": {
-    "projects": ["!@org/source"],
+    "projects": ["*", "!@pvorona/source"],
     "version": {
       "preVersionCommand": "npx nx run-many -t build"
     }
