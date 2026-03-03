@@ -19,7 +19,8 @@
     "!**/*.tsbuildinfo"
   ],
   "dependencies": {
-    "@pvorona/assert": "^0.0.1",
+    "@pvorona/assert": "^0.0.2",
+    "@pvorona/failable": "^0.0.1",
     "tslib": "^2.3.0"
   }
 }
