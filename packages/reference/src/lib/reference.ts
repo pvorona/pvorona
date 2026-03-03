@@ -13,5 +13,33 @@ export type Reference<T> = Readonly<{
 }>;
 
 export function createReference<T>(initialValue: T): Reference<T> {
-  throw new Error('Not implemented');
+  let value: T = initialValue;
+  let hasValue = true;
+
+  const getOr = <U>(valueOrGetter: U | (() => U)): T | U => {
+    if (hasValue) return value;
+
+    return typeof valueOrGetter === 'function'
+      ? (valueOrGetter as () => U)()
+      : valueOrGetter;
+  };
+
+  return {
+    getOr,
+    getOrThrow: () => {
+      throw new Error('Not implemented');
+    },
+    getOrSet: () => {
+      throw new Error('Not implemented');
+    },
+    set: () => {
+      throw new Error('Not implemented');
+    },
+    unset: () => {
+      throw new Error('Not implemented');
+    },
+    asReadonly: () => {
+      throw new Error('Not implemented');
+    },
+  };
 }
