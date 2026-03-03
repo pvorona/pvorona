@@ -22,6 +22,6 @@
     "name": "duration"
   },
   "dependencies": {
-    "@pvorona/assert": "^0.0.1"
+    "@pvorona/assert": "^0.0.2"
   }
 }

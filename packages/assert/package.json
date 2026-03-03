@@ -19,7 +19,7 @@
     "!**/*.tsbuildinfo"
   ],
   "dependencies": {
-    "@pvorona/throw-error": "^0.0.1",
+    "@pvorona/throw-error": "^0.0.2",
     "tslib": "^2.3.0"
   }
 }

@@ -19,7 +19,7 @@
     "!**/*.tsbuildinfo"
   ],
   "dependencies": {
-    "@pvorona/assert": "^0.0.1",
+    "@pvorona/assert": "^0.0.2",
     "@pvorona/not-implemented": "^0.0.1"
   }
 }

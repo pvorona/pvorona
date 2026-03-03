@@ -22,6 +22,6 @@
     "name": "not-implemented"
   },
   "dependencies": {
-    "@pvorona/throw-error": "^0.0.1"
+    "@pvorona/throw-error": "^0.0.2"
   }
 }
