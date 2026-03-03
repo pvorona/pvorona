@@ -24,18 +24,20 @@ export function createReference<T>(initialValue: T): Reference<T> {
       : valueOrGetter;
   };
 
+  const getOrThrow = (messageOrFactory?: string | (() => string)): T => {
+    if (hasValue) return value;
+
+    const message =
+      typeof messageOrFactory === 'function'
+        ? messageOrFactory()
+        : (messageOrFactory ?? 'Reference is not set');
+
+    throw new Error(message);
+  };
+
   return {
     getOr,
-    getOrThrow: (messageOrFactory?: string | (() => string)) => {
-      if (hasValue) return value;
-
-      const message =
-        typeof messageOrFactory === 'function'
-          ? messageOrFactory()
-          : messageOrFactory ?? 'Reference is not set';
-
-      throw new Error(message);
-    },
+    getOrThrow,
     getOrSet: (valueOrGetter: T | (() => T)) => {
       if (hasValue) return value;
 
@@ -57,8 +59,6 @@ export function createReference<T>(initialValue: T): Reference<T> {
       hasValue = false;
       value = undefined as T;
     },
-    asReadonly: () => {
-      throw new Error('Not implemented');
-    },
+    asReadonly: (): ReadonlyReference<T> => ({ getOr, getOrThrow }),
   };
 }

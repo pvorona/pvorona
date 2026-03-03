@@ -98,3 +98,32 @@ describe('Reference', () => {
     });
   });
 });
+
+describe('ReadonlyReference', () => {
+  it('exposes getOr that reflects the current value', () => {
+    const ref = createReference('a');
+    const ro = ref.asReadonly();
+    expect(ro.getOr('fallback')).toBe('a');
+
+    ref.set('b');
+    expect(ro.getOr('fallback')).toBe('b');
+  });
+
+  it('exposes getOrThrow that reflects the current value', () => {
+    const ref = createReference(1);
+    const ro = ref.asReadonly();
+    expect(ro.getOrThrow()).toBe(1);
+
+    ref.unset();
+    expect(() => ro.getOrThrow()).toThrow();
+  });
+
+  it('does not expose set, unset, getOrSet, or asReadonly', () => {
+    const ref = createReference(1);
+    const ro = ref.asReadonly();
+    expect(ro).not.toHaveProperty('set');
+    expect(ro).not.toHaveProperty('unset');
+    expect(ro).not.toHaveProperty('getOrSet');
+    expect(ro).not.toHaveProperty('asReadonly');
+  });
+});
