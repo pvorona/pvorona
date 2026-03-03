@@ -26,6 +26,9 @@
     },
     {
       "path": "./packages/noop"
+    },
+    {
+      "path": "./packages/disposable"
     }
   ]
 }
