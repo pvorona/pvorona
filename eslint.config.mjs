@@ -20,9 +20,7 @@ export default [
         {
           enforceBuildableLibDependency: true,
           allow: ['^.*/eslint(\\.base)?\\.config\\.[cm]?[jt]s$'],
-          depConstraints: [
-            { sourceTag: '*', onlyDependOnLibsWithTags: ['*'] },
-          ],
+          depConstraints: [{ sourceTag: '*', onlyDependOnLibsWithTags: ['*'] }],
         },
       ],
     },
