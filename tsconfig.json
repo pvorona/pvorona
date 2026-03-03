@@ -5,6 +5,15 @@
   "references": [
     {
       "path": "./packages/reference"
+    },
+    {
+      "path": "./packages/assert"
+    },
+    {
+      "path": "./packages/not-implemented"
+    },
+    {
+      "path": "./packages/throw-error"
     }
   ]
 }
