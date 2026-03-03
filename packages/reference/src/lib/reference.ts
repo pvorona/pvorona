@@ -16,22 +16,24 @@ export type Reference<T> = Readonly<{
   asReadonly: () => ReadonlyReference<T>;
 }>;
 
+function isSet<T>(current: T | typeof UNSET): current is T {
+  return current !== UNSET;
+}
+
 export function createReference<T>(initialValue: T): Reference<T> {
   let current: T | typeof UNSET = initialValue;
-
-  const isSet = (): current is T => current !== UNSET;
 
   const resolve = <V>(valueOrGetter: V | (() => V)): V =>
     isFunction(valueOrGetter) ? valueOrGetter() : valueOrGetter;
 
   const getOr = <U>(valueOrGetter: U | (() => U)): T | U => {
-    if (isSet()) return current;
+    if (isSet(current)) return current;
 
     return resolve(valueOrGetter);
   };
 
   const getOrThrow = (messageOrFactory?: string | (() => string)): T => {
-    assert(isSet(), messageOrFactory ?? 'Reference is not set');
+    assert(isSet(current), messageOrFactory ?? 'Reference is not set');
 
     return current;
   };
@@ -40,7 +42,7 @@ export function createReference<T>(initialValue: T): Reference<T> {
     getOr,
     getOrThrow,
     getOrSet: (valueOrGetter: T | (() => T)) => {
-      if (isSet()) return current;
+      if (isSet(current)) return current;
 
       current = resolve(valueOrGetter);
 
