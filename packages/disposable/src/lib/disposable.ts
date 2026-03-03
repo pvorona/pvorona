@@ -1,8 +1,7 @@
 import { isFunction } from '@pvorona/assert';
 import { Failable } from '@pvorona/failable';
 import type { Failable as FailableType } from '@pvorona/failable';
-
-const noop = () => undefined;
+import { noop } from '@pvorona/noop';
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
   return value != null && isFunction((value as Record<string, unknown>).then);
