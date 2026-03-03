@@ -20,6 +20,9 @@
     },
     {
       "path": "./packages/counter"
+    },
+    {
+      "path": "./packages/failable"
     }
   ]
 }

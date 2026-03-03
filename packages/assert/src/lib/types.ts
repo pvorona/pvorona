@@ -1,4 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+export type Mutable<T> = {
+  -readonly [P in keyof T]: T[P];
+};
+
 export type Override<A, B> = Omit<A, keyof B> & B;
 
 type Error<Message extends string, Argument> = {
@@ -8,7 +12,7 @@ type Error<Message extends string, Argument> = {
 };
 
 export type InferErrorMessage<T, V = T> = [T] extends [
-  Error<infer Message, unknown>,
+  Error<infer Message, unknown>
 ]
   ? Message
   : V;
@@ -54,8 +58,8 @@ export type IncludesNullOrUndefinedMember<T> = null | undefined extends T
 export type IncludesNumberOrNumberLiteralMember<T> = number extends T
   ? T
   : T extends number
-    ? T
-    : Error<'Must include number or number literal', T>;
+  ? T
+  : Error<'Must include number or number literal', T>;
 
 type InferErrorArguments<T> = T extends Error<any, infer U> ? U : T;
 
@@ -72,14 +76,14 @@ export type AtLeastOneValid<T> = [T] extends [Error<string, unknown>]
 export type IncludesStringOrStringLiteralMember<T> = string extends T
   ? T
   : T extends string
-    ? T
-    : Error<'Must include string or string literal', T>;
+  ? T
+  : Error<'Must include string or string literal', T>;
 
 export type IncludesArrayOrArrayLiteralMember<T> = any[] extends T
   ? T
   : T extends any[]
-    ? T
-    : Error<'Must include array or array literal', T>;
+  ? T
+  : Error<'Must include array or array literal', T>;
 
 export type IncludesSymbolMember<T> = symbol extends T
   ? T
