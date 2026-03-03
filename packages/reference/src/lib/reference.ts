@@ -36,7 +36,8 @@ export function createReference<T>(initialValue: T): Reference<T> {
       throw new Error('Not implemented');
     },
     unset: () => {
-      throw new Error('Not implemented');
+      hasValue = false;
+      value = undefined as T;
     },
     asReadonly: () => {
       throw new Error('Not implemented');

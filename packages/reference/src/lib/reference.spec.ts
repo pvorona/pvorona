@@ -13,5 +13,17 @@ describe('Reference', () => {
       expect(ref.getOr(getter)).toBe(42);
       expect(getter).not.toHaveBeenCalled();
     });
+
+    it('returns the fallback value when unset', () => {
+      const ref = createReference('hello');
+      ref.unset();
+      expect(ref.getOr('fallback')).toBe('fallback');
+    });
+
+    it('calls and returns the fallback getter when unset', () => {
+      const ref = createReference(10);
+      ref.unset();
+      expect(ref.getOr(() => 99)).toBe(99);
+    });
   });
 });
