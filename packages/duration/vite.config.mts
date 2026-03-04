@@ -41,6 +41,7 @@ export default defineConfig(() => ({
   },
   test: {
     name: '@pvorona/duration',
+    passWithNoTests: true,
     watch: false,
     globals: true,
     environment: 'node',
