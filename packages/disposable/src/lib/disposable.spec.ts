@@ -1,6 +1,6 @@
 import { createDisposable } from './disposable.js';
 import { assert } from '@pvorona/assert';
-import { Failable } from '@pvorona/failable';
+import { isFailure, isSuccess } from '@pvorona/failable';
 
 type Deferred<T = void, E = unknown> = {
   promise: Promise<T>;
@@ -122,7 +122,7 @@ describe('Disposable', () => {
       expect(disposable.dispose(onCompleted)).toBe(true);
 
       expect(onCompleted).toHaveBeenCalledTimes(1);
-      expect(Failable.isSuccess(onCompleted.mock.calls[0][0])).toBe(true);
+      expect(isSuccess(onCompleted.mock.calls[0][0])).toBe(true);
     });
 
     it('calls onCompleted with Failure when a listener throws', () => {
@@ -144,8 +144,8 @@ describe('Disposable', () => {
 
         expect(onCompleted).toHaveBeenCalledTimes(1);
         const result = onCompleted.mock.calls[0][0];
-        expect(Failable.isFailure(result)).toBe(true);
-        assert(Failable.isFailure(result));
+        expect(isFailure(result)).toBe(true);
+        assert(isFailure(result));
         expect(result.error).toBe(listenerError);
       } finally {
         consoleErrorSpy.mockRestore();
@@ -167,7 +167,7 @@ describe('Disposable', () => {
       await Promise.resolve();
 
       expect(onCompleted).toHaveBeenCalledTimes(1);
-      expect(Failable.isSuccess(onCompleted.mock.calls[0][0])).toBe(true);
+      expect(isSuccess(onCompleted.mock.calls[0][0])).toBe(true);
     });
 
     it('queues subsequent dispose(onCompleted) calls while completion is pending and uses the original result', async () => {
@@ -634,8 +634,8 @@ describe('Disposable', () => {
         expect(throwingAsyncListener).toHaveBeenCalledTimes(1);
         expect(onCompleted).toHaveBeenCalledTimes(1);
         const result = onCompleted.mock.calls[0][0];
-        expect(Failable.isFailure(result)).toBe(true);
-        assert(Failable.isFailure(result));
+        expect(isFailure(result)).toBe(true);
+        assert(isFailure(result));
         expect(result.error).toBe(listenerError);
       });
 
@@ -660,8 +660,8 @@ describe('Disposable', () => {
 
         expect(onCompleted).toHaveBeenCalledTimes(1);
         const result = onCompleted.mock.calls[0][0];
-        expect(Failable.isFailure(result)).toBe(true);
-        assert(Failable.isFailure(result));
+        expect(isFailure(result)).toBe(true);
+        assert(isFailure(result));
         expect(result.error).toBe(listenerError);
       });
 

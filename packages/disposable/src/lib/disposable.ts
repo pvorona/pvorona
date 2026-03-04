@@ -1,6 +1,6 @@
 import { isFunction } from '@pvorona/assert';
-import { Failable } from '@pvorona/failable';
-import type { Failable as FailableType } from '@pvorona/failable';
+import { failure, success } from '@pvorona/failable';
+import type { Failable } from '@pvorona/failable';
 import { noop } from '@pvorona/noop';
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
@@ -17,7 +17,7 @@ export type OnDisposedListener = (() => void) | (() => PromiseLike<unknown>);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type OnCompletedListener = <Error = any>(
-  result: FailableType<null, Error>
+  result: Failable<null, Error>
 ) => void;
 
 export type Disposable = {
@@ -108,15 +108,15 @@ export function createDisposable() {
   const errors: unknown[] = [];
   const pendingThenables: PromiseLike<unknown>[] = [];
 
-  let completionResult: FailableType<null, unknown> | null = null;
-  let completion: Promise<FailableType<null, unknown>> | null = null;
+  let completionResult: Failable<null, unknown> | null = null;
+  let completion: Promise<Failable<null, unknown>> | null = null;
 
-  function finalize(extraErrors: unknown[] = []): FailableType<null, unknown> {
+  function finalize(extraErrors: unknown[] = []): Failable<null, unknown> {
     const allErrors = errors.concat(extraErrors);
     const result =
       allErrors.length === 0
-        ? Failable.ofSuccess(null)
-        : Failable.ofError(allErrors.length === 1 ? allErrors[0] : allErrors);
+        ? success(null)
+        : failure(allErrors.length === 1 ? allErrors[0] : allErrors);
 
     completionResult = result;
 
