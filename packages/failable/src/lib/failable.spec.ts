@@ -194,20 +194,20 @@ describe('createFailable (failableLike)', () => {
   it('rehydrates FailableLike into Failable', () => {
     const data = faker.number.float();
     const error = faker.string.uuid();
-    const success = {
+    const successLike = {
       status: FailableStatus.Success,
       data,
     } as FailableLike<typeof data, unknown>;
-    const failure = {
+    const failureLike = {
       status: FailableStatus.Failure,
       error,
     } as FailableLike<unknown, typeof error>;
 
-    const result1 = createFailable(success);
+    const result1 = createFailable(successLike);
     expect(result1).toStrictEqual(success(data));
     expectTypeOf(result1).toEqualTypeOf<Failable<typeof data, unknown>>();
 
-    const result2 = createFailable(failure);
+    const result2 = createFailable(failureLike);
     expect(result2).toStrictEqual(failure(error));
     expectTypeOf(result2).toEqualTypeOf<Failable<unknown, typeof error>>();
   });

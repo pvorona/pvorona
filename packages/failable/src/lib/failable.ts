@@ -19,8 +19,8 @@ export type Failable<T, E> = Success<T> | Failure<E>;
  * A {@link Failable} instance relies on Symbols and prototype methods, which do not survive structured cloning.
  *
  * Boundary rule:
- * - **sender**: `Failable.toFailableLike(result)`
- * - **receiver**: `Failable.from(message.result)` (rehydrates into a real {@link Failable})
+ * - **sender**: `toFailableLike(result)`
+ * - **receiver**: `createFailable(message.result)` (rehydrates into a real {@link Failable})
  *
  * Note: `data` / `error` must themselves be structured-cloneable.
  */
@@ -60,6 +60,12 @@ function isFailableLikeFailure(
       FailableStatus.Failure &&
     Object.prototype.hasOwnProperty.call(value, 'error')
   );
+}
+
+export function isFailableLike(
+  value: unknown
+): value is FailableLike<unknown, unknown> {
+  return isFailableLikeFailure(value) || isFailableLikeSuccess(value);
 }
 
 export type Success<T> = {
@@ -122,7 +128,7 @@ const BASE_FAILURE = (() => {
   node.status = FailableStatus.Failure;
   node.isError = true;
   node.or = function orFailure(value) {
-    return Failable.ofSuccess(value);
+    return success(value);
   };
   node.getOr = function getOrFailure(value) {
     return value;
@@ -134,7 +140,7 @@ const BASE_FAILURE = (() => {
 })();
 
 /**
- * Namespace-style factory + utilities for the {@link Failable} result type.
+ * Factory + utilities for the {@link Failable} result type.
  *
  * `Failable<T, E>` is a discriminated union of:
  * - {@link Success}: `{ status: 'success', isSuccess: true, data: T, error: null }`
@@ -148,71 +154,70 @@ const BASE_FAILURE = (() => {
  * Runtime model / invariants:
  * - Instances are shallow-immutable (`Object.freeze`) and tagged with Symbols.
  * - They are NOT class instances; do not use `instanceof`. Prefer `result.isSuccess` / `result.isError`
- *   or the guards {@link Failable.isSuccess} / {@link Failable.isFailure}.
+ *   or the guards {@link isSuccess} / {@link isFailure}.
  * - Exactly one of `data` / `error` is non-null.
  *
  * Structured-clone boundary rule (RPC, `postMessage`, `chrome.*` messaging):
- * - **sender**: `Failable.toFailableLike(result)`
- * - **receiver**: `Failable.from(payload)` (rehydrates methods + Symbol tags)
+ * - **sender**: `toFailableLike(result)`
+ * - **receiver**: `createFailable(payload)` (rehydrates methods + Symbol tags)
  *
- * `Failable.from(...)` overloads:
- * - `from(failable)` returns the same instance (no wrapping).
- * - `from(failableLike)` rehydrates into a real `Success` / `Failure`.
- * - `from(() => value)` captures thrown values into `Failure` and preserves/rehydrates returned
+ * `createFailable(...)` overloads:
+ * - `createFailable(failable)` returns the same instance (no wrapping).
+ * - `createFailable(failableLike)` rehydrates into a real `Success` / `Failure`.
+ * - `createFailable(() => value)` captures thrown values into `Failure` and preserves/rehydrates returned
  *   `Failable` / `FailableLike`.
- * - `from(promise)` captures rejection values into `Failure` and preserves/rehydrates resolved
+ * - `createFailable(promise)` captures rejection values into `Failure` and preserves/rehydrates resolved
  *   `Failable` / `FailableLike`.
  *
  * Gotchas:
- * - `Failable.isFailableLike` is intentionally strict: only `{ status, data }` or `{ status, error }`
+ * - `isFailableLike` is intentionally strict: only `{ status, data }` or `{ status, error }`
  *   with no extra enumerable keys. If you need metadata, wrap it: `{ result: failableLike, meta }`.
  * - `or(...)` and `getOr(...)` are eager (fallback is evaluated before the call). Use branching for
  *   lazy fallbacks.
  * - No error normalization is performed: whatever you throw/reject becomes `.error`.
- * - `from(() => somePromise)` does NOT await; pass the promise directly: `from(somePromise)`.
+ * - `createFailable(() => somePromise)` does NOT await; pass the promise directly: `createFailable(somePromise)`.
  *
  * @example
- * const res = Failable.from(() => JSON.parse(text));
+ * const res = createFailable(() => JSON.parse(text));
  * if (res.isSuccess) return res.data;
  * console.error(res.error);
  *
  * @example
  * // Structured-clone transport
- * const wire = Failable.toFailableLike(res);
+ * const wire = toFailableLike(res);
  * // ... send wire ...
- * const hydrated = Failable.from(wire);
+ * const hydrated = createFailable(wire);
  */
-export const Failable = {
-  isFailable: (value: unknown): value is Failable<unknown, unknown> => {
-    return isObject(value) && value[FailableTag] === true;
-  },
-  isSuccess: (value: unknown): value is Success<unknown> => {
-    return isObject(value) && value[SuccessTag] === true;
-  },
-  isFailure: (value: unknown): value is Failure<unknown> => {
-    return isObject(value) && value[FailureTag] === true;
-  },
-  ofSuccess: <T = void>(data: T): Success<T> => {
-    const node: Mutable<Success<T>> = Object.create(BASE_SUCCESS);
-    node.data = data;
-    return Object.freeze(node);
-  },
-  ofError: <E = void>(error: E): Failure<E> => {
-    const node: Mutable<Failure<E>> = Object.create(BASE_FAILURE);
-    node.error = error;
-    return Object.freeze(node);
-  },
-  toFailableLike,
-  isFailableLike: (value: unknown): value is FailableLike<unknown, unknown> => {
-    return isFailableLikeFailure(value) || isFailableLikeSuccess(value);
-  },
-  from,
-} as const;
+export function isFailable(
+  value: unknown
+): value is Failable<unknown, unknown> {
+  return isObject(value) && value[FailableTag] === true;
+}
 
-function toFailableLike<T>(value: Success<T>): FailableLikeSuccess<T>;
-function toFailableLike<E>(value: Failure<E>): FailableLikeFailure<E>;
-function toFailableLike<T, E>(value: Failable<T, E>): FailableLike<T, E>;
-function toFailableLike<T, E>(value: Failable<T, E>): FailableLike<T, E> {
+export function isSuccess(value: unknown): value is Success<unknown> {
+  return isObject(value) && value[SuccessTag] === true;
+}
+
+export function isFailure(value: unknown): value is Failure<unknown> {
+  return isObject(value) && value[FailureTag] === true;
+}
+
+export function success<T = void>(data: T): Success<T> {
+  const node: Mutable<Success<T>> = Object.create(BASE_SUCCESS);
+  node.data = data;
+  return Object.freeze(node);
+}
+
+export function failure<E = void>(error: E): Failure<E> {
+  const node: Mutable<Failure<E>> = Object.create(BASE_FAILURE);
+  node.error = error;
+  return Object.freeze(node);
+}
+
+export function toFailableLike<T>(value: Success<T>): FailableLikeSuccess<T>;
+export function toFailableLike<E>(value: Failure<E>): FailableLikeFailure<E>;
+export function toFailableLike<T, E>(value: Failable<T, E>): FailableLike<T, E>;
+export function toFailableLike<T, E>(value: Failable<T, E>): FailableLike<T, E> {
   if (value.status === FailableStatus.Failure) {
     return { status: FailableStatus.Failure, error: value.error };
   }
@@ -258,26 +263,31 @@ type InferReturnTypeFromPromise<
   ? Promise<Failable<A, B>>
   : Promise<Failable<Awaited<P>, E>>;
 
-function from<T>(value: FailableLikeSuccess<T>): Success<T>;
-function from<E>(value: FailableLikeFailure<E>): Failure<E>;
-function from<T, E>(value: FailableLike<T, E>): Failable<T, E>;
-function from<F extends () => R, E = Error, R = ReturnType<F>>(
+export function createFailable<T>(value: FailableLikeSuccess<T>): Success<T>;
+export function createFailable<E>(value: FailableLikeFailure<E>): Failure<E>;
+export function createFailable<T, E>(value: FailableLike<T, E>): Failable<T, E>;
+export function createFailable<F extends () => R, E = Error, R = ReturnType<F>>(
   fun: F
 ): InferReturnTypeFromFunction<F, E, R>;
-function from<T, E = Error, P extends PromiseLike<T> = PromiseLike<T>>(
+export function createFailable<
+  T,
+  E = Error,
+  P extends PromiseLike<T> = PromiseLike<T>
+>(
   promise: P
 ): InferReturnTypeFromPromise<T, E, P>;
-function from(
+export function createFailable(
   value:
     | FailableLike<unknown, unknown>
-    | (() => Failable<unknown, unknown>)
-    | Promise<Failable<unknown, unknown>>
+    | Failable<unknown, unknown>
+    | (() => unknown)
+    | PromiseLike<unknown>
 ) {
-  if (Failable.isFailable(value)) {
+  if (isFailable(value)) {
     return value;
   }
 
-  if (Failable.isFailableLike(value)) {
+  if (isFailableLike(value)) {
     return fromFailableLike(value);
   }
 
@@ -292,40 +302,40 @@ function fromFailableLike<T, E>(
   failableLike: FailableLike<T, E>
 ): Failable<T, E> {
   if (failableLike.status === FailableStatus.Success) {
-    return Failable.ofSuccess(failableLike.data);
+    return success(failableLike.data);
   }
 
-  return Failable.ofError(failableLike.error);
+  return failure(failableLike.error);
 }
 
 function fromFunction<T extends () => U, E, U = ReturnType<T>>(fun: T) {
   try {
     const data = fun();
 
-    if (Failable.isFailable(data)) {
+    if (isFailable(data)) {
       return data;
     }
 
-    if (Failable.isFailableLike(data)) {
+    if (isFailableLike(data)) {
       return fromFailableLike(data);
     }
 
-    return Failable.ofSuccess(data);
+    return success(data);
   } catch (error) {
-    return Failable.ofError(error as E);
+    return failure(error as E);
   }
 }
 
-function fromPromise<T extends Promise<U>, U = Awaited<T>>(promise: T) {
-  return promise.then((data) => {
-    if (Failable.isFailable(data)) {
+function fromPromise<T extends PromiseLike<U>, U = Awaited<T>>(promise: T) {
+  return Promise.resolve(promise).then((data) => {
+    if (isFailable(data)) {
       return data;
     }
 
-    if (Failable.isFailableLike(data)) {
+    if (isFailableLike(data)) {
       return fromFailableLike(data);
     }
 
-    return Failable.ofSuccess(data);
-  }, Failable.ofError);
+    return success(data);
+  }, failure);
 }
