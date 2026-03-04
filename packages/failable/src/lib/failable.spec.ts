@@ -1,8 +1,16 @@
 import { faker } from '@faker-js/faker';
 import { expectTypeOf } from 'expect-type';
 import {
-  Failable,
+  createFailable,
+  failure,
   FailableStatus,
+  isFailable,
+  isFailableLike,
+  isFailure,
+  isSuccess,
+  success,
+  toFailableLike,
+  type Failable,
   type FailableLike,
   type FailableLikeFailure,
   type FailableLikeSuccess,
@@ -10,14 +18,14 @@ import {
   type Success,
 } from './failable.js';
 
-describe('ofSuccess', () => {
+describe('success', () => {
   it('creates a frozen Success instance with correct properties', () => {
     const value = faker.number.float();
-    const result = Failable.ofSuccess(value);
-    expect(Failable.isFailable(result)).toBe(true);
+    const result = success(value);
+    expect(isFailable(result)).toBe(true);
     expect(Object.isFrozen(result)).toBe(true);
-    expect(Failable.isSuccess(result)).toBe(true);
-    expect(Failable.isFailure(result)).toBe(false);
+    expect(isSuccess(result)).toBe(true);
+    expect(isFailure(result)).toBe(false);
     expect(result.isSuccess).toBe(true);
     expect(result.isError).toBe(false);
     expect(result.status).toBe(FailableStatus.Success);
@@ -27,15 +35,15 @@ describe('ofSuccess', () => {
   });
 });
 
-describe('ofError', () => {
+describe('failure', () => {
   it('creates a frozen Failure instance with correct properties', () => {
     const message = faker.string.uuid();
     const error = new Error(message);
-    const result = Failable.ofError(error);
-    expect(Failable.isFailable(result)).toBe(true);
+    const result = failure(error);
+    expect(isFailable(result)).toBe(true);
     expect(Object.isFrozen(result)).toBe(true);
-    expect(Failable.isSuccess(result)).toBe(false);
-    expect(Failable.isFailure(result)).toBe(true);
+    expect(isSuccess(result)).toBe(false);
+    expect(isFailure(result)).toBe(true);
     expect(result.isSuccess).toBe(false);
     expect(result.isError).toBe(true);
     expect(result.status).toBe(FailableStatus.Failure);
@@ -48,7 +56,7 @@ describe('ofError', () => {
 describe('toFailableLike', () => {
   it('converts Success to FailableLikeSuccess', () => {
     const value = faker.number.float();
-    const result = Failable.toFailableLike(Failable.ofSuccess(value));
+    const result = toFailableLike(success(value));
     expect(result).toStrictEqual({
       status: FailableStatus.Success,
       data: value,
@@ -59,7 +67,7 @@ describe('toFailableLike', () => {
   it('converts Failure to FailableLikeFailure', () => {
     const message = faker.string.uuid();
     const error = new Error(message);
-    const result = Failable.toFailableLike(Failable.ofError(error));
+    const result = toFailableLike(failure(error));
     expect(result).toStrictEqual({ status: FailableStatus.Failure, error });
     expectTypeOf(result).toEqualTypeOf<FailableLikeFailure<typeof error>>();
   });
@@ -67,20 +75,20 @@ describe('toFailableLike', () => {
   it('converts Failable to FailableLike', () => {
     const data = faker.number.float();
     const error = faker.string.uuid();
-    const success = Failable.ofSuccess(data) as Failable<typeof data, unknown>;
-    const failure = Failable.ofError(error) as Failable<unknown, typeof error>;
+    const successResult = success(data) as Failable<typeof data, unknown>;
+    const failureResult = failure(error) as Failable<unknown, typeof error>;
 
-    const result1 = Failable.toFailableLike(success);
+    const result1 = toFailableLike(successResult);
     expect(result1).toStrictEqual({
-      status: success.status,
-      data: success.data,
+      status: successResult.status,
+      data: successResult.data,
     });
     expectTypeOf(result1).toEqualTypeOf<FailableLike<typeof data, unknown>>();
 
-    const result2 = Failable.toFailableLike(failure);
+    const result2 = toFailableLike(failureResult);
     expect(result2).toStrictEqual({
-      status: failure.status,
-      error: failure.error,
+      status: failureResult.status,
+      error: failureResult.error,
     });
     expectTypeOf(result2).toEqualTypeOf<FailableLike<unknown, typeof error>>();
   });
@@ -89,7 +97,7 @@ describe('toFailableLike', () => {
 describe('isFailableLike', () => {
   it('returns true for { status: success, data }', () => {
     const value = faker.number.float();
-    const result = Failable.isFailableLike({
+    const result = isFailableLike({
       status: FailableStatus.Success,
       data: value,
     });
@@ -99,7 +107,7 @@ describe('isFailableLike', () => {
   it('returns true for { status: failure, error }', () => {
     const message = faker.string.uuid();
     const error = new Error(message);
-    const result = Failable.isFailableLike({
+    const result = isFailableLike({
       status: FailableStatus.Failure,
       error,
     });
@@ -118,31 +126,31 @@ describe('isFailableLike', () => {
     ['array', [faker.string.uuid()]],
     ['object', { foo: faker.string.uuid() }],
   ])('returns false for %s', (_, value) => {
-    const result = Failable.isFailableLike(value);
+    const result = isFailableLike(value);
     expect(result).toBe(false);
   });
 
   it('returns false for unknown status', () => {
-    const result = Failable.isFailableLike({ status: 'wat', data: 123 });
+    const result = isFailableLike({ status: 'wat', data: 123 });
     expect(result).toBe(false);
   });
 
   it('returns false for success without data', () => {
-    const result = Failable.isFailableLike({
+    const result = isFailableLike({
       status: FailableStatus.Success,
     });
     expect(result).toBe(false);
   });
 
   it('returns false for failure without error', () => {
-    const result = Failable.isFailableLike({
+    const result = isFailableLike({
       status: FailableStatus.Failure,
     });
     expect(result).toBe(false);
   });
 
   it('returns false for FailableLikeSuccess with extra properties', () => {
-    const result = Failable.isFailableLike({
+    const result = isFailableLike({
       status: FailableStatus.Success,
       data: faker.number.float(),
       extra: faker.string.uuid(),
@@ -151,7 +159,7 @@ describe('isFailableLike', () => {
   });
 
   it('returns false for FailableLikeFailure with extra properties', () => {
-    const result = Failable.isFailableLike({
+    const result = isFailableLike({
       status: FailableStatus.Failure,
       error: faker.string.uuid(),
       extra: faker.string.uuid(),
@@ -160,15 +168,15 @@ describe('isFailableLike', () => {
   });
 });
 
-describe('from failableLike', () => {
+describe('createFailable (failableLike)', () => {
   it('rehydrates FailableLikeSuccess into Success', () => {
     const data = faker.number.float();
     const failableLike = {
       status: FailableStatus.Success,
       data,
     } as const satisfies FailableLikeSuccess<typeof data>;
-    const result = Failable.from(failableLike);
-    expect(result).toStrictEqual(Failable.ofSuccess(data));
+    const result = createFailable(failableLike);
+    expect(result).toStrictEqual(success(data));
     expectTypeOf(result).toEqualTypeOf<Success<typeof data>>();
   });
 
@@ -178,8 +186,8 @@ describe('from failableLike', () => {
       status: FailableStatus.Failure,
       error,
     } as const satisfies FailableLikeFailure<typeof error>;
-    const result = Failable.from(failableLike);
-    expect(result).toStrictEqual(Failable.ofError(error));
+    const result = createFailable(failableLike);
+    expect(result).toStrictEqual(failure(error));
     expectTypeOf(result).toEqualTypeOf<Failure<typeof error>>();
   });
 
@@ -195,12 +203,12 @@ describe('from failableLike', () => {
       error,
     } as FailableLike<unknown, typeof error>;
 
-    const result1 = Failable.from(success);
-    expect(result1).toStrictEqual(Failable.ofSuccess(data));
+    const result1 = createFailable(success);
+    expect(result1).toStrictEqual(success(data));
     expectTypeOf(result1).toEqualTypeOf<Failable<typeof data, unknown>>();
 
-    const result2 = Failable.from(failure);
-    expect(result2).toStrictEqual(Failable.ofError(error));
+    const result2 = createFailable(failure);
+    expect(result2).toStrictEqual(failure(error));
     expectTypeOf(result2).toEqualTypeOf<Failable<unknown, typeof error>>();
   });
 });
@@ -209,20 +217,20 @@ describe('or', () => {
   it('Success keeps original', () => {
     type ValueType = 123;
     const value: ValueType = 123;
-    const original = Failable.ofSuccess(value);
+    const original = success(value);
     const result = original.or('fallback');
     expect(result).toBe(original);
-    expect(result).toStrictEqual(Failable.ofSuccess(value));
+    expect(result).toStrictEqual(success(value));
     expectTypeOf(result).toEqualTypeOf<Success<ValueType>>();
   });
 
   it('Failure recovers to Success', () => {
     type FallbackType = string;
     const error = new Error(faker.string.uuid());
-    const original = Failable.ofError(error);
+    const original = failure(error);
     const fallback: FallbackType = faker.string.uuid();
     const result = original.or(fallback);
-    expect(result).toStrictEqual(Failable.ofSuccess(fallback));
+    expect(result).toStrictEqual(success(fallback));
     expectTypeOf(result).toEqualTypeOf<Success<FallbackType>>();
   });
 });
@@ -231,7 +239,7 @@ describe('getOr', () => {
   it('Success returns its data', () => {
     type ValueType = 123;
     const value: ValueType = 123;
-    const original = Failable.ofSuccess(value);
+    const original = success(value);
     const result = original.getOr('fallback');
     expect(result).toBe(value);
     expectTypeOf(result).toEqualTypeOf<ValueType>();
@@ -241,7 +249,7 @@ describe('getOr', () => {
     type FallbackType = 456;
     const message = faker.string.uuid();
     const error = new Error(message);
-    const original = Failable.ofError(error);
+    const original = failure(error);
     const fallback: FallbackType = 456;
     const result = original.getOr(fallback);
     expect(result).toBe(fallback);
@@ -252,8 +260,8 @@ describe('getOr', () => {
 describe('type ergonomics (Failable union)', () => {
   it('infers correct types for or, getOr, getOrThrow', () => {
     const union: Failable<number, string> = faker.helpers.arrayElement([
-      Failable.ofSuccess(123),
-      Failable.ofError('boom'),
+      success(123),
+      failure('boom'),
     ]);
 
     const orResult = union.or({ a: 1 });
@@ -270,20 +278,20 @@ describe('type ergonomics (Failable union)', () => {
   });
 });
 
-describe('from function', () => {
+describe('createFailable (function)', () => {
   it('wraps success', () => {
     const value = faker.number.float();
-    const result = Failable.from(() => value);
-    expect(Failable.isSuccess(result)).toBe(true);
+    const result = createFailable(() => value);
+    expect(isSuccess(result)).toBe(true);
     expect(result.data).toBe(value);
   });
 
   it('wraps error', () => {
     const value = faker.number.float();
-    const result = Failable.from(() => {
+    const result = createFailable(() => {
       throw value;
     });
-    expect(Failable.isFailure(result)).toBe(true);
+    expect(isFailure(result)).toBe(true);
     expect(result.error).toBe(value);
   });
 
@@ -293,8 +301,8 @@ describe('from function', () => {
       status: FailableStatus.Success,
       data,
     } as const satisfies FailableLikeSuccess<typeof data>;
-    const result = Failable.from(() => failableLike);
-    expect(result).toStrictEqual(Failable.ofSuccess(data));
+    const result = createFailable(() => failableLike);
+    expect(result).toStrictEqual(success(data));
   });
 
   it('rehydrates FailableLikeFailure return value', () => {
@@ -303,38 +311,38 @@ describe('from function', () => {
       status: FailableStatus.Failure,
       error,
     } as const satisfies FailableLikeFailure<typeof error>;
-    const result = Failable.from(() => failableLike);
-    expect(result).toStrictEqual(Failable.ofError(error));
+    const result = createFailable(() => failableLike);
+    expect(result).toStrictEqual(failure(error));
   });
 
   it("doesn't wrap Success", () => {
     const value = faker.number.float();
-    const original = Failable.ofSuccess(value);
-    const result = Failable.from(() => original);
+    const original = success(value);
+    const result = createFailable(() => original);
     expect(result).toBe(original);
   });
 
   it("doesn't wrap Failure", () => {
     const message = faker.string.uuid();
     const error = new Error(message);
-    const original = Failable.ofError(error);
-    const result = Failable.from(() => original);
+    const original = failure(error);
+    const result = createFailable(() => original);
     expect(result).toBe(original);
   });
 });
 
-describe('from promise', () => {
+describe('createFailable (promise)', () => {
   it('wraps success', async () => {
     const value = faker.number.float();
-    const result = await Failable.from(Promise.resolve(value));
-    expect(Failable.isSuccess(result)).toBe(true);
+    const result = await createFailable(Promise.resolve(value));
+    expect(isSuccess(result)).toBe(true);
     expect(result.data).toBe(value);
   });
 
   it('wraps error', async () => {
     const value = faker.number.float();
-    const result = await Failable.from(Promise.reject(value));
-    expect(Failable.isFailure(result)).toBe(true);
+    const result = await createFailable(Promise.reject(value));
+    expect(isFailure(result)).toBe(true);
     expect(result.error).toBe(value);
   });
 
@@ -344,8 +352,8 @@ describe('from promise', () => {
       status: FailableStatus.Success,
       data,
     } as const satisfies FailableLikeSuccess<typeof data>;
-    const result = await Failable.from(Promise.resolve(failableLike));
-    expect(result).toStrictEqual(Failable.ofSuccess(data));
+    const result = await createFailable(Promise.resolve(failableLike));
+    expect(result).toStrictEqual(success(data));
   });
 
   it('rehydrates FailableLikeFailure resolved value', async () => {
@@ -354,21 +362,21 @@ describe('from promise', () => {
       status: FailableStatus.Failure,
       error,
     } as const satisfies FailableLikeFailure<typeof error>;
-    const result = await Failable.from(Promise.resolve(failableLike));
-    expect(result).toStrictEqual(Failable.ofError(error));
+    const result = await createFailable(Promise.resolve(failableLike));
+    expect(result).toStrictEqual(failure(error));
   });
 
   it("doesn't wrap Success", async () => {
     const value = faker.number.float();
-    const original = Failable.ofSuccess(value);
-    const result = await Failable.from(Promise.resolve(original));
+    const original = success(value);
+    const result = await createFailable(Promise.resolve(original));
     expect(result).toBe(original);
   });
 
   it("doesn't wrap Failure", async () => {
     const value = faker.number.float();
-    const original = Failable.ofError(value);
-    const result = await Failable.from(Promise.resolve(original));
+    const original = failure(value);
+    const result = await createFailable(Promise.resolve(original));
     expect(result).toBe(original);
   });
 
@@ -381,11 +389,11 @@ describe('from promise', () => {
         { status: FailableStatus.Failure, error },
       ]);
 
-    const result = Failable.from(Promise.resolve(failableLike));
+    const result = createFailable(Promise.resolve(failableLike));
     expectTypeOf(result).toEqualTypeOf<
       Promise<Failable<typeof data, typeof error>>
     >();
 
-    expect(Failable.isFailable(await result)).toBe(true);
+    expect(isFailable(await result)).toBe(true);
   });
 });
