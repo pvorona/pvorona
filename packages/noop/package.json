@@ -1,6 +1,6 @@
 {
   "name": "@pvorona/noop",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
