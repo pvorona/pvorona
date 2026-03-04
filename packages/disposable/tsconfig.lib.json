@@ -10,7 +10,17 @@
     "types": ["node"]
   },
   "include": ["src/**/*.ts"],
-  "references": [],
+  "references": [
+    {
+      "path": "../noop/tsconfig.lib.json"
+    },
+    {
+      "path": "../failable/tsconfig.lib.json"
+    },
+    {
+      "path": "../assert/tsconfig.lib.json"
+    }
+  ],
   "exclude": [
     "vite.config.ts",
     "vite.config.mts",

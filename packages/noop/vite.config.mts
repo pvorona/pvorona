@@ -21,7 +21,7 @@ export default defineConfig(() => ({
     },
     lib: {
       entry: 'src/index.ts',
-      name: 'noop',
+      name: '@pvorona/noop',
       fileName: 'index',
       formats: ['es' as const],
     },
