@@ -17,5 +17,9 @@
   "files": [
     "dist",
     "!**/*.tsbuildinfo"
-  ]
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
 }

@@ -18,6 +18,10 @@
     "dist",
     "!**/*.tsbuildinfo"
   ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@pvorona/assert": "^0.0.2",
     "@pvorona/failable": "^0.0.1",
