@@ -28,7 +28,7 @@ export default defineConfig(() => ({
     lib: {
       // Could also be a dictionary or array of multiple entry points.
       entry: 'src/index.ts',
-      name: 'duration',
+      name: '@pvorona/duration',
       fileName: 'index',
       // Change this to the formats you want to support.
       // Don't forget to update your package.json as well.
@@ -36,11 +36,11 @@ export default defineConfig(() => ({
     },
     rollupOptions: {
       // External packages that should not be bundled into your library.
-      external: [],
+      external: ['@pvorona/assert'],
     },
   },
   test: {
-    name: 'duration',
+    name: '@pvorona/duration',
     watch: false,
     globals: true,
     environment: 'node',
