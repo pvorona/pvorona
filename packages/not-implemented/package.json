@@ -1,6 +1,7 @@
 {
   "name": "@pvorona/not-implemented",
   "version": "0.0.1",
+  "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -18,7 +19,10 @@
     "dist",
     "!**/*.tsbuildinfo"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
-    "@pvorona/throw-error": "^0.0.2"
+    "@pvorona/throw-error": "~0.0.2"
   }
 }

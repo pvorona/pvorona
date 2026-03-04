@@ -1,6 +1,7 @@
 {
   "name": "@pvorona/failable",
   "version": "0.0.1",
+  "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -18,8 +19,11 @@
     "dist",
     "!**/*.tsbuildinfo"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
-    "@pvorona/assert": "^0.0.2",
-    "@pvorona/not-implemented": "^0.0.1"
+    "@pvorona/assert": "~0.0.2",
+    "@pvorona/not-implemented": "~0.0.1"
   }
 }

@@ -1,6 +1,7 @@
 {
   "name": "@pvorona/counter",
   "version": "0.0.1",
+  "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -18,5 +19,8 @@
     "dist",
     "!**/*.tsbuildinfo"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {}
 }

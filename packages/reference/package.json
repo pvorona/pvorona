@@ -1,6 +1,7 @@
 {
   "name": "@pvorona/reference",
   "version": "0.0.1",
+  "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -22,7 +23,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@pvorona/assert": "0.0.2",
+    "@pvorona/assert": "~0.0.2",
     "tslib": "^2.3.0"
   }
 }
