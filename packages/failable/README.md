@@ -11,9 +11,9 @@ npm i @pvorona/failable
 ## Usage
 
 ```ts
-import { Failable } from '@pvorona/failable';
+import { createFailable } from '@pvorona/failable';
 
-const result = Failable.from(() => JSON.parse(text));
+const result = createFailable(() => JSON.parse(text));
 
 if (result.isSuccess) {
   console.log(result.data);
@@ -25,29 +25,29 @@ if (result.isSuccess) {
 ### Factories
 
 ```ts
-import { Failable } from '@pvorona/failable';
+import { failure, success } from '@pvorona/failable';
 
-const success = Failable.ofSuccess(42);
-const failure = Failable.ofError(new Error('boom'));
+const ok = success(42);
+const err = failure(new Error('boom'));
 ```
 
 ### Fallbacks
 
 ```ts
-import { Failable } from '@pvorona/failable';
+import { failure } from '@pvorona/failable';
 
-const failure = Failable.ofError(new Error('boom'));
+const err = failure(new Error('boom'));
 
-const value = failure.getOr('default'); // 'default'
-const recovered = failure.or('fallback'); // Success<'fallback'>
+const value = err.getOr('default'); // 'default'
+const recovered = err.or('fallback'); // Success<'fallback'>
 ```
 
 ### Wrapping async work
 
 ```ts
-import { Failable } from '@pvorona/failable';
+import { createFailable } from '@pvorona/failable';
 
-const result = await Failable.from(fetch('/api'));
+const result = await createFailable(fetch('/api'));
 ```
 
 ### Structured-clone transport
@@ -55,14 +55,14 @@ const result = await Failable.from(fetch('/api'));
 `Failable` instances use Symbols and prototype methods that do not survive structured cloning (`postMessage`, `chrome.runtime.sendMessage`, etc.). Convert to a plain object first:
 
 ```ts
-import { Failable } from '@pvorona/failable';
+import { createFailable, toFailableLike } from '@pvorona/failable';
 
 // sender
-const wire = Failable.toFailableLike(result);
+const wire = toFailableLike(result);
 postMessage(wire);
 
 // receiver
-const hydrated = Failable.from(wire);
+const hydrated = createFailable(wire);
 ```
 
 ## API
@@ -97,13 +97,13 @@ Example:
 
 ```ts
 import type { Failable } from '@pvorona/failable';
-import { Failable as FailableNS } from '@pvorona/failable';
+import { failure, success } from '@pvorona/failable';
 
 export function parseIntSafe(input: string): Failable<number, Error> {
   const n = Number(input);
-  if (!Number.isInteger(n)) return FailableNS.ofError(new Error('Not an int'));
+  if (!Number.isInteger(n)) return failure(new Error('Not an int'));
 
-  return FailableNS.ofSuccess(n);
+  return success(n);
 }
 ```
 
@@ -122,9 +122,9 @@ Key fields/methods:
 Example:
 
 ```ts
-import { Failable } from '@pvorona/failable';
+import { success } from '@pvorona/failable';
 
-const s = Failable.ofSuccess(123);
+const s = success(123);
 s.getOr(0); // 123
 s.or('x'); // Success<number>
 ```
@@ -144,9 +144,9 @@ Key fields/methods:
 Example:
 
 ```ts
-import { Failable } from '@pvorona/failable';
+import { failure } from '@pvorona/failable';
 
-const f = Failable.ofError(new Error('boom'));
+const f = failure(new Error('boom'));
 f.getOr('default'); // 'default'
 f.or(42).data; // 42
 ```
@@ -200,7 +200,7 @@ const wireErr: FailableLikeFailure<string> = {
 
 Low-level Symbol tags used to mark hydrated `Failable` instances at runtime.
 
-Most code should prefer `result.isSuccess` / `result.isError` or the guards `Failable.isSuccess(...)` / `Failable.isFailure(...)`.
+Most code should prefer `result.isSuccess` / `result.isError` or the guards `isSuccess(...)` / `isFailure(...)`.
 
 Example (advanced):
 
@@ -216,118 +216,114 @@ export function isHydratedFailable(value: unknown): boolean {
 }
 ```
 
-### `const Failable`
-
-Namespace-style factory + utilities for producing and working with `Failable<T, E>`.
-
-#### `Failable.ofSuccess<T>(data: T): Success<T>`
+### `success<T>(data: T): Success<T>`
 
 Example:
 
 ```ts
-import { Failable } from '@pvorona/failable';
+import { success } from '@pvorona/failable';
 
-const ok = Failable.ofSuccess({ id: '1' });
+const ok = success({ id: '1' });
 ```
 
-#### `Failable.ofError<E>(error: E): Failure<E>`
+### `failure<E>(error: E): Failure<E>`
 
 Example:
 
 ```ts
-import { Failable } from '@pvorona/failable';
+import { failure } from '@pvorona/failable';
 
-const err = Failable.ofError({ code: 'bad_request' });
+const err = failure({ code: 'bad_request' });
 ```
 
-#### `Failable.isFailable(value): value is Failable<unknown, unknown>`
+### `isFailable(value): value is Failable<unknown, unknown>`
 
 Checks whether a value is a hydrated `Failable` instance (Symbol-tagged).
 
 Example:
 
 ```ts
-import { Failable } from '@pvorona/failable';
+import { isFailable, success } from '@pvorona/failable';
 
-const maybe: unknown = Failable.ofSuccess(1);
-if (Failable.isFailable(maybe)) {
+const maybe: unknown = success(1);
+if (isFailable(maybe)) {
   // narrowed
 }
 ```
 
-#### `Failable.isSuccess(value): value is Success<unknown>`
+### `isSuccess(value): value is Success<unknown>`
 
 Example:
 
 ```ts
-import { Failable } from '@pvorona/failable';
+import { isSuccess, success } from '@pvorona/failable';
 
-const maybe: unknown = Failable.ofSuccess(1);
-if (Failable.isSuccess(maybe)) {
+const maybe: unknown = success(1);
+if (isSuccess(maybe)) {
   maybe.data; // ok
 }
 ```
 
-#### `Failable.isFailure(value): value is Failure<unknown>`
+### `isFailure(value): value is Failure<unknown>`
 
 Example:
 
 ```ts
-import { Failable } from '@pvorona/failable';
+import { failure, isFailure } from '@pvorona/failable';
 
-const maybe: unknown = Failable.ofError('nope');
-if (Failable.isFailure(maybe)) {
+const maybe: unknown = failure('nope');
+if (isFailure(maybe)) {
   console.log(maybe.error);
 }
 ```
 
-#### `Failable.toFailableLike(result): FailableLike<...>`
+### `toFailableLike(result): FailableLike<...>`
 
 Converts a hydrated `Failable` into a structured-clone-friendly representation.
 
 Example:
 
 ```ts
-import { Failable } from '@pvorona/failable';
+import { success, toFailableLike } from '@pvorona/failable';
 
-const res = Failable.ofSuccess(1);
-const wire = Failable.toFailableLike(res);
+const res = success(1);
+const wire = toFailableLike(res);
 ```
 
-#### `Failable.isFailableLike(value): value is FailableLike<unknown, unknown>`
+### `isFailableLike(value): value is FailableLike<unknown, unknown>`
 
 Strictly checks for `{ status, data }` or `{ status, error }` with no extra enumerable keys.
 
 Example:
 
 ```ts
-import { Failable } from '@pvorona/failable';
+import { isFailableLike } from '@pvorona/failable';
 
 const wire: unknown = { status: 'success', data: 1 };
-Failable.isFailableLike(wire); // true
+isFailableLike(wire); // true
 ```
 
-#### `Failable.from(...)`
+### `createFailable(...)`
 
 Overloads:
 
-- `from(failable)` → returns the same instance
-- `from(failableLike)` → rehydrates into a real `Success` / `Failure`
-- `from(() => value)` → captures throws into `Failure`
-- `from(promise)` → captures rejections into `Failure`
+- `createFailable(failable)` → returns the same instance
+- `createFailable(failableLike)` → rehydrates into a real `Success` / `Failure`
+- `createFailable(() => value)` → captures throws into `Failure`
+- `createFailable(promise)` → captures rejections into `Failure`
 
 Examples:
 
 ```ts
-import { Failable } from '@pvorona/failable';
+import { createFailable, failure, toFailableLike } from '@pvorona/failable';
 
 // function wrapper (captures throws)
-const res1 = Failable.from(() => JSON.parse('{'));
+const res1 = createFailable(() => JSON.parse('{'));
 
 // promise wrapper (captures rejections)
-const res2 = await Failable.from(fetch('https://example.com'));
+const res2 = await createFailable(fetch('https://example.com'));
 
 // rehydrate from structured clone
-const wire = Failable.toFailableLike(Failable.ofError('bad'));
-const hydrated = Failable.from(wire);
+const wire = toFailableLike(failure('bad'));
+const hydrated = createFailable(wire);
 ```
