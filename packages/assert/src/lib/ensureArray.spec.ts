@@ -10,7 +10,7 @@ test('ensureArray', () => {
   expect(() =>
     // @ts-expect-error "Must include array or array literal"
     ensureArray(1),
-  );
+  ).toThrow();
   expect(() =>
     // @ts-expect-error "Must include array or array literal"
     ensureArray(true),
