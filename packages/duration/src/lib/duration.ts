@@ -15,10 +15,10 @@ export const enum TimeUnit {
   Year,
 }
 
-const milliSeconds = Symbol('milliSeconds');
+const millisecondsTag = Symbol('milliSeconds');
 
 export type Duration = {
-  readonly [milliSeconds]: number;
+  readonly [millisecondsTag]: number;
   readonly isFinite: boolean;
   readonly isInfinite: boolean;
   readonly isInstant: boolean;
@@ -56,13 +56,13 @@ const MILLISECONDS_IN_UNIT = {
 } as const;
 
 const BASE_DURATION: Duration = {
-  [milliSeconds]: 0,
+  [millisecondsTag]: 0,
   isFinite: false,
   isInfinite: false,
   isInstant: false,
 
   to(unit: TimeUnit): number {
-    return this[milliSeconds] / MILLISECONDS_IN_UNIT[unit];
+    return this[millisecondsTag] / MILLISECONDS_IN_UNIT[unit];
   },
   toMilliSeconds() {
     return this.to(TimeUnit.MilliSecond);
@@ -89,19 +89,19 @@ const BASE_DURATION: Duration = {
     return this.to(TimeUnit.Year);
   },
   equals(other: Duration): boolean {
-    return this[milliSeconds] === other[milliSeconds];
+    return this[millisecondsTag] === other[millisecondsTag];
   },
   lessThan(other: Duration): boolean {
-    return this[milliSeconds] < other[milliSeconds];
+    return this[millisecondsTag] < other[millisecondsTag];
   },
   lessThanOrEqual(other: Duration): boolean {
-    return this[milliSeconds] <= other[milliSeconds];
+    return this[millisecondsTag] <= other[millisecondsTag];
   },
   greaterThan(other: Duration): boolean {
-    return this[milliSeconds] > other[milliSeconds];
+    return this[millisecondsTag] > other[millisecondsTag];
   },
   greaterThanOrEqual(other: Duration): boolean {
-    return this[milliSeconds] >= other[milliSeconds];
+    return this[millisecondsTag] >= other[millisecondsTag];
   },
   compare(other: Duration): -1 | 0 | 1 {
     if (this.lessThan(other)) {
@@ -116,69 +116,80 @@ const BASE_DURATION: Duration = {
 
 function createDuration(value: number, unit: TimeUnit): Duration {
   const result: Mutable<Duration> = Object.create(BASE_DURATION);
-  result[milliSeconds] = value * MILLISECONDS_IN_UNIT[unit];
+  result[millisecondsTag] = value * MILLISECONDS_IN_UNIT[unit];
   result.isFinite = value !== Infinity;
   result.isInfinite = value === Infinity;
   result.isInstant = value === 0;
   return Object.freeze(result);
 }
 
-export const Duration = Object.freeze({
-  of(value: number, unit: TimeUnit): Duration {
-    return createDuration(value, unit);
-  },
-  ofMilliSeconds(value: number): Duration {
-    return Duration.of(value, TimeUnit.MilliSecond);
-  },
-  ofSeconds(value: number): Duration {
-    return Duration.of(value, TimeUnit.Second);
-  },
-  ofMinutes(value: number): Duration {
-    return Duration.of(value, TimeUnit.Minute);
-  },
-  ofHours(value: number): Duration {
-    return Duration.of(value, TimeUnit.Hour);
-  },
-  ofDays(value: number): Duration {
-    return Duration.of(value, TimeUnit.Day);
-  },
-  ofWeeks(value: number): Duration {
-    return Duration.of(value, TimeUnit.Week);
-  },
-  ofMonths(value: number): Duration {
-    return Duration.of(value, TimeUnit.Month);
-  },
-  ofYears(value: number): Duration {
-    return Duration.of(value, TimeUnit.Year);
-  },
-  between: (start: Date, end: Date): Duration => {
-    return Duration.of(end.getTime() - start.getTime(), TimeUnit.MilliSecond);
-  },
-  since: (start: Date): Duration => {
-    return Duration.between(start, new Date());
-  },
-  add: (a: Duration, b: Duration): Duration => {
-    return Duration.ofMilliSeconds(a[milliSeconds] + b[milliSeconds]);
-  },
-  subtract: (a: Duration, b: Duration): Duration => {
-    return Duration.ofMilliSeconds(a[milliSeconds] - b[milliSeconds]);
-  },
-  multiply: (a: Duration, b: number): Duration => {
-    return Duration.ofMilliSeconds(a[milliSeconds] * b);
-  },
-  divide: (a: Duration, b: number): Duration => {
-    return Duration.ofMilliSeconds(a[milliSeconds] / b);
-  },
-  ofInfinite: ((): Duration => {
-    return createDuration(Infinity, TimeUnit.MilliSecond);
-  })(),
-  ofInstant: ((): Duration => {
-    return createDuration(0, TimeUnit.MilliSecond);
-  })(),
-  isDuration: (value: unknown): value is Duration => {
-    return isObject(value) && milliSeconds in value;
-  },
-  isEqual: (a: Duration, b: Duration): boolean => {
-    return a[milliSeconds] === b[milliSeconds];
-  },
-});
+export function duration(value: number, unit: TimeUnit): Duration {
+  return createDuration(value, unit);
+}
+
+export function milliSeconds(value: number): Duration {
+  return duration(value, TimeUnit.MilliSecond);
+}
+
+export function seconds(value: number): Duration {
+  return duration(value, TimeUnit.Second);
+}
+
+export function minutes(value: number): Duration {
+  return duration(value, TimeUnit.Minute);
+}
+
+export function hours(value: number): Duration {
+  return duration(value, TimeUnit.Hour);
+}
+
+export function days(value: number): Duration {
+  return duration(value, TimeUnit.Day);
+}
+
+export function weeks(value: number): Duration {
+  return duration(value, TimeUnit.Week);
+}
+
+export function months(value: number): Duration {
+  return duration(value, TimeUnit.Month);
+}
+
+export function years(value: number): Duration {
+  return duration(value, TimeUnit.Year);
+}
+
+export function between(start: Date, end: Date): Duration {
+  return milliSeconds(end.getTime() - start.getTime());
+}
+
+export function since(start: Date): Duration {
+  return between(start, new Date());
+}
+
+export function add(a: Duration, b: Duration): Duration {
+  return milliSeconds(a[millisecondsTag] + b[millisecondsTag]);
+}
+
+export function subtract(a: Duration, b: Duration): Duration {
+  return milliSeconds(a[millisecondsTag] - b[millisecondsTag]);
+}
+
+export function multiply(a: Duration, b: number): Duration {
+  return milliSeconds(a[millisecondsTag] * b);
+}
+
+export function divide(a: Duration, b: number): Duration {
+  return milliSeconds(a[millisecondsTag] / b);
+}
+
+export const infinite: Duration = milliSeconds(Infinity);
+export const instant: Duration = milliSeconds(0);
+
+export function isDuration(value: unknown): value is Duration {
+  return isObject(value) && millisecondsTag in value;
+}
+
+export function isEqual(a: Duration, b: Duration): boolean {
+  return a[millisecondsTag] === b[millisecondsTag];
+}
