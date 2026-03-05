@@ -13,9 +13,9 @@ npm i @pvorona/duration
 ### Create and convert
 
 ```ts
-import { Duration } from '@pvorona/duration';
+import { minutes } from '@pvorona/duration';
 
-const d = Duration.ofMinutes(5);
+const d = minutes(5);
 d.toSeconds(); // 300
 d.toMilliSeconds(); // 300_000
 ```
@@ -23,10 +23,10 @@ d.toMilliSeconds(); // 300_000
 ### Compare
 
 ```ts
-import { Duration } from '@pvorona/duration';
+import { milliSeconds, seconds } from '@pvorona/duration';
 
-const a = Duration.ofSeconds(1);
-const b = Duration.ofMilliSeconds(900);
+const a = seconds(1);
+const b = milliSeconds(900);
 
 a.greaterThan(b); // true
 a.compare(b); // 1
@@ -35,19 +35,19 @@ a.compare(b); // 1
 ### Arithmetic
 
 ```ts
-import { Duration } from '@pvorona/duration';
+import { add, milliSeconds, seconds } from '@pvorona/duration';
 
-const total = Duration.add(Duration.ofSeconds(1), Duration.ofMilliSeconds(500));
+const total = add(seconds(1), milliSeconds(500));
 total.toMilliSeconds(); // 1500
 ```
 
 ### Between dates
 
 ```ts
-import { Duration } from '@pvorona/duration';
+import { since } from '@pvorona/duration';
 
 const startedAt = new Date(Date.now() - 2_000);
-const elapsed = Duration.since(startedAt);
+const elapsed = since(startedAt);
 elapsed.toSeconds(); // ~2
 ```
 
@@ -55,7 +55,7 @@ elapsed.toSeconds(); // ~2
 
 ### `const enum TimeUnit`
 
-Time units supported by `Duration.of(value, unit)` and `duration.to(unit)`.
+Time units supported by `duration(value, unit)` and `d.to(unit)`.
 
 ```ts
 export const enum TimeUnit {
@@ -78,9 +78,9 @@ Notes:
 Example:
 
 ```ts
-import { Duration, TimeUnit } from '@pvorona/duration';
+import { duration, TimeUnit } from '@pvorona/duration';
 
-Duration.of(2, TimeUnit.Hour).toMinutes(); // 120
+duration(2, TimeUnit.Hour).toMinutes(); // 120
 ```
 
 ### `type Duration`
@@ -90,8 +90,8 @@ An opaque, immutable duration value.
 #### Properties
 
 - **`isFinite: boolean`**: `true` unless the duration is infinite
-- **`isInfinite: boolean`**: `true` for `Duration.ofInfinite`
-- **`isInstant: boolean`**: `true` for zero duration (`Duration.ofInstant`)
+- **`isInfinite: boolean`**: `true` for `infinite`
+- **`isInstant: boolean`**: `true` for zero duration (`instant`)
 
 #### Conversions
 
@@ -117,101 +117,62 @@ An opaque, immutable duration value.
 Example (properties + conversion + comparison):
 
 ```ts
-import type { Duration } from '@pvorona/duration';
-import { Duration as DurationNS } from '@pvorona/duration';
+import { milliSeconds, seconds, type Duration } from '@pvorona/duration';
 
 function isShort(d: Duration) {
   return d.isFinite && d.toSeconds() < 5;
 }
 
-const a = DurationNS.ofSeconds(1);
-const b = DurationNS.ofMilliSeconds(900);
+const a = seconds(1);
+const b = milliSeconds(900);
 
 isShort(a); // true
 a.greaterThan(b); // true
 ```
 
-### `const Duration`
-
-Namespace-style factory + utilities.
+### Function API
 
 #### Constructors
 
-- **`Duration.of(value: number, unit: TimeUnit): Duration`**
-- **`Duration.ofMilliSeconds(value: number): Duration`**
-- **`Duration.ofSeconds(value: number): Duration`**
-- **`Duration.ofMinutes(value: number): Duration`**
-- **`Duration.ofHours(value: number): Duration`**
-- **`Duration.ofDays(value: number): Duration`**
-- **`Duration.ofWeeks(value: number): Duration`**
-- **`Duration.ofMonths(value: number): Duration`** (30-day months)
-- **`Duration.ofYears(value: number): Duration`** (365.25-day years)
-
-Example:
-
-```ts
-import { Duration } from '@pvorona/duration';
-
-Duration.ofHours(1).toMinutes(); // 60
-Duration.ofWeeks(2).toDays(); // 14
-```
+- `duration(value: number, unit: TimeUnit): Duration`
+- `milliSeconds(value: number): Duration`
+- `seconds(value: number): Duration`
+- `minutes(value: number): Duration`
+- `hours(value: number): Duration`
+- `days(value: number): Duration`
+- `weeks(value: number): Duration`
+- `months(value: number): Duration`
+- `years(value: number): Duration`
 
 #### Date helpers
 
-- **`Duration.between(start: Date, end: Date): Duration`**
-- **`Duration.since(start: Date): Duration`** (until “now”)
-
-Example:
-
-```ts
-import { Duration } from '@pvorona/duration';
-
-const d = Duration.between(new Date(0), new Date(1_000));
-d.toSeconds(); // 1
-```
+- `between(start: Date, end: Date): Duration`
+- `since(start: Date): Duration`
 
 #### Arithmetic helpers
 
-- **`Duration.add(a: Duration, b: Duration): Duration`**
-- **`Duration.subtract(a: Duration, b: Duration): Duration`**
-- **`Duration.multiply(a: Duration, b: number): Duration`**
-- **`Duration.divide(a: Duration, b: number): Duration`**
-
-Example:
-
-```ts
-import { Duration } from '@pvorona/duration';
-
-const d = Duration.multiply(Duration.ofSeconds(2), 3);
-d.toSeconds(); // 6
-```
+- `add(a: Duration, b: Duration): Duration`
+- `subtract(a: Duration, b: Duration): Duration`
+- `multiply(a: Duration, b: number): Duration`
+- `divide(a: Duration, b: number): Duration`
 
 #### Constants
 
-- **`Duration.ofInfinite: Duration`**
-- **`Duration.ofInstant: Duration`**
-
-Example:
-
-```ts
-import { Duration } from '@pvorona/duration';
-
-Duration.ofInstant.isInstant; // true
-Duration.ofInfinite.isInfinite; // true
-```
+- `instant: Duration`
+- `infinite: Duration`
 
 #### Guards / equality
 
-- **`Duration.isDuration(value: unknown): value is Duration`**
-- **`Duration.isEqual(a: Duration, b: Duration): boolean`**
+- `isDuration(value: unknown): value is Duration`
+- `isEqual(a: Duration, b: Duration): boolean`
 
 Example:
 
 ```ts
-import { Duration } from '@pvorona/duration';
+import { isDuration, seconds } from '@pvorona/duration';
 
-const maybe: unknown = Duration.ofSeconds(1);
-if (Duration.isDuration(maybe)) {
+const maybe: unknown = seconds(1);
+if (isDuration(maybe)) {
   maybe.toMilliSeconds(); // ok, narrowed
 }
 ```
