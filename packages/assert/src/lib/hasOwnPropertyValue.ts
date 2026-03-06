@@ -7,5 +7,8 @@ export function hasOwnPropertyValue<K extends PropertyKey, V>(
 ): value is Record<K, V> {
   if (!hasOwnKey(value, key)) return false;
 
-  return Object.getOwnPropertyDescriptor(value, key)?.value === expected;
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  if (!descriptor || !('value' in descriptor)) return false;
+
+  return descriptor.value === expected;
 }

@@ -21,6 +21,17 @@ test('hasOwnPropertyValue', () => {
       'success',
     ),
   ).toBe(false);
+  expect(
+    hasOwnPropertyValue(
+      {
+        get status() {
+          return undefined;
+        },
+      },
+      'status',
+      undefined,
+    ),
+  ).toBe(false);
 
   const unknownValue = { status: 'success' as const } as unknown;
   if (hasOwnPropertyValue(unknownValue, 'status', 'success' as const)) {

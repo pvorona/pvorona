@@ -3,5 +3,9 @@ import { resolveValueOrGetter } from './resolveValueOrGetter.js';
 export function getMessage(
   messageOrMessageGetter?: undefined | string | (() => string),
 ) {
-  return resolveValueOrGetter<string | undefined>(messageOrMessageGetter);
+  if (typeof messageOrMessageGetter === 'function') {
+    return resolveValueOrGetter<string>(messageOrMessageGetter);
+  }
+
+  return resolveValueOrGetter(messageOrMessageGetter);
 }

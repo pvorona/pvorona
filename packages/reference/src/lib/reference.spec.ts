@@ -96,6 +96,13 @@ describe('Reference', () => {
       ref.getOrSet(getter);
       expect(getter).not.toHaveBeenCalled();
     });
+
+    it('rejects function-valued getOrSet inputs for function references', () => {
+      const ref = createReference(() => 1);
+
+      // @ts-expect-error "Function values are reserved for lazy getters"
+      ref.getOrSet(() => () => 2);
+    });
   });
 });
 
