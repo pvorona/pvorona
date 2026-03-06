@@ -26,7 +26,11 @@ These helpers are mainly for narrowing values that already include the member yo
 
 ## Quick start
 
-### `assert(...)`
+### Throw on impossible state with `assert(...)`
+
+`assert(...)` takes a boolean condition. If the condition is `false`, it throws `AssertionError`.
+
+The message can be a string or a lazy getter.
 
 ```ts
 import { assert } from '@pvorona/assert';
@@ -40,18 +44,31 @@ export function parsePort(input: string): number {
 }
 ```
 
-### Null-safe DOM lookup
+### Remove `null` and `undefined`
 
 ```ts
-import { ensureNotNull } from '@pvorona/assert';
+import { ensureNotNullOrUndefined } from '@pvorona/assert';
 
-const root = ensureNotNull(document.getElementById('root'));
-// root: HTMLElement
+const envPort: null | string | undefined = process.env['PORT'];
+const port = ensureNotNullOrUndefined(envPort);
+// port: string
 ```
 
-Use `ensureDefined(...)` only when the missing case is actually `undefined`.
+Use `ensureDefined(...)` for `T | undefined` and `ensureNotNull(...)` for `T | null`.
 
-### Restrictive guard example
+### Check an object property on `unknown`
+
+```ts
+import { hasOwnPropertyValue } from '@pvorona/assert';
+
+const result: unknown = { status: 'success', value: 42 };
+
+if (hasOwnPropertyValue(result, 'status', 'success')) {
+  console.log(result['status']);
+}
+```
+
+### Narrow an existing union
 
 ```ts
 import { isString } from '@pvorona/assert';
@@ -63,45 +80,10 @@ function format(value: string | number): string {
 }
 ```
 
-### `isPromiseLike(...)`
+This is the intended style of use:
 
-```ts
-import { isPromiseLike } from '@pvorona/assert';
-
-async function awaitIfNeeded(value: unknown): Promise<unknown> {
-  if (!isPromiseLike(value)) return value;
-
-  return await value;
-}
-```
-
-### `hasOwnKey(...)`
-
-```ts
-import { hasOwnKey } from '@pvorona/assert';
-
-const durationBrand = Symbol('duration');
-const value: unknown = { [durationBrand]: true, milliseconds: 250 };
-
-if (hasOwnKey(value, durationBrand) && hasOwnKey(value, 'milliseconds')) {
-  console.log(value[durationBrand], value['milliseconds']);
-}
-```
-
-### Non-empty arrays
-
-```ts
-import { ensureNonEmptyArray, isNonEmptyArray } from '@pvorona/assert';
-
-const mutableValues: number[] = [1, 2];
-if (isNonEmptyArray(mutableValues)) {
-  mutableValues.push(3);
-}
-
-const readonlyValues: readonly number[] = [1, 2];
-const ensured = ensureNonEmptyArray(readonlyValues);
-// ensured: ReadonlyNonEmptyArray<number>
-```
+- Good fit: `isString(value)` when `value` is `string | number`
+- Not a good fit: treating `isString(...)` like a loose parser for arbitrary `unknown`
 
 ## Stable public surface
 
