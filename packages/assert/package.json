@@ -1,6 +1,6 @@
 {
   "name": "@pvorona/assert",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "ESM-only TypeScript assertions, restrictive guards, and narrowing helpers.",
   "keywords": [
     "assert",
