@@ -8,17 +8,17 @@ type FunctionValue = Function;
 
 type MessageOrFactory = string | (() => string);
 
+type IsNonFunctionalValue<T> = Extract<T, FunctionValue> extends never
+  ? true
+  : false;
+
 type NonFunctionalValue<T> = Extract<T, FunctionValue> extends never ? T : never;
+
+type NonFunctionalThis<T> = IsNonFunctionalValue<T> extends true ? void : never;
 
 type Getter<T> = () => T;
 
 type ValueOrGetter<T> = T | Getter<T>;
-
-type NonFunctionalReferenceGuard<T> = [T] extends [never]
-  ? []
-  : Extract<T, FunctionValue> extends never
-    ? []
-    : ['Reference values cannot be functions'];
 
 type ReadonlyReferenceShape<T> = Readonly<{
   isSet: boolean;
@@ -161,10 +161,9 @@ function createReferenceInternal<T>(
  * lazy initializers.
  */
 export function createReference<T>(
+  this: NonFunctionalThis<T>,
   initialValue: T,
-  ..._guard: NonFunctionalReferenceGuard<T>
 ): Reference<T> {
-  void _guard;
   assertNonFunctionalValue(initialValue);
 
   return createReferenceInternal<NonFunctionalValue<T>>(initialValue);
@@ -178,8 +177,7 @@ export function createReference<T>(
  * function inputs are reserved for lazy getters and lazy initializers.
  */
 export function createUnsetReference<T>(
-  ..._guard: NonFunctionalReferenceGuard<T>
+  this: NonFunctionalThis<T>,
 ): Reference<T> {
-  void _guard;
   return createReferenceInternal<NonFunctionalValue<T>>(UNSET);
 }
