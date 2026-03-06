@@ -48,19 +48,19 @@ export type Duration = {
   compare(other: Duration): -1 | 0 | 1;
 };
 
-const MILLISECONDS_IN_UNIT = [
-  1,
-  1_000,
-  60 * 1_000,
-  60 * 60 * 1_000,
+const MILLISECONDS_IN_UNIT = {
+  [TimeUnit.Millisecond]: 1,
+  [TimeUnit.Second]: 1_000,
+  [TimeUnit.Minute]: 60 * 1_000,
+  [TimeUnit.Hour]: 60 * 60 * 1_000,
   /** Note: Does not account for leap second */
-  24 * 60 * 60 * 1_000,
-  7 * 24 * 60 * 60 * 1_000,
+  [TimeUnit.Day]: 24 * 60 * 60 * 1_000,
+  [TimeUnit.Week]: 7 * 24 * 60 * 60 * 1_000,
   /** Note: Does not account for leap year */
-  /* 30 days */ 30 * 24 * 60 * 60 * 1_000,
+  [TimeUnit.Month]: /* 30 days */ 30 * 24 * 60 * 60 * 1_000,
   /** Note: Does not account for leap year */
-  /* 365.25 days */ 365.25 * 24 * 60 * 60 * 1_000,
-] as const;
+  [TimeUnit.Year]: /* 365.25 days */ 365.25 * 24 * 60 * 60 * 1_000,
+} as const;
 
 function ensureTimeUnit(unit: TimeUnit): TimeUnit {
   if (TIME_UNITS.has(unit)) {
