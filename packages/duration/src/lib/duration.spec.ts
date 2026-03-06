@@ -11,6 +11,7 @@ import {
   instant,
   isDuration,
   isEqual,
+  milliseconds,
   minutes,
   months,
   multiply,
@@ -24,33 +25,11 @@ import {
 
 type DurationModule = typeof import('./duration.js');
 
-async function loadMillisecondsFactory(): Promise<(value: number) => Duration> {
-  const durationModule = await import('./duration.js');
-
-  expect(durationModule).toHaveProperty('milliseconds');
-
-  const milliseconds = Reflect.get(durationModule, 'milliseconds');
-  if (typeof milliseconds !== 'function') {
-    throw new TypeError('Expected `milliseconds` to be a function');
-  }
-
-  return milliseconds as (value: number) => Duration;
-}
-
-function toMilliseconds(value: Duration): number {
-  const toMilliseconds = Reflect.get(value, 'toMilliseconds');
-  if (typeof toMilliseconds !== 'function') {
-    throw new TypeError('Expected `toMilliseconds` to be a function');
-  }
-
-  return Reflect.apply(toMilliseconds, value, []) as number;
-}
-
 describe('duration factories', () => {
   it('duration(value, unit) supports conversions', () => {
     const d = duration(2, TimeUnit.Minute);
     expect(d.toSeconds()).toBe(120);
-    expect(toMilliseconds(d)).toBe(120_000);
+    expect(d.toMilliseconds()).toBe(120_000);
   });
 
   it('seconds() creates a finite duration', () => {
@@ -58,36 +37,35 @@ describe('duration factories', () => {
     expect(d.isFinite).toBe(true);
     expect(d.isInfinite).toBe(false);
     expect(d.isInstant).toBe(false);
-    expect(toMilliseconds(d)).toBe(5_000);
+    expect(d.toMilliseconds()).toBe(5_000);
   });
 
-  it('milliseconds(0) is instant', async () => {
-    const milliseconds = await loadMillisecondsFactory();
+  it('milliseconds(0) is instant', () => {
     const d = milliseconds(0);
 
     expect(d.isInstant).toBe(true);
     expect(d.toSeconds()).toBe(0);
-    expect(toMilliseconds(d)).toBe(0);
+    expect(d.toMilliseconds()).toBe(0);
   });
 });
 
 describe('constants', () => {
   it('instant is zero', () => {
     expect(instant.isInstant).toBe(true);
-    expect(toMilliseconds(instant)).toBe(0);
+    expect(instant.toMilliseconds()).toBe(0);
   });
 
   it('infinite is infinite', () => {
     expect(infinite.isInfinite).toBe(true);
     expect(infinite.isFinite).toBe(false);
-    expect(toMilliseconds(infinite)).toBe(Infinity);
+    expect(infinite.toMilliseconds()).toBe(Infinity);
   });
 });
 
 describe('date helpers', () => {
   it('between returns the millisecond difference', () => {
     const d = between(new Date(0), new Date(1_500));
-    expect(toMilliseconds(d)).toBe(1_500);
+    expect(d.toMilliseconds()).toBe(1_500);
   });
 
   it('since uses "now"', () => {
@@ -95,7 +73,7 @@ describe('date helpers', () => {
     vi.setSystemTime(new Date(10_000));
 
     const d = since(new Date(7_500));
-    expect(toMilliseconds(d)).toBe(2_500);
+    expect(d.toMilliseconds()).toBe(2_500);
 
     vi.useRealTimers();
   });
@@ -105,14 +83,14 @@ describe('arithmetic', () => {
   it('add/subtract', () => {
     const a = seconds(1);
     const b = seconds(0.5);
-    expect(toMilliseconds(add(a, b))).toBe(1_500);
-    expect(toMilliseconds(subtract(a, b))).toBe(500);
+    expect(add(a, b).toMilliseconds()).toBe(1_500);
+    expect(subtract(a, b).toMilliseconds()).toBe(500);
   });
 
   it('multiply/divide', () => {
     const a = seconds(2);
     expect(multiply(a, 3).toSeconds()).toBe(6);
-    expect(toMilliseconds(divide(a, 4))).toBe(500);
+    expect(divide(a, 4).toMilliseconds()).toBe(500);
   });
 });
 
@@ -186,6 +164,42 @@ describe('runtime contract', () => {
     expect(result.isInstant).toBe(false);
     expect(result.toSeconds()).toBe(-1);
     expect(result.lessThan(instant)).toBe(true);
+  });
+});
+
+describe('README examples', () => {
+  it('creates and converts durations', () => {
+    const d = duration(2, TimeUnit.Minute);
+
+    expect(d.toSeconds()).toBe(120);
+    expect(d.toMilliseconds()).toBe(120_000);
+    expect(duration(250, TimeUnit.Millisecond).toSeconds()).toBe(0.25);
+  });
+
+  it('compares durations', () => {
+    const a = seconds(1);
+    const b = milliseconds(900);
+
+    expect(a.greaterThan(b)).toBe(true);
+    expect(a.compare(b)).toBe(1);
+  });
+
+  it('adds durations', () => {
+    const total = add(seconds(1), milliseconds(500));
+
+    expect(total.toMilliseconds()).toBe(1_500);
+  });
+
+  it('measures time since a start date', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(10_000));
+
+    const startedAt = new Date(Date.now() - 2_000);
+    const elapsed = since(startedAt);
+
+    expect(elapsed.toSeconds()).toBe(2);
+
+    vi.useRealTimers();
   });
 });
 
