@@ -21,6 +21,10 @@ export default [
     },
   },
   {
-    ignores: ['**/out-tsc'],
+    ignores: [
+      '**/out-tsc',
+      // This fixture intentionally imports the published package entry.
+      '**/tests/consumer/**',
+    ],
   },
 ];
