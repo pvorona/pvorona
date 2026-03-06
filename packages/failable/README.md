@@ -2,7 +2,7 @@
 
 Typed success/failure results for expected failures in TypeScript.
 
-`Failable<T, E>` is a discriminated union of `Success<T>` and `Failure<E>`. In the common case, you model the return type explicitly, construct with `success(...)` / `failure(...)`, and branch with `isSuccess(...)` / `isFailure(...)` or the `isSuccess` / `isError` flags.
+`Failable<T, E>` is a discriminated union of `Success<T>` and `Failure<E>`. In normal application code, return `success(...)` / `failure(...)`, then branch with `result.isSuccess` / `result.isError`. Keep `isSuccess(...)` / `isFailure(...)` for validating `unknown` values or external inputs.
 
 ## Install
 
@@ -10,11 +10,13 @@ Typed success/failure results for expected failures in TypeScript.
 npm i @pvorona/failable
 ```
 
-## Quick start
+This package is ESM-only. Use `import` syntax; the published package declares `Node >=18`.
+
+## Quick Start
 
 ```ts
 import type { Failable } from '@pvorona/failable';
-import { failure, isFailure, success } from '@pvorona/failable';
+import { failure, success } from '@pvorona/failable';
 
 function divide(a: number, b: number): Failable<number, string> {
   if (b === 0) return failure('Cannot divide by zero');
@@ -24,22 +26,18 @@ function divide(a: number, b: number): Failable<number, string> {
 
 const result = divide(10, 2);
 
-if (isFailure(result)) {
+if (result.isError) {
   console.error(result.error);
 } else {
   console.log(result.data);
 }
 ```
 
-## Core API
+## Everyday Usage
 
-### `type Failable<T, E>`
+### Return `success(...)` and `failure(...)`
 
-Alias for `Success<T> | Failure<E>`.
-
-### `success(data)` and `failure(error)`
-
-Use these when you already know whether you are returning success or failure:
+Use the explicit constructors when your function already knows which branch it should return:
 
 ```ts
 import { failure, success } from '@pvorona/failable';
@@ -48,79 +46,116 @@ const ok = success({ id: '1' });
 const err = failure({ code: 'bad_request' });
 ```
 
-### `isSuccess(...)` and `isFailure(...)`
+### Branch and unwrap with instance methods
 
-Use the guards or the instance booleans (`result.isSuccess` / `result.isError`) to branch:
+Hydrated `Failable` values carry booleans and convenience methods, so everyday code can stay local and direct:
 
 ```ts
-import { failure, isSuccess, success } from '@pvorona/failable';
+import { failure, success } from '@pvorona/failable';
 
-const result = Math.random() > 0.5 ? success(123) : failure('boom');
+const portResult = Math.random() > 0.5
+  ? success(3000)
+  : failure('Missing port');
 
-if (isSuccess(result)) {
-  console.log(result.data);
+if (portResult.isError) {
+  console.error(portResult.error);
 } else {
-  console.error(result.error);
+  const requiredPort = portResult.getOrThrow();
+  console.log(requiredPort);
 }
+
+const port = portResult.getOr(3000);
+const ensuredPort = portResult.or(3000);
+console.log(port, ensuredPort.data);
 ```
 
-### `createFailable(...)`
+- `result.isSuccess` / `result.isError`: branch on a hydrated result
+- `result.getOr(fallback)`: get the success value or a fallback
+- `result.or(fallback)`: always end up with `Success<T>`
+- `result.getOrThrow()`: unwrap success or throw the failure value
 
-`createFailable(...)` is a convenience wrapper when you want to capture thrown or rejected values:
+### `createFailable(...)` for throwy or rejecting code
+
+`createFailable(...)` is the convenience entrypoint when you want to capture sync throws, promise rejections, or reuse an existing result shape:
 
 - `createFailable(failable)` returns the same instance
 - `createFailable(failableLike)` rehydrates into a real `Success` / `Failure`
 - `createFailable(() => value)` captures sync throws into `Failure`
 - `createFailable(promise)` captures promise rejections into `Failure`
-
-Example:
-
-```ts
-import { createFailable, isFailure } from '@pvorona/failable';
-
-const responseResult = await createFailable(fetch('https://example.com/items'));
-
-if (isFailure(responseResult)) {
-  console.error('Network failure:', responseResult.error);
-} else if (!responseResult.data.ok) {
-  console.error(`Unexpected status: ${responseResult.data.status}`);
-} else {
-  const text = await responseResult.data.text();
-  const parseResult = createFailable(() => JSON.parse(text));
-
-  if (isFailure(parseResult)) {
-    console.error('Invalid JSON:', parseResult.error);
-  } else {
-    console.log(parseResult.data);
-  }
-}
-```
-
-## Important semantics
-
-- `createFailable(async () => value)` is a footgun. The async function itself is treated as a sync return value, so the result is `Success<Promise<T>>`. If you want rejection capture, pass the promise directly: `await createFailable(somePromise)`.
-- `or(...)` and `getOr(...)` are eager. The fallback expression runs before the method call.
-- `isFailableLike(...)` is intentionally strict. It only accepts exactly `{ status, data }` or `{ status, error }` with no extra enumerable keys.
-- By default, `createFailable(...)` preserves raw thrown and rejected values. If something throws `'boom'`, `{ code: 'bad_request' }`, or `[error1, error2]`, that exact value becomes `.error`.
-- `createFailable(input, NormalizedErrors)` converts non-`Error` failures into `Error` values:
-  - existing `Error` values pass through unchanged
-  - arrays become `AggregateError`
-  - other values become `Error`
-  - the original raw value is preserved in `error.cause`
-- `createFailable(input, { normalizeError })` lets you supply your own normalization strategy.
-- The library still uses private runtime tags internally for hydrated instances, but those details are not part of the public API.
-- This package is ESM-only. Use `import` syntax; there is no `require` export condition.
-
-## Normalizing errors
-
-If you want `Error`-shaped handling at the boundary, opt in explicitly:
+- If a callback returns, or a promise resolves to, a `Failable` or `FailableLike`, `createFailable(...)` preserves that result instead of nesting it inside `Success`
 
 ```ts
 import {
   createFailable,
-  isFailure,
-  NormalizedErrors,
+  failure,
+  success,
+  type Failable,
 } from '@pvorona/failable';
+
+type PortError = {
+  readonly code: 'invalid_port';
+};
+
+function readPort(value: unknown): Failable<number, PortError> {
+  if (typeof value !== 'number') return failure({ code: 'invalid_port' });
+
+  return success(value);
+}
+
+const configResult = createFailable(() => JSON.parse(rawConfig));
+
+if (configResult.isError) {
+  console.error('Invalid JSON:', configResult.error);
+} else {
+  const portResult = createFailable(() => readPort(configResult.data.port));
+
+  if (portResult.isError) {
+    console.error(portResult.error.code);
+  } else {
+    console.log(portResult.data);
+  }
+}
+```
+
+Pass promises directly when you want rejection capture:
+
+```ts
+import { createFailable } from '@pvorona/failable';
+
+const responseResult = await createFailable(fetch(url));
+if (responseResult.isError) console.error(responseResult.error);
+```
+
+### Use guards for `unknown` values
+
+Use `isFailable(...)`, `isSuccess(...)`, and `isFailure(...)` when you are validating something that might already be a hydrated `Failable`:
+
+```ts
+import { isFailable } from '@pvorona/failable';
+
+const candidate: unknown = maybeFromAnotherModule();
+
+if (isFailable(candidate) && candidate.isError) {
+  console.error(candidate.error);
+}
+```
+
+Use `isSuccess(...)` / `isFailure(...)` when you only care about one branch. If you are validating plain wire data, use `isFailableLike(...)` and then rehydrate with `createFailable(...)`.
+
+## Important Semantics
+
+- Hydrated `Failable` values are frozen plain objects with methods. Prefer `result.isSuccess` / `result.isError`, and do not use `instanceof`.
+- `or(...)` and `getOr(...)` are eager. The fallback expression runs before the method call.
+- By default, `createFailable(...)` preserves raw thrown and rejected values. If something throws `'boom'`, `{ code: 'bad_request' }`, or `[error1, error2]`, that exact value becomes `.error`.
+- `getOrThrow()` throws `result.error` unchanged on failures. If you want `Error` values, opt into normalization.
+- `createFailable(async () => value)` is a footgun. The async function itself is treated as a sync return value, so the result is `Success<Promise<T>>`. If you want rejection capture, pass the promise directly: `await createFailable(somePromise)`.
+
+## Normalizing Errors
+
+If you want `Error`-shaped failures, opt in explicitly with `NormalizedErrors`:
+
+```ts
+import { createFailable, NormalizedErrors } from '@pvorona/failable';
 
 const result = createFailable(
   () => {
@@ -129,11 +164,20 @@ const result = createFailable(
   NormalizedErrors
 );
 
-if (isFailure(result)) {
+if (result.isError) {
   console.error(result.error.message);
   console.error(result.error.cause); // { code: 'bad_request' }
 }
 ```
+
+The same option also normalizes existing `failure(...)` values and rehydrated `FailableLike` failures.
+
+Built-in normalization behaves like this:
+
+- existing `Error` values pass through unchanged
+- arrays become `AggregateError`
+- other values become `Error`
+- the original raw value is preserved in `error.cause`
 
 For custom normalization:
 
@@ -149,48 +193,29 @@ const result = createFailable(doThing, {
 });
 ```
 
-## Structured-clone transport
+## Boundary Transport
 
-Hydrated `Failable` instances have methods and private runtime details that do not survive structured cloning (`postMessage`, `MessagePort`, extension messaging, etc.). Convert them to plain objects first:
+Hydrated `Failable` values do not survive structured cloning because they carry methods and runtime details. If you need to cross a message boundary, convert to a plain shape first and rehydrate on the receiving side:
 
 ```ts
 import { createFailable, toFailableLike } from '@pvorona/failable';
 
-const result = createFailable(() => JSON.parse('{"ok":true}'));
-
-// sender
 const wire = toFailableLike(result);
-postMessage(wire);
-
-// receiver
 const hydrated = createFailable(wire);
 ```
 
-The transport shape is:
+`isFailableLike(...)` validates the strict wire shape `{ status, data }` or `{ status, error }`, and the inner `data` / `error` values must still be structured-cloneable.
 
-- `FailableLikeSuccess<T>`: `{ status: FailableStatus.Success, data: T }`
-- `FailableLikeFailure<E>`: `{ status: FailableStatus.Failure, error: E }`
-
-`FailableStatus` is a runtime object:
-
-```ts
-import { FailableStatus, type FailableLike } from '@pvorona/failable';
-
-const wire: FailableLike<number, string> = {
-  status: FailableStatus.Success,
-  data: 1,
-};
-```
-
-## API at a glance
+## API At A Glance
 
 - `type Failable<T, E>`: `Success<T> | Failure<E>`
-- `type Success<T>`: success variant with `data`, `or(...)`, `getOr(...)`, and `getOrThrow()`
-- `type Failure<E>`: failure variant with `error`, `or(...)`, `getOr(...)`, and `getOrThrow()`
-- `const FailableStatus`: runtime `{ Success, Failure }` object
+- `type Success<T>`: success variant with `isSuccess`, `data`, `or(...)`, `getOr(...)`, and `getOrThrow()`
+- `type Failure<E>`: failure variant with `isError`, `error`, `or(...)`, `getOr(...)`, and `getOrThrow()`
+- `type FailableLike<T, E>`: strict structured-clone-friendly wire shape
 - `const NormalizedErrors`: built-in token for `Error` normalization
 - `success(data)` / `failure(error)`: explicit constructors
-- `isFailable(...)`, `isSuccess(...)`, `isFailure(...)`: runtime guards for hydrated values
-- `toFailableLike(...)`: convert a hydrated result into a structured-clone-friendly value
-- `isFailableLike(...)`: validate the strict structured-clone shape
-- `createFailable(...)`: wrap, rehydrate, or normalize results
+- `createFailable(...)`: wrap, preserve, rehydrate, or normalize results
+- `isFailable(...)`, `isSuccess(...)`, `isFailure(...)`: runtime validators for hydrated values
+- `toFailableLike(...)`: convert a hydrated result into a plain transport shape
+- `isFailableLike(...)`: validate the strict wire shape
+- `const FailableStatus`: runtime `{ Success, Failure }` object for wire values
