@@ -19,7 +19,7 @@ import { duration, TimeUnit } from '@pvorona/duration';
 
 const d = duration(2, TimeUnit.Minute);
 d.toSeconds(); // 120
-d.toMilliseconds(); // 300_000
+d.toMilliseconds(); // 120_000
 duration(250, TimeUnit.Millisecond).toSeconds(); // 0.25
 ```
 
@@ -54,9 +54,14 @@ const elapsed = since(startedAt);
 elapsed.toSeconds(); // ~2
 ```
 
-## Environment and semantics
+## Important semantics
 
 - ESM-only package: use `import`, not `require(...)`.
+- Duration values are frozen branded objects created by this package. Use `isDuration(...)` for unknown inputs instead of duck typing.
+- Compare durations by value with `d.equals(other)` or `isEqual(a, b)`, not `===`.
+- Do not spread, JSON-serialize, or structured-clone `Duration` values as a transport format. Serialize your own explicit shape and reconstruct with `milliseconds(...)` for finite values or `infinite` for the sentinel.
+- `instant` is the exported zero-duration constant, but any zero-valued duration has `isInstant === true`.
+- The public millisecond APIs are `TimeUnit.Millisecond`, `milliseconds(...)`, and `toMilliseconds()`.
 - `Month` is treated as 30 days and `Year` as 365.25 days. These are approximations, not calendar-aware durations.
 - Negative finite durations are valid. `between(...)`, `since(...)`, arithmetic, and comparisons can produce or operate on negative values.
 - Constructors accept only finite numeric inputs. `infinite` is the only supported non-finite duration.
@@ -67,7 +72,10 @@ elapsed.toSeconds(); // ~2
 
 ### `TimeUnit`
 
-Runtime unit constants supported by `duration(value, unit)` and `d.to(unit)`.
+The package exports both:
+
+- `type TimeUnit`: the union of the supported runtime unit values
+- `const TimeUnit`: the runtime constants accepted by `duration(value, unit)` and `d.to(unit)`
 
 - `TimeUnit.Millisecond`
 - `TimeUnit.Second`
@@ -80,13 +88,13 @@ Runtime unit constants supported by `duration(value, unit)` and `d.to(unit)`.
 
 ### `type Duration`
 
-An opaque, immutable duration value.
+An opaque, immutable duration value. Duration instances are branded by the package, so use `isDuration(...)` for unknown inputs and compare values with `equals(...)` / `isEqual(...)` rather than `===`.
 
 #### Properties
 
 - **`isFinite: boolean`**: `true` for finite durations
 - **`isInfinite: boolean`**: `true` only for `infinite`
-- **`isInstant: boolean`**: `true` for zero duration (`instant`)
+- **`isInstant: boolean`**: `true` for any zero duration (including `instant`)
 
 #### Conversions
 
