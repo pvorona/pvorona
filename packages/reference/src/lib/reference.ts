@@ -1,4 +1,4 @@
-import { assert, resolveValueOrGetter } from '@pvorona/assert';
+import { assert, isFunction, resolveValueOrGetter } from '@pvorona/assert';
 
 const UNSET: unique symbol = Symbol('UNSET');
 
@@ -6,77 +6,252 @@ type FunctionValue =
   | ((...args: never[]) => unknown)
   | (abstract new (...args: never[]) => unknown);
 
-type NonFunctionalValue<T> = T extends FunctionValue ? never : T;
+type MessageOrFactory = string | (() => string);
 
-export type ReadonlyReference<T> = Readonly<{
+type NonFunctionalValue<T> = Extract<T, FunctionValue> extends never ? T : never;
+
+type Getter<T> = () => T;
+
+type ValueOrGetter<T> = T | Getter<T>;
+
+type ReadonlyReferenceShape<T> = Readonly<{
+  isSet: boolean;
+  isUnset: boolean;
   getOr: {
     <U>(value: NonFunctionalValue<U>): T | NonFunctionalValue<U>;
-    <U>(getter: () => NonFunctionalValue<U>): T | NonFunctionalValue<U>;
+    <U>(getter: Getter<NonFunctionalValue<U>>): T | NonFunctionalValue<U>;
     <U>(
-      valueOrGetter: NonFunctionalValue<U> | (() => NonFunctionalValue<U>),
+      valueOrGetter: NonFunctionalValue<U> | Getter<NonFunctionalValue<U>>,
     ): T | NonFunctionalValue<U>;
   };
-  getOrThrow: (messageOrFactory?: string | (() => string)) => T;
+  getOrThrow: (messageOrFactory?: MessageOrFactory) => T;
 }>;
 
-export type Reference<T> = Readonly<{
+type ReferenceShape<T> = Readonly<{
+  isSet: boolean;
+  isUnset: boolean;
   getOr: {
     <U>(value: NonFunctionalValue<U>): T | NonFunctionalValue<U>;
-    <U>(getter: () => NonFunctionalValue<U>): T | NonFunctionalValue<U>;
+    <U>(getter: Getter<NonFunctionalValue<U>>): T | NonFunctionalValue<U>;
     <U>(
-      valueOrGetter: NonFunctionalValue<U> | (() => NonFunctionalValue<U>),
+      valueOrGetter: NonFunctionalValue<U> | Getter<NonFunctionalValue<U>>,
     ): T | NonFunctionalValue<U>;
   };
-  getOrThrow: (messageOrFactory?: string | (() => string)) => T;
+  getOrThrow: (messageOrFactory?: MessageOrFactory) => T;
   getOrSet: {
-    (value: NonFunctionalValue<T>): T;
-    (getter: () => NonFunctionalValue<T>): T;
-    (valueOrGetter: NonFunctionalValue<T> | (() => NonFunctionalValue<T>)): T;
+    (value: T): T;
+    (getter: Getter<T>): T;
+    (valueOrGetter: T | Getter<T>): T;
   };
   set: (value: T) => void;
+  unset: () => void;
+  asReadonly: () => ReadonlyReferenceShape<T>;
+}>;
+
+/**
+ * A live readonly view of a reference.
+ *
+ * Use `isSet` and `isUnset` for presence checks, `getOr(...)` for fallback reads,
+ * and `getOrThrow(...)` when absence is an error. Function-valued `T` is rejected
+ * because function inputs are reserved for lazy getters.
+ */
+export type ReadonlyReference<T> = Readonly<{
+  isSet: boolean;
+  isUnset: boolean;
+  getOr: {
+    <U>(value: Extract<U, FunctionValue> extends never ? U : never):
+      | (Extract<T, FunctionValue> extends never ? T : never)
+      | (Extract<U, FunctionValue> extends never ? U : never);
+    <U>(getter: () => Extract<U, FunctionValue> extends never ? U : never):
+      | (Extract<T, FunctionValue> extends never ? T : never)
+      | (Extract<U, FunctionValue> extends never ? U : never);
+    <U>(
+      valueOrGetter:
+        | (Extract<U, FunctionValue> extends never ? U : never)
+        | (() => Extract<U, FunctionValue> extends never ? U : never),
+    ):
+      | (Extract<T, FunctionValue> extends never ? T : never)
+      | (Extract<U, FunctionValue> extends never ? U : never);
+  };
+  getOrThrow: (
+    messageOrFactory?: string | (() => string),
+  ) => Extract<T, FunctionValue> extends never ? T : never;
+}>;
+
+/**
+ * A mutable reference with explicit empty-state semantics.
+ *
+ * `createReference(value)` starts set, `createUnsetReference<T>()` starts unset,
+ * and `asReadonly()` returns a live readonly view of the same state. Function-
+ * valued `T` is rejected because function inputs are reserved for lazy getters
+ * and lazy initializers.
+ */
+export type Reference<T> = Readonly<{
+  isSet: boolean;
+  isUnset: boolean;
+  getOr: {
+    <U>(value: Extract<U, FunctionValue> extends never ? U : never):
+      | (Extract<T, FunctionValue> extends never ? T : never)
+      | (Extract<U, FunctionValue> extends never ? U : never);
+    <U>(getter: () => Extract<U, FunctionValue> extends never ? U : never):
+      | (Extract<T, FunctionValue> extends never ? T : never)
+      | (Extract<U, FunctionValue> extends never ? U : never);
+    <U>(
+      valueOrGetter:
+        | (Extract<U, FunctionValue> extends never ? U : never)
+        | (() => Extract<U, FunctionValue> extends never ? U : never),
+    ):
+      | (Extract<T, FunctionValue> extends never ? T : never)
+      | (Extract<U, FunctionValue> extends never ? U : never);
+  };
+  getOrThrow: (
+    messageOrFactory?: string | (() => string),
+  ) => Extract<T, FunctionValue> extends never ? T : never;
+  getOrSet: {
+    (value: Extract<T, FunctionValue> extends never ? T : never):
+      Extract<T, FunctionValue> extends never ? T : never;
+    (getter: () => Extract<T, FunctionValue> extends never ? T : never):
+      Extract<T, FunctionValue> extends never ? T : never;
+    (
+      valueOrGetter:
+        | (Extract<T, FunctionValue> extends never ? T : never)
+        | (() => Extract<T, FunctionValue> extends never ? T : never),
+    ): Extract<T, FunctionValue> extends never ? T : never;
+  };
+  set: (value: Extract<T, FunctionValue> extends never ? T : never) => void;
   unset: () => void;
   asReadonly: () => ReadonlyReference<T>;
 }>;
 
-function isSet<T>(current: T | typeof UNSET): current is T {
+function hasStoredValue<T>(current: T | typeof UNSET): current is T {
   return current !== UNSET;
 }
 
-export function createReference<T>(initialValue: T): Reference<T> {
+function assertNonFunctionalValue<T>(
+  value: T,
+): asserts value is NonFunctionalValue<T> {
+  assert(
+    !isFunction(value),
+    'Reference values cannot be functions; functions are reserved for lazy getters and initializers',
+  );
+}
+
+function isClassConstructor(
+  value: unknown,
+): value is abstract new (...args: never[]) => unknown {
+  if (!isFunction(value)) return false;
+
+  return Function.prototype.toString.call(value).startsWith('class ');
+}
+
+function resolveReferenceValue<T>(
+  valueOrGetter: ValueOrGetter<T>,
+): NonFunctionalValue<T> {
+  if (isClassConstructor(valueOrGetter)) {
+    assertNonFunctionalValue(valueOrGetter);
+  }
+
+  const value = resolveValueOrGetter(valueOrGetter as never) as NonFunctionalValue<T>;
+
+  assertNonFunctionalValue(value);
+
+  return value;
+}
+
+function createReferenceInternal<T>(
+  initialValue: T | typeof UNSET,
+): ReferenceShape<T> {
   let current: T | typeof UNSET = initialValue;
 
-  const getOr = <U>(
-    valueOrGetter: NonFunctionalValue<U> | (() => NonFunctionalValue<U>),
-  ): T | NonFunctionalValue<U> => {
-    if (isSet(current)) return current;
+  if (hasStoredValue(current)) {
+    assertNonFunctionalValue(current);
+  }
 
-    return resolveValueOrGetter(valueOrGetter);
+  const getOr: ReadonlyReferenceShape<T>['getOr'] = <U>(
+    valueOrGetter: ValueOrGetter<NonFunctionalValue<U>>,
+  ): T | NonFunctionalValue<U> => {
+    if (hasStoredValue(current)) return current;
+
+    return resolveReferenceValue(valueOrGetter);
   };
 
-  const getOrThrow = (messageOrFactory?: string | (() => string)): T => {
-    assert(isSet(current), messageOrFactory ?? 'Reference is not set');
+  const getOrThrow = (messageOrFactory?: MessageOrFactory): T => {
+    assert(hasStoredValue(current), messageOrFactory ?? 'Reference is not set');
 
     return current;
   };
 
-  return {
+  const getOrSet: ReferenceShape<T>['getOrSet'] = (
+    valueOrGetter: ValueOrGetter<T>,
+  ): T => {
+    if (hasStoredValue(current)) return current;
+
+    const nextValue = resolveReferenceValue(valueOrGetter);
+
+    current = nextValue;
+
+    return current;
+  };
+
+  const readonlyReference: ReadonlyReferenceShape<T> = {
+    get isSet() {
+      return hasStoredValue(current);
+    },
+    get isUnset() {
+      return !hasStoredValue(current);
+    },
     getOr,
     getOrThrow,
-    getOrSet: (
-      valueOrGetter: NonFunctionalValue<T> | (() => NonFunctionalValue<T>),
-    ) => {
-      if (isSet(current)) return current;
+  };
 
-      current = resolveValueOrGetter(valueOrGetter);
-
-      return current;
+  return {
+    get isSet() {
+      return hasStoredValue(current);
     },
+    get isUnset() {
+      return !hasStoredValue(current);
+    },
+    getOr,
+    getOrThrow,
+    getOrSet,
     set: (value: T) => {
+      assertNonFunctionalValue(value);
+
       current = value;
     },
     unset: () => {
       current = UNSET;
     },
-    asReadonly: (): ReadonlyReference<T> => ({ getOr, getOrThrow }),
+    asReadonly: (): ReadonlyReferenceShape<T> => readonlyReference,
   };
+}
+
+/**
+ * Create a reference that starts set to `initialValue`.
+ *
+ * Passing `undefined` or `null` stores that exact value. Use
+ * `createUnsetReference<T>()` when you need an empty reference instead. Functions
+ * cannot be stored directly; function inputs are reserved for lazy getters and
+ * lazy initializers.
+ */
+export function createReference<T>(
+  this: Extract<T, FunctionValue> extends never ? void : never,
+  initialValue: T,
+): Reference<T> {
+  assertNonFunctionalValue(initialValue);
+
+  return createReferenceInternal<NonFunctionalValue<T>>(initialValue);
+}
+
+/**
+ * Create a reference that starts unset.
+ *
+ * Use `isSet`, `isUnset`, `getOr(...)`, `getOrThrow(...)`, and `getOrSet(...)`
+ * to observe or initialize it later. Functions cannot be used as `T` because
+ * function inputs are reserved for lazy getters and lazy initializers.
+ */
+export function createUnsetReference<T>(
+  this: Extract<T, FunctionValue> extends never ? void : never,
+): Reference<T> {
+  return createReferenceInternal<NonFunctionalValue<T>>(UNSET);
 }
