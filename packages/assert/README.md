@@ -108,10 +108,15 @@ const ensured = ensureNonEmptyArray(readonlyValues);
 // ensured: ReadonlyNonEmptyArray<number>
 ```
 
-### `Mutable<T>`
+### Breaking change: `Mutable<T>` is no longer public
+
+`Mutable` is no longer exported from `@pvorona/assert`.
+Inside this workspace, current consumers now import it from the private
+`@pvorona/types` package.
 
 ```ts
-import type { Mutable } from '@pvorona/assert';
+// Workspace-internal migration only
+import type { Mutable } from '@pvorona/types';
 
 type Config = {
   readonly retries: number;
@@ -125,12 +130,12 @@ type DraftConfig = Mutable<Config>;
 ## Stable public surface
 
 - Runtime helpers: `assert`, `AssertionError`, the root `is*` / `ensure*` helpers, `isPromiseLike`, `hasOwnKey`, and `hasOwnPropertyValue`
-- Public types: `Mutable`, `NonEmptyArray`, and `ReadonlyNonEmptyArray`
+- Public types: `NonEmptyArray` and `ReadonlyNonEmptyArray`
 
 ## ESM and tooling
 
 - Import the package with standard ESM syntax: `import { assert } from '@pvorona/assert'`
-- Import types with `import type`, for example `import type { Mutable } from '@pvorona/assert'`
+- Import types with `import type`, for example `import type { ReadonlyNonEmptyArray } from '@pvorona/assert'`
 - The current workspace baseline is Node 20+ and TypeScript 5.9+
 
 ## Migration note
@@ -142,13 +147,15 @@ The root package no longer re-exports some advanced helpers from the old interna
 import { resolveValueOrGetter } from '@pvorona/assert';
 import type { Mutable, Override, NotOnlyString } from '@pvorona/assert';
 
-// After (workspace-internal helper import)
+// After (workspace-internal helper/type imports)
 import { resolveValueOrGetter } from '@pvorona/resolve-value-or-getter';
-import type { Mutable } from '@pvorona/assert';
+import type { Mutable } from '@pvorona/types';
 ```
 
 - `resolveValueOrGetter` moved to the private workspace package `@pvorona/resolve-value-or-getter`
+- `Mutable` moved to the private workspace package `@pvorona/types`
 - External consumers should stop importing `resolveValueOrGetter` from `@pvorona/assert` and define a local equivalent if they still need the helper
+- External consumers should stop importing `Mutable` from `@pvorona/assert` and define a local equivalent if they still need the mapped type
 - Removed root exports include internal-looking helpers such as `Override`, `InferErrorMessage`, `NotOnly*`, `Includes*`, `AtLeastOneValid`, and `InferArrayType`
-- `Mutable`, `NonEmptyArray`, and `ReadonlyNonEmptyArray` remain public
+- `NonEmptyArray` and `ReadonlyNonEmptyArray` remain public
 - There is no replacement public subpath for the removed advanced types; if you still need them, define local equivalents in your own codebase

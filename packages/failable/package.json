@@ -39,5 +39,8 @@
   "dependencies": {
     "@pvorona/assert": "~0.1.0",
     "@pvorona/not-implemented": "~0.0.1"
+  },
+  "devDependencies": {
+    "@pvorona/types": "0.0.0"
   }
 }

@@ -3,9 +3,9 @@ import {
   hasOwnPropertyValue,
   isFunction,
   isObject,
-  type Mutable,
 } from '@pvorona/assert';
 import { notImplemented } from '@pvorona/not-implemented';
+import type { Mutable } from '@pvorona/types';
 
 const FAILABLE_TAG = Symbol('Failable');
 const SUCCESS_TAG = Symbol('Success');

@@ -28,4 +28,3 @@ export * from './lib/isPromiseLike.js';
 export * from './lib/isString.js';
 export * from './lib/isSymbol.js';
 export * from './lib/isUndefined.js';
-export type { Mutable } from './lib/Mutable.js';
