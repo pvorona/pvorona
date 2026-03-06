@@ -44,6 +44,7 @@
     "access": "public"
   },
   "dependencies": {
+    "@pvorona/resolve-value-or-getter": "0.0.0",
     "@pvorona/throw-error": "~0.0.2",
     "tslib": "^2.3.0"
   }

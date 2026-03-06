@@ -78,10 +78,10 @@ if (hasOwnKey(value, durationBrand) && hasOwnKey(value, 'milliseconds')) {
 }
 ```
 
-### `resolveValueOrGetter(...)`
+### Breaking change: `resolveValueOrGetter(...)` moved
 
 ```ts
-import { resolveValueOrGetter } from '@pvorona/assert';
+import { resolveValueOrGetter } from '@pvorona/resolve-value-or-getter';
 
 const fallback = Math.random() > 0.5 ? 'cached' : () => 'computed';
 const value = resolveValueOrGetter(fallback);
@@ -119,7 +119,7 @@ type DraftConfig = Mutable<Config>;
 
 ## Stable public surface
 
-- Runtime helpers: `assert`, `AssertionError`, the root `is*` / `ensure*` helpers, `isPromiseLike`, `hasOwnKey`, `hasOwnPropertyValue`, and `resolveValueOrGetter`
+- Runtime helpers: `assert`, `AssertionError`, the root `is*` / `ensure*` helpers, `isPromiseLike`, `hasOwnKey`, and `hasOwnPropertyValue`
 - Public types: `Mutable`, `NonEmptyArray`, and `ReadonlyNonEmptyArray`
 
 ## ESM and tooling
@@ -130,16 +130,19 @@ type DraftConfig = Mutable<Config>;
 
 ## Migration note
 
-The root package no longer re-exports the advanced helper types from the old internal `types.ts` surface.
+The root package no longer re-exports some advanced helpers from the old internal surfaces.
 
 ```ts
 // Before
+import { resolveValueOrGetter } from '@pvorona/assert';
 import type { Mutable, Override, NotOnlyString } from '@pvorona/assert';
 
 // After
+import { resolveValueOrGetter } from '@pvorona/resolve-value-or-getter';
 import type { Mutable } from '@pvorona/assert';
 ```
 
+- `resolveValueOrGetter` moved to `@pvorona/resolve-value-or-getter`
 - Removed root exports include internal-looking helpers such as `Override`, `InferErrorMessage`, `NotOnly*`, `Includes*`, `AtLeastOneValid`, and `InferArrayType`
 - `Mutable`, `NonEmptyArray`, and `ReadonlyNonEmptyArray` remain public
 - There is no replacement public subpath for the removed advanced types; if you still need them, define local equivalents in your own codebase

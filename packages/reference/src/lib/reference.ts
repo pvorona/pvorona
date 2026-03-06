@@ -1,4 +1,5 @@
-import { assert, isFunction, resolveValueOrGetter } from '@pvorona/assert';
+import { assert, isFunction } from '@pvorona/assert';
+import { resolveValueOrGetter } from '@pvorona/resolve-value-or-getter';
 
 const UNSET: unique symbol = Symbol('UNSET');
 

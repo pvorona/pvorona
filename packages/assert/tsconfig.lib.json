@@ -12,6 +12,9 @@
   "include": ["src/**/*.ts"],
   "references": [
     {
+      "path": "../resolve-value-or-getter/tsconfig.lib.json"
+    },
+    {
       "path": "../throw-error/tsconfig.lib.json"
     }
   ],
