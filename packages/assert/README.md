@@ -85,10 +85,92 @@ This is the intended style of use:
 - Good fit: `isString(value)` when `value` is `string | number`
 - Not a good fit: treating `isString(...)` like a loose parser for arbitrary `unknown`
 
-## Stable public surface
+## API reference
 
-- Runtime helpers: `assert`, `AssertionError`, the root `is*` and `ensure*` helpers, `isPromiseLike`, `hasOwnKey`, and `hasOwnPropertyValue`
-- Public types: `NonEmptyArray` and `ReadonlyNonEmptyArray`
+### Core assertion helpers
+
+- `assert(condition, message?, functionToSkipStackFrames?)`: asserts a boolean condition and throws `AssertionError` on failure
+- `AssertionError`: error class used by failed `assert(...)` calls
+- `ensureNever(value, silent?, message?)`: throws plain `Error` for exhaustive-check failures unless `silent` is `true`
+
+### Nullish helpers
+
+- `isDefined(...)`: boolean type guard that narrows `T | undefined` to `T`
+- `ensureDefined(...)`: narrows `T | undefined` and throws on `undefined`
+- `isNull(...)`: boolean type guard for unions that include `null`
+- `isNotNull(...)`: boolean type guard that excludes `null`
+- `ensureNotNull(...)`: narrows `T | null` and throws on `null`
+- `isUndefined(...)`: boolean type guard for unions that include `undefined`
+- `isNullOrUndefined(...)`: boolean type guard for unions that include both `null` and `undefined`
+- `ensureNotNullOrUndefined(...)`: narrows `T | null | undefined` and throws on `null` or `undefined`
+
+### String and number helpers
+
+- `isString(...)`: boolean type guard for unions that include `string`
+- `ensureString(...)`: narrows to `string` and throws on failure
+- `isNumber(...)`: boolean type guard for unions that include `number`
+- `ensureNumber(...)`: narrows to `number` and throws on failure
+
+### Object and property helpers
+
+- `isObject(...)`: boolean type guard for non-null indexable objects
+- `ensureObject(...)`: narrows to a non-null object and throws on failure
+- `hasOwnKey(...)`: boolean guard for own properties on objects or functions
+- `hasOwnPropertyValue(...)`: boolean guard for own data properties matching an exact value
+- `isFunction(...)`: boolean guard for unions that already include a function member
+- `isSymbol(...)`: boolean guard for unions that include `symbol`
+
+### Array helpers
+
+- `isArray(...)`: boolean type guard for unions that include mutable arrays
+- `ensureArray(...)`: narrows to mutable arrays and throws on failure
+- `isEmptyArray(...)`: boolean type guard for the exact empty tuple `[]`
+- `isNonEmptyArray(...)`: boolean guard for non-empty mutable or readonly arrays
+- `ensureNonEmptyArray(...)`: narrows to `NonEmptyArray<T>` or `ReadonlyNonEmptyArray<T>` and throws on failure
+
+### Numeric predicates
+
+- `isInteger(number)`: returns `true` for integers
+- `isPositive(number)`: returns `true` for numbers greater than `0`
+- `isNegative(number)`: returns `true` for numbers less than `0`
+
+### Async helper
+
+- `isPromiseLike(...)`: boolean guard for values that expose a callable `.then`
+
+### Public types
+
+- `NonEmptyArray<T>`: mutable non-empty array whose `map(...)` stays non-empty
+- `ReadonlyNonEmptyArray<T>`: readonly non-empty array whose `map(...)` returns a mutable `NonEmptyArray<U>`
+
+## Behavior notes
+
+- `isNumber(...)` and `ensureNumber(...)` reject `NaN`, `Infinity`, and `-Infinity`.
+- `ensureNumber(...)` is an exception to the stricter compile-time pattern used by helpers like `isNumber(...)`: plain `number` inputs are allowed.
+- `isObject(...)` and `ensureObject(...)` accept arrays but reject functions.
+- `hasOwnKey(...)` and `hasOwnPropertyValue(...)` work with both objects and functions that have own properties.
+- `hasOwnPropertyValue(...)` only matches own data properties. Inherited properties and getters return `false`.
+- `isPromiseLike(...)` accepts object or function thenables and returns `false` if reading `.then` throws.
+- `ensureNever(...)` is for exhaustive checks. It throws plain `Error`, not `AssertionError`, and `silent = true` skips throwing.
+- `isFunction(...)` is most useful when the union already contains a function member.
+- `isSymbol(...)` expects the broad `symbol` type in the input union.
+- `isNullOrUndefined(...)` and `ensureNotNullOrUndefined(...)` expect unions that include both `null` and `undefined`.
+
+## Restrictive helper examples
+
+```ts
+import { ensureDefined, ensureNotNullOrUndefined } from '@pvorona/assert';
+
+const port: null | string | undefined = process.env['PORT'];
+const definedPort = ensureNotNullOrUndefined(port);
+
+const fallbackPort: string | undefined = process.env['FALLBACK_PORT'];
+const requiredFallbackPort = ensureDefined(fallbackPort);
+
+// Not the same contract:
+// ensureNotNullOrUndefined(fallbackPort)
+// Use ensureDefined(...) for T | undefined and ensureNotNull(...) for T | null.
+```
 
 ## Migration notes
 
