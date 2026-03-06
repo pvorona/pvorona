@@ -130,9 +130,9 @@ This is the intended style of use:
 
 ### Numeric predicates
 
-- `isInteger(number)`: returns `true` for integers
-- `isPositive(number)`: returns `true` for numbers greater than `0`
-- `isNegative(number)`: returns `true` for numbers less than `0`
+- `isInteger(...)`: returns `true` for integers
+- `isPositive(...)`: returns `true` for numbers greater than `0`
+- `isNegative(...)`: returns `true` for numbers less than `0`
 
 ### Async helper
 
