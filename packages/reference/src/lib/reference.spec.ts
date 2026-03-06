@@ -163,6 +163,18 @@ describe('Reference', () => {
       );
     });
 
+    it('throws when createReference receives a constructor from a JS or any caller', () => {
+      class ExampleClass {}
+
+      const createReferenceFromUntyped = createReference as (
+        value: unknown,
+      ) => unknown;
+
+      expect(() => createReferenceFromUntyped(ExampleClass)).toThrow(
+        /function/i,
+      );
+    });
+
     it('throws when set receives a function from a JS or any caller', () => {
       const ref = createReference('value');
       const setFromUntyped = ref.set as (value: unknown) => void;
@@ -248,16 +260,29 @@ describe('ReadonlyReference', () => {
 
 void (() => {
   const functionValue = () => 'value';
+  class ExampleClass {}
 
   // @ts-expect-error Functions are reserved for lazy getters and cannot be stored.
   createReference(functionValue);
 
+  // @ts-expect-error Constructors are function-valued and cannot be stored.
+  createReference(ExampleClass);
+
   // @ts-expect-error Unset references cannot be parameterized with functions.
   createUnsetReference<() => void>();
+
+  // @ts-expect-error Unset references cannot be parameterized with constructors.
+  createUnsetReference<typeof ExampleClass>();
 
   // @ts-expect-error Functional references are rejected at the type level.
   const invalidReference: Reference<() => void> = createReference(functionValue);
 
+  // @ts-expect-error Constructor-valued references are rejected at the type level.
+  const invalidConstructorReference: Reference<typeof ExampleClass> = createReference(ExampleClass);
+
   // @ts-expect-error Passing a stored function to set is not supported.
   invalidReference.set(functionValue);
+
+  // @ts-expect-error Passing a stored constructor to set is not supported.
+  invalidConstructorReference.set(ExampleClass);
 });

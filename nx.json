@@ -55,15 +55,18 @@
     "groups": {
       "reference": {
         "projects": ["@pvorona/reference"],
-        "projectsRelationship": "independent"
+        "projectsRelationship": "independent",
+        "version": {
+          "groupPreVersionCommand": "npx nx run @pvorona/reference:build"
+        }
       },
       "packages": {
         "projects": ["*", "!@pvorona/source", "!@pvorona/reference"],
-        "projectsRelationship": "fixed"
+        "projectsRelationship": "fixed",
+        "version": {
+          "groupPreVersionCommand": "npx nx run-many -t build --projects='*,!@pvorona/source,!@pvorona/reference'"
+        }
       }
-    },
-    "version": {
-      "preVersionCommand": "npx nx run-many -t build"
     }
   },
   "targetDefaults": {
