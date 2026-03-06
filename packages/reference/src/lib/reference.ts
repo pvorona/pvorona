@@ -6,12 +6,15 @@ type FunctionValue =
   | ((...args: never[]) => unknown)
   | (abstract new (...args: never[]) => unknown);
 
-type NonFunctionalValue<T> = Extract<T, FunctionValue> extends never ? T : never;
+type NonFunctionalValue<T> = T extends FunctionValue ? never : T;
 
 export type ReadonlyReference<T> = Readonly<{
   getOr: {
     <U>(value: NonFunctionalValue<U>): T | NonFunctionalValue<U>;
     <U>(getter: () => NonFunctionalValue<U>): T | NonFunctionalValue<U>;
+    <U>(
+      valueOrGetter: NonFunctionalValue<U> | (() => NonFunctionalValue<U>),
+    ): T | NonFunctionalValue<U>;
   };
   getOrThrow: (messageOrFactory?: string | (() => string)) => T;
 }>;
@@ -20,11 +23,15 @@ export type Reference<T> = Readonly<{
   getOr: {
     <U>(value: NonFunctionalValue<U>): T | NonFunctionalValue<U>;
     <U>(getter: () => NonFunctionalValue<U>): T | NonFunctionalValue<U>;
+    <U>(
+      valueOrGetter: NonFunctionalValue<U> | (() => NonFunctionalValue<U>),
+    ): T | NonFunctionalValue<U>;
   };
   getOrThrow: (messageOrFactory?: string | (() => string)) => T;
   getOrSet: {
     (value: NonFunctionalValue<T>): T;
     (getter: () => NonFunctionalValue<T>): T;
+    (valueOrGetter: NonFunctionalValue<T> | (() => NonFunctionalValue<T>)): T;
   };
   set: (value: T) => void;
   unset: () => void;

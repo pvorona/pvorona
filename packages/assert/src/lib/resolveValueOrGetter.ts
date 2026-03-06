@@ -2,7 +2,7 @@ type FunctionValue =
   | ((...args: never[]) => unknown)
   | (abstract new (...args: never[]) => unknown);
 
-type NonFunctionalValue<T> = Extract<T, FunctionValue> extends never ? T : never;
+type NonFunctionalValue<T> = T extends FunctionValue ? never : T;
 
 export function resolveValueOrGetter<T>(value: NonFunctionalValue<T>): NonFunctionalValue<T>;
 export function resolveValueOrGetter<T>(

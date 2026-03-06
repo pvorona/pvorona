@@ -97,6 +97,13 @@ describe('Reference', () => {
       expect(getter).not.toHaveBeenCalled();
     });
 
+    it('accepts non-functional getOrSet inputs when T also includes a function member', () => {
+      const ref = createReference('value' as string | (() => number));
+      ref.unset();
+
+      expect(ref.getOrSet('fallback')).toBe('fallback');
+    });
+
     it('rejects function-valued getOrSet inputs for function references', () => {
       const ref = createReference(() => 1);
 
@@ -107,6 +114,15 @@ describe('Reference', () => {
 });
 
 describe('ReadonlyReference', () => {
+  it('accepts a precomputed value-or-getter union variable', () => {
+    const ref = createReference('value');
+    ref.unset();
+
+    const fallback = Math.random() > 0.5 ? 'fallback' : () => 'fallback';
+
+    expect(ref.asReadonly().getOr(fallback)).toBe('fallback');
+  });
+
   it('exposes getOr that reflects the current value', () => {
     const ref = createReference('a');
     const ro = ref.asReadonly();
