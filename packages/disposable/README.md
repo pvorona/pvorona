@@ -1,6 +1,6 @@
 # @pvorona/disposable
 
-Centralize teardown/cleanup for a unit of work. Register many cleanup callbacks, then run them all exactly once via `dispose()`.
+Centralize teardown for a unit of work and observe when disposal has fully settled.
 
 ## Install
 
@@ -8,144 +8,137 @@ Centralize teardown/cleanup for a unit of work. Register many cleanup callbacks,
 npm i @pvorona/disposable
 ```
 
-## Usage
+## Quick Start
 
 ```ts
 import { createDisposable } from '@pvorona/disposable';
 
 const disposable = createDisposable();
 
-disposable.onDisposed(() => window.removeEventListener('resize', onResize));
-disposable.onDisposed(() => clearInterval(intervalId));
-disposable.onDisposed(() => observer.disconnect());
+disposable.onDispose(() => window.removeEventListener('resize', onResize));
+disposable.onDispose(() => clearInterval(intervalId));
+disposable.onDispose(() => observer.disconnect());
 
-// Later — runs all registered listeners exactly once:
+disposable.onDisposed((result) => {
+  if (result.isError) {
+    console.error('cleanup failed:', result.error.errors);
+  }
+});
+
 disposable.dispose();
 ```
 
-### Inline teardown registration
+## Important Semantics
+
+- `dispose()` is synchronous and idempotent. It returns `true` only on the call that starts disposal.
+- `onDispose(...)` callbacks run during disposal, before `isDisposed` flips to `true`.
+- `onDisposed(...)` callbacks run after async cleanup settles and receive the final `DisposeResult`.
+- Duplicate `onDispose(...)` listener functions registered before disposal are de-duped.
+- Late `onDispose(...)` registration after disposal invokes immediately and returns a no-op unsubscribe. Late `onDisposed(...)` registration after completion replays the cached result immediately.
+- Listener order is insertion order. If an `onDispose(...)` listener registers another `onDispose(...)` listener during disposal, the new listener is drained later in the same disposal pass.
+
+## Usage
+
+### Sync cleanup only
 
 ```ts
+import { createDisposable } from '@pvorona/disposable';
+
 const disposable = createDisposable();
 
-disposable.onDisposed(addEventListeners(el, { click: onClick }));
-disposable.onDisposed(autorun(effect)); // mobx autorun returns a disposer
-
-return () => disposable.dispose();
-```
-
-### Completion callback
-
-```ts
-import { createFailable, NormalizedErrors } from '@pvorona/failable';
-
-disposable.dispose((result) => {
-  const normalized = createFailable(result, NormalizedErrors);
-  if (normalized.isSuccess) return;
-
-  console.error('disposal had errors:', normalized.error);
+const unsubscribe = disposable.onDispose(() => {
+  console.log('closing resources');
 });
+
+unsubscribe(); // remove that cleanup if plans change
+
+disposable.dispose();
 ```
 
-### AbortController / cancellation
+### Async cleanup with `onDisposed(...)`
 
 ```ts
+import { createDisposable } from '@pvorona/disposable';
+
+const disposable = createDisposable();
+
+disposable.onDispose(async () => {
+  await database.close();
+});
+
+disposable.onDisposed((result) => {
+  if (result.isSuccess) return;
+
+  console.error('disposal failed:', result.error.errors);
+});
+
+disposable.dispose();
+```
+
+### `AbortController` cleanup
+
+```ts
+import { createDisposable } from '@pvorona/disposable';
+
 const disposable = createDisposable();
 const abortController = new AbortController();
-disposable.onDisposed(() => abortController.abort());
+
+disposable.onDispose(() => {
+  abortController.abort();
+});
+
+fetch(url, { signal: abortController.signal });
+
+disposable.dispose();
 ```
 
 ## API
 
-### `type OnDisposedListener`
+### `OnDisposeListener`
 
-A disposal callback. You can register either:
+Cleanup callback registered with `onDispose(...)`.
 
-- `() => void` (sync)
-- `() => PromiseLike<unknown>` (async-ish)
+- `() => void` for synchronous cleanup
+- `() => PromiseLike<unknown>` for async cleanup that should delay `onDisposed(...)`
 
-Notes:
+### `DisposeError`
 
-- `dispose()` **invokes** listeners and does not `await` them.
-- If you need a completion result that accounts for promise rejections, use `dispose(onCompleted)`.
-
-Example:
+Stable failure shape emitted when one or more cleanup callbacks throw or reject.
 
 ```ts
-import type { OnDisposedListener } from '@pvorona/disposable';
-
-const listener: OnDisposedListener = () => {
-  // cleanup
+type DisposeError = {
+  readonly errors: readonly [unknown, ...unknown[]];
 };
 ```
 
-### `type OnCompletedListener`
+### `DisposeResult`
 
-Called when disposal "completes", with a `Failable<null, unknown>` result.
-
-- success/failure is represented via `result.isSuccess` / `result.isError`
-- sync exceptions thrown by listeners are captured as-is
-- promise rejections from async listeners are captured as-is (when you use `dispose(onCompleted)`)
-- multiple failures may be reported as an array of raw failure values
-- if you want `Error`-shaped handling, normalize with `createFailable(result, NormalizedErrors)`
-
-Example:
+Final completion result delivered to `onDisposed(...)`.
 
 ```ts
-import { createFailable, NormalizedErrors } from '@pvorona/failable';
-import type { OnCompletedListener } from '@pvorona/disposable';
-
-const onCompleted: OnCompletedListener = (result) => {
-  const normalized = createFailable(result, NormalizedErrors);
-  if (normalized.isSuccess) return;
-
-  console.error('dispose failed:', normalized.error);
-};
+type DisposeResult = Failable<null, DisposeError>;
 ```
 
-### `type Disposable`
+### `OnDisposedListener`
 
-The disposable interface.
+Completion observer called after all async cleanup settles.
 
 ```ts
-export type Disposable = {
+type OnDisposedListener = (result: DisposeResult) => void;
+```
+
+### `Disposable`
+
+```ts
+type Disposable = {
   readonly isDisposed: boolean;
   readonly isDisposing: boolean;
-  readonly dispose: (onCompleted?: OnCompletedListener) => boolean;
+  readonly dispose: () => boolean;
+  readonly onDispose: (listener: OnDisposeListener) => () => void;
   readonly onDisposed: (listener: OnDisposedListener) => () => void;
 };
 ```
 
-Example (unsubscribe from a listener):
+### `createDisposable()`
 
-```ts
-import { createDisposable } from '@pvorona/disposable';
-
-const d = createDisposable();
-const unsubscribe = d.onDisposed(() => console.log('cleanup'));
-
-unsubscribe(); // removes that listener
-d.dispose(); // nothing logs
-```
-
-### `createDisposable(): Disposable`
-
-Creates a new disposable.
-
-Key semantics:
-
-- `dispose()` is **idempotent**:
-  - returns `true` on the first call (it started disposing)
-  - returns `false` if already disposing/disposed
-- `onDisposed(listener)` returns an unsubscribe function
-  - If already disposed, it invokes `listener` immediately and returns a no-op unsubscribe.
-
-Example (idempotency):
-
-```ts
-import { createDisposable } from '@pvorona/disposable';
-
-const d = createDisposable();
-console.log(d.dispose()); // true
-console.log(d.dispose()); // false
-```
+Creates a new `Disposable` that coordinates cleanup registration and final completion observation.

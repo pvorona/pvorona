@@ -14,14 +14,28 @@ enum DisposableStatus {
 
 export type OnDisposeListener = (() => void) | (() => PromiseLike<unknown>);
 
+/**
+ * Stable failure shape produced when one or more cleanup callbacks throw or
+ * reject during disposal.
+ */
 export type DisposeError = {
   readonly errors: readonly [unknown, ...unknown[]];
 };
 
+/** Final completion result delivered to `onDisposed(...)` listeners. */
 export type DisposeResult = Failable<null, DisposeError>;
 
+/** Observer called once the final `DisposeResult` is known. */
 export type OnDisposedListener = (result: DisposeResult) => void;
 
+/**
+ * Public disposal lifecycle contract.
+ *
+ * - `dispose()` starts disposal synchronously and returns whether this call
+ *   started it.
+ * - `onDispose(...)` registers cleanup callbacks and returns an unsubscribe.
+ * - `onDisposed(...)` observes the cached final `DisposeResult`.
+ */
 export type Disposable = {
   readonly isDisposed: boolean;
   readonly isDisposing: boolean;
@@ -31,10 +45,35 @@ export type Disposable = {
 };
 
 /**
- * Centralize teardown and completion observation for a unit of work.
+ * Create a disposable teardown coordinator.
  *
- * Use `onDispose(...)` to register cleanup callbacks, `dispose()` to start
- * disposal, and `onDisposed(...)` to observe the final `DisposeResult`.
+ * Important semantics:
+ * - `dispose()` is synchronous and idempotent.
+ * - `onDispose(...)` callbacks run while disposal is in progress, before
+ *   `isDisposed` flips to `true`.
+ * - Duplicate `onDispose(...)` listener functions registered before disposal
+ *   are de-duped.
+ * - Listener order is insertion order. `onDispose(...)` listeners added during
+ *   disposal are drained later in the same pass.
+ * - Late `onDispose(...)` registration after disposal invokes immediately and
+ *   returns a no-op unsubscribe.
+ * - `onDisposed(...)` fires once the final `DisposeResult` is known, after all
+ *   promise-returning `onDispose(...)` callbacks settle.
+ * - Late `onDisposed(...)` registration after completion replays the cached
+ *   result immediately.
+ *
+ * @example
+ * const disposable = createDisposable();
+ *
+ * disposable.onDispose(() => window.removeEventListener('resize', onResize));
+ *
+ * disposable.onDisposed((result) => {
+ *   if (result.isError) {
+ *     console.error(result.error.errors);
+ *   }
+ * });
+ *
+ * disposable.dispose();
  */
 export function createDisposable(): Disposable {
   let status = DisposableStatus.Active;
