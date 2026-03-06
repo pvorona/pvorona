@@ -38,4 +38,21 @@ describe('createCounter', () => {
     counter.set(42);
     expect(counter.value).toBe(42);
   });
+
+  it('should return the assigned value from set', () => {
+    const counter = createCounter();
+
+    expect(counter.set(42)).toBe(42);
+    expect(counter.value).toBe(42);
+  });
+
+  it('should reset to the original initial value', () => {
+    const counter = createCounter(10);
+
+    counter.increment(5);
+    counter.set(99);
+
+    expect(counter.reset()).toBe(10);
+    expect(counter.value).toBe(10);
+  });
 });

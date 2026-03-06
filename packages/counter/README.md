@@ -13,14 +13,13 @@ npm i @pvorona/counter
 ```ts
 import { createCounter } from '@pvorona/counter';
 
-const counter = createCounter(10);
+const counter = createCounter(5);
 
-counter.value; // 10
-counter.increment(); // 11
-counter.increment(2); // 13
-counter.decrement(); // 12
-counter.set(0);
-counter.value; // 0
+counter.value; // 5
+counter.increment(); // 6
+counter.set(20); // 20
+counter.reset(); // 5
+counter.value; // 5
 ```
 
 ## API
@@ -34,7 +33,8 @@ export type Counter = {
   readonly value: number;
   increment(amount?: number): number;
   decrement(amount?: number): number;
-  set(value: number): void;
+  set(value: number): number;
+  reset(): number;
 };
 ```
 
@@ -43,7 +43,8 @@ Notes:
 - `value` is the current count.
 - `increment(amount?)` adds `amount` (defaults to `1`) and returns the updated value.
 - `decrement(amount?)` subtracts `amount` (defaults to `1`) and returns the updated value.
-- `set(value)` replaces the current value.
+- `set(value)` replaces the current value and returns it.
+- `reset()` restores the original `initialValue` and returns it.
 
 Example:
 
@@ -51,7 +52,7 @@ Example:
 import type { Counter } from '@pvorona/counter';
 
 function reset(counter: Counter) {
-  counter.set(0);
+  counter.reset();
 }
 ```
 
