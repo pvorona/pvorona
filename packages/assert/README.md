@@ -81,17 +81,9 @@ if (hasOwnKey(value, durationBrand) && hasOwnKey(value, 'milliseconds')) {
 ### Breaking change: `resolveValueOrGetter(...)` is no longer public
 
 `resolveValueOrGetter` is no longer exported from `@pvorona/assert`.
-Inside this workspace, current consumers now import it from the private
-`@pvorona/resolve-value-or-getter` package.
-
-```ts
-// Workspace-internal migration only
-import { resolveValueOrGetter } from '@pvorona/resolve-value-or-getter';
-
-const fallback = Math.random() > 0.5 ? 'cached' : () => 'computed';
-const value = resolveValueOrGetter(fallback);
-// value: string
-```
+It now lives in a private workspace package used internally in this repo and
+is not part of the published API.
+External consumers should define a local equivalent if they still need the helper.
 
 ### Non-empty arrays preserve readonlyness
 
@@ -111,21 +103,9 @@ const ensured = ensureNonEmptyArray(readonlyValues);
 ### Breaking change: `Mutable<T>` is no longer public
 
 `Mutable` is no longer exported from `@pvorona/assert`.
-Inside this workspace, current consumers now import it from the private
-`@pvorona/types` package.
-
-```ts
-// Workspace-internal migration only
-import type { Mutable } from '@pvorona/types';
-
-type Config = {
-  readonly retries: number;
-  readonly label: string;
-};
-
-type DraftConfig = Mutable<Config>;
-// { retries: number; label: string }
-```
+It now lives in a private workspace package used internally in this repo and
+is not part of the published API.
+External consumers should define a local equivalent if they still need the mapped type.
 
 ## Stable public surface
 
@@ -142,20 +122,9 @@ type DraftConfig = Mutable<Config>;
 
 The root package no longer re-exports some advanced helpers from the old internal surfaces.
 
-```ts
-// Before
-import { resolveValueOrGetter } from '@pvorona/assert';
-import type { Mutable, Override, NotOnlyString } from '@pvorona/assert';
-
-// After (workspace-internal helper/type imports)
-import { resolveValueOrGetter } from '@pvorona/resolve-value-or-getter';
-import type { Mutable } from '@pvorona/types';
-```
-
-- `resolveValueOrGetter` moved to the private workspace package `@pvorona/resolve-value-or-getter`
-- `Mutable` moved to the private workspace package `@pvorona/types`
-- External consumers should stop importing `resolveValueOrGetter` from `@pvorona/assert` and define a local equivalent if they still need the helper
-- External consumers should stop importing `Mutable` from `@pvorona/assert` and define a local equivalent if they still need the mapped type
+- `resolveValueOrGetter` moved to a private workspace package and is no longer part of the published API
+- `Mutable` moved to a private workspace package and is no longer part of the published API
+- External consumers should define local equivalents if they still need either helper
 - Removed root exports include internal-looking helpers such as `Override`, `InferErrorMessage`, `NotOnly*`, `Includes*`, `AtLeastOneValid`, and `InferArrayType`
 - `NonEmptyArray` and `ReadonlyNonEmptyArray` remain public
 - There is no replacement public subpath for the removed advanced types; if you still need them, define local equivalents in your own codebase
