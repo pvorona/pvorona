@@ -811,7 +811,9 @@ describe('Disposable', () => {
       expectTypeOf(onDisposeUnsubscribe).toEqualTypeOf<() => void>();
 
       const onDisposedUnsubscribe = disposable.onDisposed(
-        (_result: DisposeResult) => undefined
+        (result: DisposeResult) => {
+          void result;
+        }
       );
       expectTypeOf(onDisposedUnsubscribe).toEqualTypeOf<() => void>();
       expectTypeOf<Parameters<OnDisposedListener>[0]>().toEqualTypeOf<DisposeResult>();
@@ -820,7 +822,9 @@ describe('Disposable', () => {
       expectTypeOf(onDisposeListener).toEqualTypeOf<OnDisposeListener>();
 
       // @ts-expect-error `dispose(onCompleted)` is no longer valid.
-      disposable.dispose((_result) => undefined);
+      disposable.dispose((result: DisposeResult) => {
+        void result;
+      });
 
       // @ts-expect-error `OnDisposedListener` now requires a completion result parameter.
       const oldCleanupArgs: Parameters<OnDisposedListener> = [];

@@ -37,6 +37,11 @@ disposable.dispose();
 - Late `onDispose(...)` registration after disposal invokes immediately and returns a no-op unsubscribe. Late `onDisposed(...)` registration after completion replays the cached result immediately.
 - Listener order is insertion order. If an `onDispose(...)` listener registers another `onDispose(...)` listener during disposal, the new listener is drained later in the same disposal pass.
 
+## Compatibility
+
+- This package is ESM-only. It does not publish a CommonJS `require` condition.
+- The current workspace tooling baseline is Node `^20.19.0 || >=22.12.0`, matching the installed Vite 7 / Vitest 4 toolchain used to build and verify this package.
+
 ## Usage
 
 ### Sync cleanup only
