@@ -53,6 +53,7 @@
   ],
   "release": {
     "projects": ["*", "!@pvorona/source"],
+    "projectsRelationship": "independent",
     "version": {
       "preVersionCommand": "npx nx run-many -t build"
     }
