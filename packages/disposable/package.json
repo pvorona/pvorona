@@ -1,6 +1,6 @@
 {
   "name": "@pvorona/disposable",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Disposable teardown coordinator with async completion observation.",
   "keywords": [
     "disposable",
@@ -43,7 +43,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@pvorona/assert": "~0.0.2",
+    "@pvorona/assert": "~0.1.0",
     "@pvorona/failable": "~0.2.0",
     "@pvorona/noop": "~0.0.1",
     "tslib": "^2.3.0"
