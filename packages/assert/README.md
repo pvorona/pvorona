@@ -156,7 +156,47 @@ This is the intended style of use:
 - `isSymbol(...)` expects the broad `symbol` type in the input union.
 - `isNullOrUndefined(...)` and `ensureNotNullOrUndefined(...)` expect unions that include both `null` and `undefined`.
 
-## Restrictive helper examples
+## Array helpers and non-empty array types
+
+`isArray(...)` and `ensureArray(...)` are typed around mutable arrays. The empty and non-empty helpers also support readonly arrays:
+
+- `isEmptyArray(...)` accepts `readonly T[]` and narrows the true branch to `[]`
+- `isNonEmptyArray(...)` accepts mutable and readonly arrays
+- `ensureNonEmptyArray(...)` preserves readonlyness when the input is readonly
+
+```ts
+import { isEmptyArray } from '@pvorona/assert';
+
+const values = [] as [] | [number];
+
+if (isEmptyArray(values)) {
+  // values: []
+} else {
+  // values: [number]
+}
+```
+
+```ts
+import { ensureNonEmptyArray } from '@pvorona/assert';
+
+const readonlyValues: readonly number[] = [1, 2];
+const ensured = ensureNonEmptyArray(readonlyValues);
+// ensured: ReadonlyNonEmptyArray<number>
+```
+
+The public non-empty array types also preserve non-empty-ness through `map(...)`:
+
+```ts
+import type { ReadonlyNonEmptyArray } from '@pvorona/assert';
+
+const values: ReadonlyNonEmptyArray<string> = ['1', '2'];
+const lengths = values.map((value) => Number(value));
+// lengths: NonEmptyArray<number>
+```
+
+Ensuring or narrowing a readonly array stays readonly. Mapping a `ReadonlyNonEmptyArray<T>` returns a new mutable `NonEmptyArray<U>`.
+
+## Restrictive helper contracts
 
 ```ts
 import { ensureDefined, ensureNotNullOrUndefined } from '@pvorona/assert';
