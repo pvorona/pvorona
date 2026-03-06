@@ -4,18 +4,24 @@ type Mutable<T> = {
   -readonly [P in keyof T]: T[P];
 };
 
-export const enum TimeUnit {
-  MilliSecond,
-  Second,
-  Minute,
-  Hour,
-  Day,
-  Week,
-  Month,
-  Year,
-}
+const TIME_UNIT_VALUES = {
+  Millisecond: 0,
+  Second: 1,
+  Minute: 2,
+  Hour: 3,
+  Day: 4,
+  Week: 5,
+  Month: 6,
+  Year: 7,
+} as const;
 
-const millisecondsTag = Symbol('milliSeconds');
+export type TimeUnit = (typeof TIME_UNIT_VALUES)[keyof typeof TIME_UNIT_VALUES];
+
+export const TimeUnit: {
+  readonly [Key in keyof typeof TIME_UNIT_VALUES]: TimeUnit;
+} = TIME_UNIT_VALUES;
+
+const millisecondsTag = Symbol('milliseconds');
 
 export type Duration = {
   readonly [millisecondsTag]: number;
@@ -24,7 +30,7 @@ export type Duration = {
   readonly isInstant: boolean;
 
   to(unit: TimeUnit): number;
-  toMilliSeconds(): number;
+  toMilliseconds(): number;
   toSeconds(): number;
   toMinutes(): number;
   toHours(): number;
@@ -41,19 +47,19 @@ export type Duration = {
   compare(other: Duration): -1 | 0 | 1;
 };
 
-const MILLISECONDS_IN_UNIT = {
-  [TimeUnit.MilliSecond]: 1,
-  [TimeUnit.Second]: 1_000,
-  [TimeUnit.Minute]: 60 * 1_000,
-  [TimeUnit.Hour]: 60 * 60 * 1_000,
+const MILLISECONDS_IN_UNIT = [
+  1,
+  1_000,
+  60 * 1_000,
+  60 * 60 * 1_000,
   /** Note: Does not account for leap second */
-  [TimeUnit.Day]: 24 * 60 * 60 * 1_000,
-  [TimeUnit.Week]: 7 * 24 * 60 * 60 * 1_000,
+  24 * 60 * 60 * 1_000,
+  7 * 24 * 60 * 60 * 1_000,
   /** Note: Does not account for leap year */
-  [TimeUnit.Month]: /* 30 days */ 30 * 24 * 60 * 60 * 1_000,
+  /* 30 days */ 30 * 24 * 60 * 60 * 1_000,
   /** Note: Does not account for leap year */
-  [TimeUnit.Year]: /* 365.25 days */ 365.25 * 24 * 60 * 60 * 1_000,
-} as const;
+  /* 365.25 days */ 365.25 * 24 * 60 * 60 * 1_000,
+] as const;
 
 const BASE_DURATION: Duration = {
   [millisecondsTag]: 0,
@@ -64,8 +70,8 @@ const BASE_DURATION: Duration = {
   to(unit: TimeUnit): number {
     return this[millisecondsTag] / MILLISECONDS_IN_UNIT[unit];
   },
-  toMilliSeconds() {
-    return this.to(TimeUnit.MilliSecond);
+  toMilliseconds() {
+    return this.to(TimeUnit.Millisecond);
   },
   toSeconds() {
     return this.to(TimeUnit.Second);
@@ -127,8 +133,8 @@ export function duration(value: number, unit: TimeUnit): Duration {
   return createDuration(value, unit);
 }
 
-export function milliSeconds(value: number): Duration {
-  return duration(value, TimeUnit.MilliSecond);
+export function milliseconds(value: number): Duration {
+  return duration(value, TimeUnit.Millisecond);
 }
 
 export function seconds(value: number): Duration {
@@ -160,7 +166,7 @@ export function years(value: number): Duration {
 }
 
 export function between(start: Date, end: Date): Duration {
-  return milliSeconds(end.getTime() - start.getTime());
+  return milliseconds(end.getTime() - start.getTime());
 }
 
 export function since(start: Date): Duration {
@@ -168,23 +174,23 @@ export function since(start: Date): Duration {
 }
 
 export function add(a: Duration, b: Duration): Duration {
-  return milliSeconds(a[millisecondsTag] + b[millisecondsTag]);
+  return milliseconds(a[millisecondsTag] + b[millisecondsTag]);
 }
 
 export function subtract(a: Duration, b: Duration): Duration {
-  return milliSeconds(a[millisecondsTag] - b[millisecondsTag]);
+  return milliseconds(a[millisecondsTag] - b[millisecondsTag]);
 }
 
 export function multiply(a: Duration, b: number): Duration {
-  return milliSeconds(a[millisecondsTag] * b);
+  return milliseconds(a[millisecondsTag] * b);
 }
 
 export function divide(a: Duration, b: number): Duration {
-  return milliSeconds(a[millisecondsTag] / b);
+  return milliseconds(a[millisecondsTag] / b);
 }
 
-export const infinite: Duration = milliSeconds(Infinity);
-export const instant: Duration = milliSeconds(0);
+export const infinite: Duration = milliseconds(Infinity);
+export const instant: Duration = milliseconds(0);
 
 export function isDuration(value: unknown): value is Duration {
   return isObject(value) && millisecondsTag in value;
