@@ -23,3 +23,20 @@ test('isPromiseLike', () => {
     expectTypeOf(unknownValue).toEqualTypeOf<PromiseLike<unknown>>();
   }
 });
+
+test('isPromiseLike returns false when reading `then` throws', () => {
+  const value = {
+    get then() {
+      throw new Error('boom');
+    },
+  };
+
+  expect(isPromiseLike(value)).toBe(false);
+});
+
+test('isPromiseLike returns false for revoked proxies', () => {
+  const proxy = Proxy.revocable({}, {});
+  proxy.revoke();
+
+  expect(isPromiseLike(proxy.proxy)).toBe(false);
+});
