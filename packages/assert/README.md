@@ -78,9 +78,14 @@ if (hasOwnKey(value, durationBrand) && hasOwnKey(value, 'milliseconds')) {
 }
 ```
 
-### Breaking change: `resolveValueOrGetter(...)` moved
+### Breaking change: `resolveValueOrGetter(...)` is no longer public
+
+`resolveValueOrGetter` is no longer exported from `@pvorona/assert`.
+Inside this workspace, current consumers now import it from the private
+`@pvorona/resolve-value-or-getter` package.
 
 ```ts
+// Workspace-internal migration only
 import { resolveValueOrGetter } from '@pvorona/resolve-value-or-getter';
 
 const fallback = Math.random() > 0.5 ? 'cached' : () => 'computed';
@@ -137,12 +142,13 @@ The root package no longer re-exports some advanced helpers from the old interna
 import { resolveValueOrGetter } from '@pvorona/assert';
 import type { Mutable, Override, NotOnlyString } from '@pvorona/assert';
 
-// After
+// After (workspace-internal helper import)
 import { resolveValueOrGetter } from '@pvorona/resolve-value-or-getter';
 import type { Mutable } from '@pvorona/assert';
 ```
 
-- `resolveValueOrGetter` moved to `@pvorona/resolve-value-or-getter`
+- `resolveValueOrGetter` moved to the private workspace package `@pvorona/resolve-value-or-getter`
+- External consumers should stop importing `resolveValueOrGetter` from `@pvorona/assert` and define a local equivalent if they still need the helper
 - Removed root exports include internal-looking helpers such as `Override`, `InferErrorMessage`, `NotOnly*`, `Includes*`, `AtLeastOneValid`, and `InferArrayType`
 - `Mutable`, `NonEmptyArray`, and `ReadonlyNonEmptyArray` remain public
 - There is no replacement public subpath for the removed advanced types; if you still need them, define local equivalents in your own codebase

@@ -1,14 +1,34 @@
 /// <reference types='vitest' />
+import * as path from 'path';
 import { defineConfig } from 'vite';
+import dts from 'vite-plugin-dts';
 
 export default defineConfig(() => ({
   root: import.meta.dirname,
   cacheDir: '../../node_modules/.vite/packages/assert',
-  plugins: [],
-  // Uncomment this if you are using workers.
-  // worker: {
-  //  plugins: [],
-  // },
+  plugins: [
+    dts({
+      entryRoot: 'src',
+      tsconfigPath: path.join(import.meta.dirname, 'tsconfig.lib.json'),
+    }),
+  ],
+  build: {
+    outDir: './dist',
+    emptyOutDir: true,
+    reportCompressedSize: true,
+    commonjsOptions: {
+      transformMixedEsModules: true,
+    },
+    lib: {
+      entry: 'src/index.ts',
+      name: '@pvorona/assert',
+      fileName: 'index',
+      formats: ['es' as const],
+    },
+    rollupOptions: {
+      external: ['@pvorona/throw-error'],
+    },
+  },
   test: {
     name: '@pvorona/assert',
     watch: false,
