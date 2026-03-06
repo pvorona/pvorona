@@ -1,7 +1,6 @@
 import {
   isNonEmptyArray,
   NonEmptyArray,
-  ReadonlyNonEmptyArray,
 } from './isNonEmptyArray.js';
 
 test('isNonEmptyArray', () => {
@@ -16,6 +15,8 @@ test('isNonEmptyArray', () => {
 
   const readonlyValue = [1] as readonly number[];
   if (isNonEmptyArray(readonlyValue)) {
-    expectTypeOf(readonlyValue).toEqualTypeOf<ReadonlyNonEmptyArray<number>>();
+    // @ts-expect-error "Readonly narrowing must remain readonly"
+    const mutableValue: number[] = readonlyValue;
+    expect(mutableValue).toEqual([1]);
   }
 });

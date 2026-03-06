@@ -20,8 +20,10 @@ export type ReadonlyNonEmptyArray<T> = Override<
   }
 >;
 
+export function isNonEmptyArray<T>(value: T[]): value is NonEmptyArray<T>;
 export function isNonEmptyArray<T>(
   value: readonly T[],
-): value is NonEmptyArray<T> {
+): value is ReadonlyNonEmptyArray<T>;
+export function isNonEmptyArray<T>(value: readonly T[]): boolean {
   return !isEmptyArray(value);
 }

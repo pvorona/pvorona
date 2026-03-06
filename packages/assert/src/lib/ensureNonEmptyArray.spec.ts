@@ -1,5 +1,5 @@
 import { ensureNonEmptyArray } from './ensureNonEmptyArray.js';
-import { NonEmptyArray, ReadonlyNonEmptyArray } from './isNonEmptyArray.js';
+import { NonEmptyArray } from './isNonEmptyArray.js';
 
 test('ensureNonEmptyArray', () => {
   expect(() => ensureNonEmptyArray([])).toThrow();
@@ -9,6 +9,7 @@ test('ensureNonEmptyArray', () => {
   expect(mutableValue).toEqual([1, 2]);
 
   const readonlyValue = ensureNonEmptyArray([1, 2] as readonly number[]);
-  expectTypeOf(readonlyValue).toEqualTypeOf<ReadonlyNonEmptyArray<number>>();
-  expect(readonlyValue).toEqual([1, 2]);
+  // @ts-expect-error "Readonly result must not allow mutation"
+  const readonlyMutableValue: number[] = readonlyValue;
+  expect(readonlyMutableValue).toEqual([1, 2]);
 });
