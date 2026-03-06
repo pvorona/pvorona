@@ -9,7 +9,6 @@
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "@pvorona/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
@@ -19,6 +18,10 @@
     "dist",
     "!**/*.tsbuildinfo"
   ],
+  "scripts": {
+    "check-package-surface": "node ./scripts/check-package-surface.mjs",
+    "prepublishOnly": "npm run check-package-surface"
+  },
   "publishConfig": {
     "access": "public"
   },
