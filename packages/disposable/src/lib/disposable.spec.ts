@@ -763,10 +763,10 @@ describe('Disposable', () => {
       // @ts-expect-error `dispose(onCompleted)` is no longer valid.
       disposable.dispose((_result) => undefined);
 
-      // @ts-expect-error `OnDisposedListener` now observes completion, not cleanup.
-      const oldCleanupListener: OnDisposedListener = async () => undefined;
+      // @ts-expect-error `OnDisposedListener` now requires a completion result parameter.
+      const oldCleanupArgs: Parameters<OnDisposedListener> = [];
 
-      void oldCleanupListener;
+      void oldCleanupArgs;
     });
   });
 });
