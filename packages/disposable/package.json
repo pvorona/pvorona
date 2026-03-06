@@ -1,6 +1,6 @@
 {
   "name": "@pvorona/disposable",
-  "version": "0.0.6",
+  "version": "0.1.0",
   "description": "Disposable teardown coordinator with async completion observation.",
   "keywords": [
     "disposable",
