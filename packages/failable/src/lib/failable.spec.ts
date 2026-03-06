@@ -18,6 +18,53 @@ import {
   type Success,
 } from './failable.js';
 
+const RAW_ERROR_CASES = [
+  { label: 'string', error: faker.string.uuid() },
+  { label: 'number', error: faker.number.int() },
+  {
+    label: 'plain object',
+    error: {
+      code: faker.string.uuid(),
+      retryable: faker.datatype.boolean(),
+    },
+  },
+  {
+    label: 'array',
+    error: [faker.string.uuid(), faker.number.int()],
+  },
+] as const;
+
+const plannedNormalizedErrorsPreset = Object.freeze({
+  mode: 'normalized-errors',
+} as const);
+
+type PlannedNormalizeErrorOptions = {
+  readonly normalizeError: (error: unknown) => Error;
+};
+
+const createFailableWithPlannedNormalization = createFailable as unknown as (
+  value:
+    | FailableLike<unknown, unknown>
+    | Failable<unknown, unknown>
+    | (() => unknown)
+    | PromiseLike<unknown>,
+  options?:
+    | typeof plannedNormalizedErrorsPreset
+    | PlannedNormalizeErrorOptions
+) => unknown;
+
+function ensureFailure(result: unknown): asserts result is Failure<unknown> {
+  if (isFailure(result)) return;
+
+  throw new Error('Expected Failure result');
+}
+
+function ensureSuccess(result: unknown): asserts result is Success<unknown> {
+  if (isSuccess(result)) return;
+
+  throw new Error('Expected Success result');
+}
+
 describe('success', () => {
   it('creates a frozen Success instance with correct properties', () => {
     const value = faker.number.float();
@@ -295,6 +342,18 @@ describe('createFailable (function)', () => {
     expect(result.error).toBe(value);
   });
 
+  it.each(RAW_ERROR_CASES)(
+    'preserves the raw thrown $label value',
+    ({ error }) => {
+      const result = createFailable(() => {
+        throw error;
+      });
+
+      ensureFailure(result);
+      expect(result.error).toBe(error);
+    }
+  );
+
   it('rehydrates FailableLikeSuccess return value', () => {
     const data = faker.number.float();
     const failableLike = {
@@ -329,6 +388,15 @@ describe('createFailable (function)', () => {
     const result = createFailable(() => original);
     expect(result).toBe(original);
   });
+
+  it('treats async functions as plain success values and does not await them', async () => {
+    const value = faker.number.float();
+    const result = createFailable(async () => value);
+
+    ensureSuccess(result);
+    expect(result.data).toBeInstanceOf(Promise);
+    await expect(result.data).resolves.toBe(value);
+  });
 });
 
 describe('createFailable (promise)', () => {
@@ -345,6 +413,16 @@ describe('createFailable (promise)', () => {
     expect(isFailure(result)).toBe(true);
     expect(result.error).toBe(value);
   });
+
+  it.each(RAW_ERROR_CASES)(
+    'preserves the raw rejected $label value',
+    async ({ error }) => {
+      const result = await createFailable(Promise.reject(error));
+
+      ensureFailure(result);
+      expect(result.error).toBe(error);
+    }
+  );
 
   it('rehydrates FailableLikeSuccess resolved value', async () => {
     const data = faker.number.float();
@@ -395,5 +473,42 @@ describe('createFailable (promise)', () => {
     >();
 
     expect(isFailable(await result)).toBe(true);
+  });
+});
+
+describe('createFailable normalization (planned API)', () => {
+  it('supports the planned `NormalizedErrors` preset entrypoint', () => {
+    const error = [faker.string.uuid(), faker.string.uuid()];
+    const result = createFailableWithPlannedNormalization(
+      failure(error),
+      plannedNormalizedErrorsPreset
+    );
+
+    ensureFailure(result);
+    expect(result.error).toBeInstanceOf(AggregateError);
+  });
+
+  it('supports the planned custom `normalizeError` entrypoint', () => {
+    const error = {
+      code: faker.string.uuid(),
+      retryable: faker.datatype.boolean(),
+    };
+    const result = createFailableWithPlannedNormalization(
+      () => {
+        throw error;
+      },
+      {
+        normalizeError(rawError) {
+          return new Error('normalized', { cause: rawError });
+        },
+      }
+    );
+
+    ensureFailure(result);
+    expect(result.error).toBeInstanceOf(Error);
+    expect(result.error).toMatchObject({
+      cause: error,
+      message: 'normalized',
+    });
   });
 });
