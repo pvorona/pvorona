@@ -1,6 +1,9 @@
 import { isFunction, isObject, type Mutable } from '@pvorona/assert';
 import { notImplemented } from '@pvorona/not-implemented';
-import { FailableTag, SuccessTag, FailureTag } from './constants.js';
+
+const FAILABLE_TAG = Symbol('Failable');
+const SUCCESS_TAG = Symbol('Success');
+const FAILURE_TAG = Symbol('Failure');
 
 export const enum FailableStatus {
   Success = 'success',
@@ -69,8 +72,6 @@ export function isFailableLike(
 }
 
 export type Success<T> = {
-  readonly [FailableTag]: true;
-  readonly [SuccessTag]: true;
   readonly status: FailableStatus.Success;
   readonly isSuccess: true;
   readonly isError: false;
@@ -82,8 +83,6 @@ export type Success<T> = {
 };
 
 export type Failure<E> = {
-  readonly [FailableTag]: true;
-  readonly [FailureTag]: true;
   readonly status: FailableStatus.Failure;
   readonly isSuccess: false;
   readonly isError: true;
@@ -94,8 +93,18 @@ export type Failure<E> = {
   readonly getOrThrow: () => never;
 };
 
+type InternalSuccess<T> = Success<T> & {
+  readonly [FAILABLE_TAG]: true;
+  readonly [SUCCESS_TAG]: true;
+};
+
+type InternalFailure<E> = Failure<E> & {
+  readonly [FAILABLE_TAG]: true;
+  readonly [FAILURE_TAG]: true;
+};
+
 const BASE_FAILABLE = {
-  [FailableTag]: true,
+  [FAILABLE_TAG]: true,
   isSuccess: false,
   isError: false,
   data: null,
@@ -106,8 +115,8 @@ const BASE_FAILABLE = {
 } as const;
 
 const BASE_SUCCESS = (() => {
-  const node: Mutable<Success<unknown>> = Object.create(BASE_FAILABLE);
-  node[SuccessTag] = true;
+  const node: Mutable<InternalSuccess<unknown>> = Object.create(BASE_FAILABLE);
+  node[SUCCESS_TAG] = true;
   node.status = FailableStatus.Success;
   node.isSuccess = true;
   node.or = function orSuccess() {
@@ -123,8 +132,8 @@ const BASE_SUCCESS = (() => {
 })();
 
 const BASE_FAILURE = (() => {
-  const node: Mutable<Failure<unknown>> = Object.create(BASE_FAILABLE);
-  node[FailureTag] = true;
+  const node: Mutable<InternalFailure<unknown>> = Object.create(BASE_FAILABLE);
+  node[FAILURE_TAG] = true;
   node.status = FailableStatus.Failure;
   node.isError = true;
   node.or = function orFailure(value) {
@@ -188,28 +197,56 @@ const BASE_FAILURE = (() => {
  * // ... send wire ...
  * const hydrated = createFailable(wire);
  */
+function isPublicSuccessShape(value: unknown): value is Success<unknown> {
+  if (!isObject(value)) return false;
+  if (value.status !== FailableStatus.Success) return false;
+  if (value.isSuccess !== true) return false;
+  if (value.isError !== false) return false;
+  if (!('data' in value)) return false;
+  if (value.error !== null) return false;
+  if (!isFunction(value.or)) return false;
+  if (!isFunction(value.getOr)) return false;
+  if (!isFunction(value.getOrThrow)) return false;
+
+  return true;
+}
+
+function isPublicFailureShape(value: unknown): value is Failure<unknown> {
+  if (!isObject(value)) return false;
+  if (value.status !== FailableStatus.Failure) return false;
+  if (value.isSuccess !== false) return false;
+  if (value.isError !== true) return false;
+  if (!('error' in value)) return false;
+  if (value.data !== null) return false;
+  if (!isFunction(value.or)) return false;
+  if (!isFunction(value.getOr)) return false;
+  if (!isFunction(value.getOrThrow)) return false;
+
+  return true;
+}
+
 export function isFailable(
   value: unknown
 ): value is Failable<unknown, unknown> {
-  return isObject(value) && value[FailableTag] === true;
+  return isPublicFailureShape(value) || isPublicSuccessShape(value);
 }
 
 export function isSuccess(value: unknown): value is Success<unknown> {
-  return isObject(value) && value[SuccessTag] === true;
+  return isPublicSuccessShape(value);
 }
 
 export function isFailure(value: unknown): value is Failure<unknown> {
-  return isObject(value) && value[FailureTag] === true;
+  return isPublicFailureShape(value);
 }
 
 export function success<T = void>(data: T): Success<T> {
-  const node: Mutable<Success<T>> = Object.create(BASE_SUCCESS);
+  const node: Mutable<InternalSuccess<T>> = Object.create(BASE_SUCCESS);
   node.data = data;
   return Object.freeze(node);
 }
 
 export function failure<E = void>(error: E): Failure<E> {
-  const node: Mutable<Failure<E>> = Object.create(BASE_FAILURE);
+  const node: Mutable<InternalFailure<E>> = Object.create(BASE_FAILURE);
   node.error = error;
   return Object.freeze(node);
 }
