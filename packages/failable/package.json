@@ -1,8 +1,13 @@
 {
   "name": "@pvorona/failable",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Typed success/failure results for expected failures in TypeScript.",
-  "keywords": ["failable", "result", "typescript", "error-handling"],
+  "keywords": [
+    "failable",
+    "result",
+    "typescript",
+    "error-handling"
+  ],
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
