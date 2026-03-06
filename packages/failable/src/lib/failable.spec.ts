@@ -8,6 +8,7 @@ import {
   isFailableLike,
   isFailure,
   isSuccess,
+  NormalizedErrors,
   success,
   toFailableLike,
   type Failable,
@@ -17,6 +18,34 @@ import {
   type Failure,
   type Success,
 } from './failable.js';
+
+const RAW_ERROR_CASES = [
+  { label: 'string', error: faker.string.uuid() },
+  { label: 'number', error: faker.number.int() },
+  {
+    label: 'plain object',
+    error: {
+      code: faker.string.uuid(),
+      retryable: faker.datatype.boolean(),
+    },
+  },
+  {
+    label: 'array',
+    error: [faker.string.uuid(), faker.number.int()],
+  },
+] as const;
+
+function ensureFailure(result: unknown): asserts result is Failure<unknown> {
+  if (isFailure(result)) return;
+
+  throw new Error('Expected Failure result');
+}
+
+function ensureSuccess(result: unknown): asserts result is Success<unknown> {
+  if (isSuccess(result)) return;
+
+  throw new Error('Expected Success result');
+}
 
 describe('success', () => {
   it('creates a frozen Success instance with correct properties', () => {
@@ -278,6 +307,20 @@ describe('type ergonomics (Failable union)', () => {
   });
 });
 
+describe('createFailable type defaults', () => {
+  it('defaults function wrapper failures to unknown', () => {
+    const result = createFailable(() => faker.number.float());
+
+    expectTypeOf(result).toEqualTypeOf<Failable<number, unknown>>();
+  });
+
+  it('defaults promise wrapper failures to unknown', () => {
+    const result = createFailable(Promise.resolve(faker.number.float()));
+
+    expectTypeOf(result).toEqualTypeOf<Promise<Failable<number, unknown>>>();
+  });
+});
+
 describe('createFailable (function)', () => {
   it('wraps success', () => {
     const value = faker.number.float();
@@ -294,6 +337,18 @@ describe('createFailable (function)', () => {
     expect(isFailure(result)).toBe(true);
     expect(result.error).toBe(value);
   });
+
+  it.each(RAW_ERROR_CASES)(
+    'preserves the raw thrown $label value',
+    ({ error }) => {
+      const result = createFailable(() => {
+        throw error;
+      });
+
+      ensureFailure(result);
+      expect(result.error).toBe(error);
+    }
+  );
 
   it('rehydrates FailableLikeSuccess return value', () => {
     const data = faker.number.float();
@@ -329,6 +384,15 @@ describe('createFailable (function)', () => {
     const result = createFailable(() => original);
     expect(result).toBe(original);
   });
+
+  it('treats async functions as plain success values and does not await them', async () => {
+    const value = faker.number.float();
+    const result = createFailable(async () => value);
+
+    ensureSuccess(result);
+    expect(result.data).toBeInstanceOf(Promise);
+    await expect(result.data).resolves.toBe(value);
+  });
 });
 
 describe('createFailable (promise)', () => {
@@ -345,6 +409,16 @@ describe('createFailable (promise)', () => {
     expect(isFailure(result)).toBe(true);
     expect(result.error).toBe(value);
   });
+
+  it.each(RAW_ERROR_CASES)(
+    'preserves the raw rejected $label value',
+    async ({ error }) => {
+      const result = await createFailable(Promise.reject(error));
+
+      ensureFailure(result);
+      expect(result.error).toBe(error);
+    }
+  );
 
   it('rehydrates FailableLikeSuccess resolved value', async () => {
     const data = faker.number.float();
@@ -395,5 +469,103 @@ describe('createFailable (promise)', () => {
     >();
 
     expect(isFailable(await result)).toBe(true);
+  });
+});
+
+describe('createFailable normalization', () => {
+  it('passes through existing Error failures unchanged', () => {
+    const error = new Error(faker.string.uuid());
+    const original = failure(error);
+    const result = createFailable(original, NormalizedErrors);
+
+    expectTypeOf(result).toEqualTypeOf<Failure<Error>>();
+    expect(result).toBe(original);
+  });
+
+  it('normalizes thrown non-Error values with `NormalizedErrors`', () => {
+    const error = faker.string.uuid();
+    const result = createFailable(
+      () => {
+        throw error;
+      },
+      NormalizedErrors
+    );
+
+    expectTypeOf(result).toEqualTypeOf<Failure<Error>>();
+    ensureFailure(result);
+    expect(result.error).toBeInstanceOf(Error);
+    expect(result.error).toMatchObject({ cause: error });
+  });
+
+  it('normalizes rejected non-Error values with `NormalizedErrors`', async () => {
+    const error = {
+      code: faker.string.uuid(),
+      retryable: faker.datatype.boolean(),
+    };
+    const result = createFailable(Promise.reject(error), NormalizedErrors);
+
+    expectTypeOf(result).toEqualTypeOf<Promise<Failure<Error>>>();
+
+    const resolved = await result;
+    ensureFailure(resolved);
+    expect(resolved.error).toBeInstanceOf(Error);
+    expect(resolved.error).toMatchObject({ cause: error });
+  });
+
+  it('converts array failures to AggregateError', () => {
+    const error = [faker.string.uuid(), faker.string.uuid()];
+    const original = failure(error);
+    const result = createFailable(original, NormalizedErrors);
+
+    ensureFailure(result);
+    expect(result).not.toBe(original);
+    expect(result.error).toBeInstanceOf(AggregateError);
+    expect(result.error).toMatchObject({ cause: error });
+  });
+
+  it('normalizes FailableLikeFailure values', () => {
+    const error = faker.number.int();
+    const failableLike = {
+      status: FailableStatus.Failure,
+      error,
+    } as const satisfies FailableLikeFailure<typeof error>;
+    const result = createFailable(failableLike, NormalizedErrors);
+
+    expectTypeOf(result).toEqualTypeOf<Failure<Error>>();
+    ensureFailure(result);
+    expect(result.error).toBeInstanceOf(Error);
+    expect(result.error).toMatchObject({ cause: error });
+  });
+
+  it('uses a custom normalizer when provided', () => {
+    const error = {
+      code: faker.string.uuid(),
+      retryable: faker.datatype.boolean(),
+    };
+    const result = createFailable(
+      () => {
+        throw error;
+      },
+      {
+        normalizeError(rawError) {
+          return new Error('normalized', { cause: rawError });
+        },
+      }
+    );
+
+    expectTypeOf(result).toEqualTypeOf<Failure<Error>>();
+    ensureFailure(result);
+    expect(result.error).toBeInstanceOf(Error);
+    expect(result.error).toMatchObject({
+      cause: error,
+      message: 'normalized',
+    });
+  });
+
+  it('returns a new failure instance when normalization changes the error', () => {
+    const original = failure(faker.string.uuid());
+    const result = createFailable(original, NormalizedErrors);
+
+    expect(result).not.toBe(original);
   });
 });

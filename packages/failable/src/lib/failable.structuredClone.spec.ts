@@ -45,4 +45,15 @@ describe('structured-clone transport', () => {
     expect(isFailableLike(cloned)).toBe(true);
     expect(createFailable(cloned)).toStrictEqual(failure(error));
   });
+
+  it('clones array-backed FailableLikeFailure and preserves the raw error', async () => {
+    const error = [faker.string.uuid(), faker.number.int()];
+    const failable = failure(error);
+    const failableLike = toFailableLike(failable);
+    const cloned = await structuredCloneViaMessageChannel(failableLike);
+
+    expect({ ...cloned }).toStrictEqual(failableLike);
+    expect(isFailableLike(cloned)).toBe(true);
+    expect(createFailable(cloned)).toStrictEqual(failure(error));
+  });
 });

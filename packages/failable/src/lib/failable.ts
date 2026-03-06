@@ -1,11 +1,29 @@
 import { isFunction, isObject, type Mutable } from '@pvorona/assert';
 import { notImplemented } from '@pvorona/not-implemented';
-import { FailableTag, SuccessTag, FailureTag } from './constants.js';
 
-export const enum FailableStatus {
-  Success = 'success',
-  Failure = 'failure',
-}
+const FAILABLE_TAG = Symbol('Failable');
+const SUCCESS_TAG = Symbol('Success');
+const FAILURE_TAG = Symbol('Failure');
+
+export const FailableStatus = Object.freeze({
+  Success: 'success',
+  Failure: 'failure',
+} as const);
+
+export type FailableStatus =
+  (typeof FailableStatus)[keyof typeof FailableStatus];
+
+export const NormalizedErrors = Object.freeze({
+  mode: 'normalized-errors',
+} as const);
+
+export type CreateFailableNormalizeErrorOptions = {
+  readonly normalizeError: (error: unknown) => Error;
+};
+
+type CreateFailableNormalizeErrorInput =
+  | typeof NormalizedErrors
+  | CreateFailableNormalizeErrorOptions;
 
 export type Failable<T, E> = Success<T> | Failure<E>;
 
@@ -29,12 +47,12 @@ export type FailableLike<T, E> =
   | FailableLikeFailure<E>;
 
 export type FailableLikeSuccess<T> = {
-  readonly status: FailableStatus.Success;
+  readonly status: typeof FailableStatus.Success;
   readonly data: T;
 };
 
 export type FailableLikeFailure<E> = {
-  readonly status: FailableStatus.Failure;
+  readonly status: typeof FailableStatus.Failure;
   readonly error: E;
 };
 
@@ -69,9 +87,7 @@ export function isFailableLike(
 }
 
 export type Success<T> = {
-  readonly [FailableTag]: true;
-  readonly [SuccessTag]: true;
-  readonly status: FailableStatus.Success;
+  readonly status: typeof FailableStatus.Success;
   readonly isSuccess: true;
   readonly isError: false;
   readonly data: T;
@@ -82,9 +98,7 @@ export type Success<T> = {
 };
 
 export type Failure<E> = {
-  readonly [FailableTag]: true;
-  readonly [FailureTag]: true;
-  readonly status: FailableStatus.Failure;
+  readonly status: typeof FailableStatus.Failure;
   readonly isSuccess: false;
   readonly isError: true;
   readonly error: E;
@@ -94,8 +108,18 @@ export type Failure<E> = {
   readonly getOrThrow: () => never;
 };
 
+type InternalSuccess<T> = Success<T> & {
+  readonly [FAILABLE_TAG]: true;
+  readonly [SUCCESS_TAG]: true;
+};
+
+type InternalFailure<E> = Failure<E> & {
+  readonly [FAILABLE_TAG]: true;
+  readonly [FAILURE_TAG]: true;
+};
+
 const BASE_FAILABLE = {
-  [FailableTag]: true,
+  [FAILABLE_TAG]: true,
   isSuccess: false,
   isError: false,
   data: null,
@@ -106,8 +130,8 @@ const BASE_FAILABLE = {
 } as const;
 
 const BASE_SUCCESS = (() => {
-  const node: Mutable<Success<unknown>> = Object.create(BASE_FAILABLE);
-  node[SuccessTag] = true;
+  const node: Mutable<InternalSuccess<unknown>> = Object.create(BASE_FAILABLE);
+  node[SUCCESS_TAG] = true;
   node.status = FailableStatus.Success;
   node.isSuccess = true;
   node.or = function orSuccess() {
@@ -123,8 +147,8 @@ const BASE_SUCCESS = (() => {
 })();
 
 const BASE_FAILURE = (() => {
-  const node: Mutable<Failure<unknown>> = Object.create(BASE_FAILABLE);
-  node[FailureTag] = true;
+  const node: Mutable<InternalFailure<unknown>> = Object.create(BASE_FAILABLE);
+  node[FAILURE_TAG] = true;
   node.status = FailableStatus.Failure;
   node.isError = true;
   node.or = function orFailure(value) {
@@ -168,13 +192,15 @@ const BASE_FAILURE = (() => {
  *   `Failable` / `FailableLike`.
  * - `createFailable(promise)` captures rejection values into `Failure` and preserves/rehydrates resolved
  *   `Failable` / `FailableLike`.
+ * - `createFailable(input, NormalizedErrors)` normalizes non-`Error` failures into `Error` shapes.
+ * - `createFailable(input, { normalizeError })` uses custom failure normalization when needed.
  *
  * Gotchas:
  * - `isFailableLike` is intentionally strict: only `{ status, data }` or `{ status, error }`
  *   with no extra enumerable keys. If you need metadata, wrap it: `{ result: failableLike, meta }`.
  * - `or(...)` and `getOr(...)` are eager (fallback is evaluated before the call). Use branching for
  *   lazy fallbacks.
- * - No error normalization is performed: whatever you throw/reject becomes `.error`.
+ * - Without normalization options, whatever you throw/reject becomes `.error` unchanged.
  * - `createFailable(() => somePromise)` does NOT await; pass the promise directly: `createFailable(somePromise)`.
  *
  * @example
@@ -188,28 +214,56 @@ const BASE_FAILURE = (() => {
  * // ... send wire ...
  * const hydrated = createFailable(wire);
  */
+function isPublicSuccessShape(value: unknown): value is Success<unknown> {
+  if (!isObject(value)) return false;
+  if (value.status !== FailableStatus.Success) return false;
+  if (value.isSuccess !== true) return false;
+  if (value.isError !== false) return false;
+  if (!('data' in value)) return false;
+  if (value.error !== null) return false;
+  if (!isFunction(value.or)) return false;
+  if (!isFunction(value.getOr)) return false;
+  if (!isFunction(value.getOrThrow)) return false;
+
+  return true;
+}
+
+function isPublicFailureShape(value: unknown): value is Failure<unknown> {
+  if (!isObject(value)) return false;
+  if (value.status !== FailableStatus.Failure) return false;
+  if (value.isSuccess !== false) return false;
+  if (value.isError !== true) return false;
+  if (!('error' in value)) return false;
+  if (value.data !== null) return false;
+  if (!isFunction(value.or)) return false;
+  if (!isFunction(value.getOr)) return false;
+  if (!isFunction(value.getOrThrow)) return false;
+
+  return true;
+}
+
 export function isFailable(
   value: unknown
 ): value is Failable<unknown, unknown> {
-  return isObject(value) && value[FailableTag] === true;
+  return isPublicFailureShape(value) || isPublicSuccessShape(value);
 }
 
 export function isSuccess(value: unknown): value is Success<unknown> {
-  return isObject(value) && value[SuccessTag] === true;
+  return isPublicSuccessShape(value);
 }
 
 export function isFailure(value: unknown): value is Failure<unknown> {
-  return isObject(value) && value[FailureTag] === true;
+  return isPublicFailureShape(value);
 }
 
 export function success<T = void>(data: T): Success<T> {
-  const node: Mutable<Success<T>> = Object.create(BASE_SUCCESS);
+  const node: Mutable<InternalSuccess<T>> = Object.create(BASE_SUCCESS);
   node.data = data;
   return Object.freeze(node);
 }
 
 export function failure<E = void>(error: E): Failure<E> {
-  const node: Mutable<Failure<E>> = Object.create(BASE_FAILURE);
+  const node: Mutable<InternalFailure<E>> = Object.create(BASE_FAILURE);
   node.error = error;
   return Object.freeze(node);
 }
@@ -227,7 +281,7 @@ export function toFailableLike<T, E>(value: Failable<T, E>): FailableLike<T, E> 
 
 type InferReturnTypeFromFunction<
   F extends () => R,
-  E = Error,
+  E = unknown,
   R = ReturnType<F>
 > = [R] extends [never]
   ? Failure<E>
@@ -241,17 +295,19 @@ type InferReturnTypeFromFunction<
   ? Failure<A>
   : R extends Failable<infer A, infer B>
   ? Failable<A, B>
+  : R extends FailableLike<infer A, infer B>
+  ? Failable<A, B>
   : Failable<R, E>;
 
 type InferReturnTypeFromPromise<
   T,
-  E = Error,
+  E = unknown,
   P extends PromiseLike<T> = PromiseLike<T>
 > = [Awaited<P>] extends [never]
   ? Promise<Failure<E>>
-  : Awaited<P> extends Promise<Success<infer A>>
+  : Awaited<P> extends Success<infer A>
   ? Promise<Success<A>>
-  : Awaited<P> extends Promise<Failure<infer A>>
+  : Awaited<P> extends Failure<infer A>
   ? Promise<Failure<A>>
   : Awaited<P> extends Failable<unknown, unknown>
   ? Promise<Awaited<P>>
@@ -263,39 +319,93 @@ type InferReturnTypeFromPromise<
   ? Promise<Failable<A, B>>
   : Promise<Failable<Awaited<P>, E>>;
 
+type NormalizeCreateFailableResult<T> = [T] extends [never]
+  ? Failure<Error>
+  : T extends Success<infer A>
+  ? Success<A>
+  : T extends Failure<unknown>
+  ? Failure<Error>
+  : T extends FailableLikeSuccess<infer A>
+  ? Success<A>
+  : T extends FailableLikeFailure<unknown>
+  ? Failure<Error>
+  : T extends Failable<infer A, unknown>
+  ? Failable<A, Error>
+  : T extends FailableLike<infer A, unknown>
+  ? Failable<A, Error>
+  : Failable<T, Error>;
+
+type CreateFailableInput =
+  | FailableLike<unknown, unknown>
+  | Failable<unknown, unknown>
+  | (() => unknown)
+  | PromiseLike<unknown>;
+
+export function createFailable<T>(value: Success<T>): Success<T>;
+export function createFailable<E>(value: Failure<E>): Failure<E>;
+export function createFailable<T, E>(value: Failable<T, E>): Failable<T, E>;
 export function createFailable<T>(value: FailableLikeSuccess<T>): Success<T>;
 export function createFailable<E>(value: FailableLikeFailure<E>): Failure<E>;
 export function createFailable<T, E>(value: FailableLike<T, E>): Failable<T, E>;
-export function createFailable<F extends () => R, E = Error, R = ReturnType<F>>(
-  fun: F
-): InferReturnTypeFromFunction<F, E, R>;
+export function createFailable<T>(
+  value: Success<T>,
+  normalizeOption: CreateFailableNormalizeErrorInput
+): Success<T>;
+export function createFailable<E>(
+  value: Failure<E>,
+  normalizeOption: CreateFailableNormalizeErrorInput
+): Failure<Error>;
+export function createFailable<T, E>(
+  value: Failable<T, E>,
+  normalizeOption: CreateFailableNormalizeErrorInput
+): Failable<T, Error>;
+export function createFailable<T>(
+  value: FailableLikeSuccess<T>,
+  normalizeOption: CreateFailableNormalizeErrorInput
+): Success<T>;
+export function createFailable<E>(
+  value: FailableLikeFailure<E>,
+  normalizeOption: CreateFailableNormalizeErrorInput
+): Failure<Error>;
+export function createFailable<T, E>(
+  value: FailableLike<T, E>,
+  normalizeOption: CreateFailableNormalizeErrorInput
+): Failable<T, Error>;
+export function createFailable<
+  F extends () => R,
+  E = unknown,
+  R = ReturnType<F>
+>(fun: F): InferReturnTypeFromFunction<F, E, R>;
+export function createFailable<F extends () => R, R = ReturnType<F>>(
+  fun: F,
+  normalizeOption: CreateFailableNormalizeErrorInput
+): NormalizeCreateFailableResult<R>;
 export function createFailable<
   T,
-  E = Error,
+  E = unknown,
   P extends PromiseLike<T> = PromiseLike<T>
->(
-  promise: P
-): InferReturnTypeFromPromise<T, E, P>;
+>(promise: P): InferReturnTypeFromPromise<T, E, P>;
+export function createFailable<T, P extends PromiseLike<T> = PromiseLike<T>>(
+  promise: P,
+  normalizeOption: CreateFailableNormalizeErrorInput
+): Promise<NormalizeCreateFailableResult<Awaited<P>>>;
 export function createFailable(
-  value:
-    | FailableLike<unknown, unknown>
-    | Failable<unknown, unknown>
-    | (() => unknown)
-    | PromiseLike<unknown>
+  value: CreateFailableInput,
+  normalizeOption?: CreateFailableNormalizeErrorInput
 ) {
   if (isFailable(value)) {
-    return value;
+    return normalizeFailableResult(value, normalizeOption);
   }
 
   if (isFailableLike(value)) {
-    return fromFailableLike(value);
+    return normalizeFailableResult(fromFailableLike(value), normalizeOption);
   }
 
   if (isFunction(value)) {
-    return fromFunction(value);
+    return fromFunction(value, normalizeOption);
   }
 
-  return fromPromise(value);
+  return fromPromise(value, normalizeOption);
 }
 
 function fromFailableLike<T, E>(
@@ -308,34 +418,92 @@ function fromFailableLike<T, E>(
   return failure(failableLike.error);
 }
 
-function fromFunction<T extends () => U, E, U = ReturnType<T>>(fun: T) {
+function fromFunction<T extends () => U, E, U = ReturnType<T>>(
+  fun: T,
+  normalizeOption?: CreateFailableNormalizeErrorInput
+) {
   try {
     const data = fun();
 
     if (isFailable(data)) {
-      return data;
+      return normalizeFailableResult(data, normalizeOption);
     }
 
     if (isFailableLike(data)) {
-      return fromFailableLike(data);
+      return normalizeFailableResult(fromFailableLike(data), normalizeOption);
     }
 
     return success(data);
   } catch (error) {
-    return failure(error as E);
+    return normalizeFailableResult(failure(error as E), normalizeOption);
   }
 }
 
-function fromPromise<T extends PromiseLike<U>, U = Awaited<T>>(promise: T) {
-  return Promise.resolve(promise).then((data) => {
-    if (isFailable(data)) {
-      return data;
-    }
+function fromPromise<T extends PromiseLike<U>, U = Awaited<T>>(
+  promise: T,
+  normalizeOption?: CreateFailableNormalizeErrorInput
+) {
+  return Promise.resolve(promise).then(
+    (data) => {
+      if (isFailable(data)) {
+        return normalizeFailableResult(data, normalizeOption);
+      }
 
-    if (isFailableLike(data)) {
-      return fromFailableLike(data);
-    }
+      if (isFailableLike(data)) {
+        return normalizeFailableResult(fromFailableLike(data), normalizeOption);
+      }
 
-    return success(data);
-  }, failure);
+      return success(data);
+    },
+    (error) => normalizeFailableResult(failure(error), normalizeOption)
+  );
+}
+
+function normalizeFailableResult<T, E>(
+  result: Failable<T, E>,
+  normalizeOption?: CreateFailableNormalizeErrorInput
+) {
+  const normalizeError = resolveNormalizeError(normalizeOption);
+  if (normalizeError === null) return result;
+  if (result.status === FailableStatus.Success) return result;
+  if (result.error instanceof Error) return result;
+
+  return failure(normalizeError(result.error));
+}
+
+function resolveNormalizeError(
+  normalizeOption?: CreateFailableNormalizeErrorInput
+) {
+  if (normalizeOption === undefined) return null;
+  if (isNormalizedErrorsPreset(normalizeOption)) return normalizeUnknownError;
+  if (!isCreateFailableNormalizeErrorOptions(normalizeOption)) return null;
+
+  return normalizeOption.normalizeError;
+}
+
+function isNormalizedErrorsPreset(
+  value: unknown
+): value is typeof NormalizedErrors {
+  if (!isObject(value)) return false;
+  if (Object.keys(value).length !== 1) return false;
+
+  return Object.getOwnPropertyDescriptor(value, 'mode')?.value ===
+    NormalizedErrors.mode;
+}
+
+function isCreateFailableNormalizeErrorOptions(
+  value: unknown
+): value is CreateFailableNormalizeErrorOptions {
+  if (!isObject(value)) return false;
+
+  return isFunction(value.normalizeError);
+}
+
+function normalizeUnknownError(error: unknown): Error {
+  if (error instanceof Error) return error;
+  if (Array.isArray(error)) {
+    return new AggregateError(error, 'Multiple errors', { cause: error });
+  }
+
+  return new Error(String(error), { cause: error });
 }

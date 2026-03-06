@@ -37,9 +37,13 @@ return () => disposable.dispose();
 ### Completion callback
 
 ```ts
+import { createFailable, NormalizedErrors } from '@pvorona/failable';
+
 disposable.dispose((result) => {
-  if (result.isSuccess) return;
-  console.error('disposal had errors:', result.error);
+  const normalized = createFailable(result, NormalizedErrors);
+  if (normalized.isSuccess) return;
+
+  console.error('disposal had errors:', normalized.error);
 });
 ```
 
@@ -77,20 +81,25 @@ const listener: OnDisposedListener = () => {
 
 ### `type OnCompletedListener`
 
-Called when disposal “completes”, with a `Failable<null, Error>` result.
+Called when disposal "completes", with a `Failable<null, unknown>` result.
 
 - success/failure is represented via `result.isSuccess` / `result.isError`
-- sync exceptions thrown by listeners are captured
-- promise rejections from async listeners are captured (when you use `dispose(onCompleted)`)
+- sync exceptions thrown by listeners are captured as-is
+- promise rejections from async listeners are captured as-is (when you use `dispose(onCompleted)`)
+- multiple failures may be reported as an array of raw failure values
+- if you want `Error`-shaped handling, normalize with `createFailable(result, NormalizedErrors)`
 
 Example:
 
 ```ts
+import { createFailable, NormalizedErrors } from '@pvorona/failable';
 import type { OnCompletedListener } from '@pvorona/disposable';
 
 const onCompleted: OnCompletedListener = (result) => {
-  if (result.isSuccess) return;
-  console.error('dispose failed:', result.error);
+  const normalized = createFailable(result, NormalizedErrors);
+  if (normalized.isSuccess) return;
+
+  console.error('dispose failed:', normalized.error);
 };
 ```
 

@@ -1,11 +1,17 @@
 {
   "name": "@pvorona/failable",
   "version": "0.1.0",
+  "description": "Typed success/failure results for expected failures in TypeScript.",
+  "keywords": ["failable", "result", "typescript", "error-handling"],
   "license": "MIT",
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "engines": {
+    "node": ">=18"
+  },
   "exports": {
     "./package.json": "./package.json",
     ".": {
