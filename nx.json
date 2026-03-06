@@ -52,7 +52,16 @@
     }
   ],
   "release": {
-    "projects": ["*", "!@pvorona/source"],
+    "groups": {
+      "reference": {
+        "projects": ["@pvorona/reference"],
+        "projectsRelationship": "independent"
+      },
+      "packages": {
+        "projects": ["*", "!@pvorona/source", "!@pvorona/reference"],
+        "projectsRelationship": "fixed"
+      }
+    },
     "version": {
       "preVersionCommand": "npx nx run-many -t build"
     }
