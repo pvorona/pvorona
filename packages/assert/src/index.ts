@@ -29,4 +29,4 @@ export * from './lib/isString.js';
 export * from './lib/isSymbol.js';
 export * from './lib/isUndefined.js';
 export * from './lib/resolveValueOrGetter.js';
-export * from './lib/types.js';
+export type { Mutable } from './lib/Mutable.js';
