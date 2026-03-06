@@ -51,6 +51,9 @@ export type Disposable = {
  * - `dispose()` is synchronous and idempotent.
  * - `onDispose(...)` callbacks run while disposal is in progress, before
  *   `isDisposed` flips to `true`.
+ * - `onDisposed(...)` fires in the same `dispose()` call when cleanup is fully
+ *   synchronous, and becomes deferred only when one or more `onDispose(...)`
+ *   callbacks return a promise.
  * - Duplicate `onDispose(...)` listener functions registered before disposal
  *   are de-duped.
  * - Listener order is insertion order. `onDispose(...)` listeners added during

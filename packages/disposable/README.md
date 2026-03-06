@@ -32,7 +32,7 @@ disposable.dispose();
 
 - `dispose()` is synchronous and idempotent. It returns `true` only on the call that starts disposal.
 - `onDispose(...)` callbacks run during disposal, before `isDisposed` flips to `true`.
-- `onDisposed(...)` callbacks run after async cleanup settles and receive the final `DisposeResult`.
+- `onDisposed(...)` callbacks receive the final `DisposeResult`. They run in the same `dispose()` call when cleanup is fully synchronous, and they wait for tracked promises only when one or more `onDispose(...)` callbacks return a promise.
 - Duplicate `onDispose(...)` listener functions registered before disposal are de-duped.
 - Late `onDispose(...)` registration after disposal invokes immediately and returns a no-op unsubscribe. Late `onDisposed(...)` registration after completion replays the cached result immediately.
 - Listener order is insertion order. If an `onDispose(...)` listener registers another `onDispose(...)` listener during disposal, the new listener is drained later in the same disposal pass.
@@ -40,7 +40,7 @@ disposable.dispose();
 ## Compatibility
 
 - This package is ESM-only. It does not publish a CommonJS `require` condition.
-- The current workspace tooling baseline is Node `^20.19.0 || >=22.12.0`, matching the installed Vite 7 / Vitest 4 toolchain used to build and verify this package.
+- The published package declares `Node >=18` and emits modern ESM (`type: module`, package `exports`, `Promise.allSettled`, ES2022 target).
 
 ## Usage
 
