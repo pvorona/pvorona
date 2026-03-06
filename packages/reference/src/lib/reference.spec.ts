@@ -144,6 +144,13 @@ describe('Reference', () => {
       expect(getter).toHaveBeenCalledOnce();
     });
 
+    it('accepts a precomputed value-or-getter union variable when unset', () => {
+      const ref = createUnsetReference<string>();
+      const fallback = Math.random() > 0.5 ? 'new' : () => 'new';
+
+      expect(ref.getOrSet(fallback)).toBe('new');
+    });
+
     it('does not call the getter when set', () => {
       const ref = createReference(5);
       const getter = vi.fn(() => 10);
@@ -182,6 +189,23 @@ describe('Reference', () => {
       expect(() => setFromUntyped(() => 'next')).toThrow(/function/i);
     });
 
+    it('throws when getOr receives a constructor from a JS or any caller', () => {
+      class ExampleClass {}
+
+      const ref = createUnsetReference<string>();
+      const getOrFromUntyped = ref.getOr as (valueOrGetter: unknown) => unknown;
+
+      expect(() => getOrFromUntyped(ExampleClass)).toThrow(/function/i);
+    });
+
+    it('throws when a getOr fallback getter resolves to a function', () => {
+      const ref = createUnsetReference<string>();
+      const getOrFromUntyped = ref.getOr as (valueOrGetter: unknown) => unknown;
+
+      expect(() => getOrFromUntyped(() => (() => 'value'))).toThrow(
+        /function/i,
+      );
+    });
     it('throws when a lazy initializer resolves to a function', () => {
       const ref = createUnsetReference<string>();
       const getOrSetFromUntyped = ref.getOrSet as (
@@ -191,6 +215,17 @@ describe('Reference', () => {
       expect(() => getOrSetFromUntyped(() => (() => 'value'))).toThrow(
         /function/i,
       );
+    });
+
+    it('throws when getOrSet receives a constructor from a JS or any caller', () => {
+      class ExampleClass {}
+
+      const ref = createUnsetReference<string>();
+      const getOrSetFromUntyped = ref.getOrSet as (
+        valueOrGetter: unknown,
+      ) => unknown;
+
+      expect(() => getOrSetFromUntyped(ExampleClass)).toThrow(/function/i);
     });
   });
 
@@ -212,6 +247,15 @@ describe('Reference', () => {
 });
 
 describe('ReadonlyReference', () => {
+  it('accepts a precomputed value-or-getter union variable when unset', () => {
+    const ref = createReference('a');
+    ref.unset();
+
+    const fallback = Math.random() > 0.5 ? 'fallback' : () => 'fallback';
+
+    expect(ref.asReadonly().getOr(fallback)).toBe('fallback');
+  });
+
   it('exposes getOr that reflects the current value', () => {
     const ref = createReference('a');
     const ro = ref.asReadonly();

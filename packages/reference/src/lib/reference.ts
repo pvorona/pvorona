@@ -1,4 +1,4 @@
-import { assert, isFunction } from '@pvorona/assert';
+import { assert, isFunction, resolveValueOrGetter } from '@pvorona/assert';
 
 const UNSET: unique symbol = Symbol('UNSET');
 
@@ -20,6 +20,9 @@ type ReadonlyReferenceShape<T> = Readonly<{
   getOr: {
     <U>(value: NonFunctionalValue<U>): T | NonFunctionalValue<U>;
     <U>(getter: Getter<NonFunctionalValue<U>>): T | NonFunctionalValue<U>;
+    <U>(
+      valueOrGetter: NonFunctionalValue<U> | Getter<NonFunctionalValue<U>>,
+    ): T | NonFunctionalValue<U>;
   };
   getOrThrow: (messageOrFactory?: MessageOrFactory) => T;
 }>;
@@ -30,11 +33,15 @@ type ReferenceShape<T> = Readonly<{
   getOr: {
     <U>(value: NonFunctionalValue<U>): T | NonFunctionalValue<U>;
     <U>(getter: Getter<NonFunctionalValue<U>>): T | NonFunctionalValue<U>;
+    <U>(
+      valueOrGetter: NonFunctionalValue<U> | Getter<NonFunctionalValue<U>>,
+    ): T | NonFunctionalValue<U>;
   };
   getOrThrow: (messageOrFactory?: MessageOrFactory) => T;
   getOrSet: {
     (value: T): T;
     (getter: Getter<T>): T;
+    (valueOrGetter: T | Getter<T>): T;
   };
   set: (value: T) => void;
   unset: () => void;
@@ -56,6 +63,13 @@ export type ReadonlyReference<T> = Readonly<{
       | (Extract<T, FunctionValue> extends never ? T : never)
       | (Extract<U, FunctionValue> extends never ? U : never);
     <U>(getter: () => Extract<U, FunctionValue> extends never ? U : never):
+      | (Extract<T, FunctionValue> extends never ? T : never)
+      | (Extract<U, FunctionValue> extends never ? U : never);
+    <U>(
+      valueOrGetter:
+        | (Extract<U, FunctionValue> extends never ? U : never)
+        | (() => Extract<U, FunctionValue> extends never ? U : never),
+    ):
       | (Extract<T, FunctionValue> extends never ? T : never)
       | (Extract<U, FunctionValue> extends never ? U : never);
   };
@@ -82,6 +96,13 @@ export type Reference<T> = Readonly<{
     <U>(getter: () => Extract<U, FunctionValue> extends never ? U : never):
       | (Extract<T, FunctionValue> extends never ? T : never)
       | (Extract<U, FunctionValue> extends never ? U : never);
+    <U>(
+      valueOrGetter:
+        | (Extract<U, FunctionValue> extends never ? U : never)
+        | (() => Extract<U, FunctionValue> extends never ? U : never),
+    ):
+      | (Extract<T, FunctionValue> extends never ? T : never)
+      | (Extract<U, FunctionValue> extends never ? U : never);
   };
   getOrThrow: (
     messageOrFactory?: string | (() => string),
@@ -91,6 +112,11 @@ export type Reference<T> = Readonly<{
       Extract<T, FunctionValue> extends never ? T : never;
     (getter: () => Extract<T, FunctionValue> extends never ? T : never):
       Extract<T, FunctionValue> extends never ? T : never;
+    (
+      valueOrGetter:
+        | (Extract<T, FunctionValue> extends never ? T : never)
+        | (() => Extract<T, FunctionValue> extends never ? T : never),
+    ): Extract<T, FunctionValue> extends never ? T : never;
   };
   set: (value: Extract<T, FunctionValue> extends never ? T : never) => void;
   unset: () => void;
@@ -110,6 +136,27 @@ function assertNonFunctionalValue<T>(
   );
 }
 
+function isClassConstructor(
+  value: unknown,
+): value is abstract new (...args: never[]) => unknown {
+  if (!isFunction(value)) return false;
+
+  return Function.prototype.toString.call(value).startsWith('class ');
+}
+
+function resolveReferenceValue<T>(
+  valueOrGetter: ValueOrGetter<T>,
+): NonFunctionalValue<T> {
+  if (isClassConstructor(valueOrGetter)) {
+    assertNonFunctionalValue(valueOrGetter);
+  }
+
+  const value = resolveValueOrGetter(valueOrGetter as never) as NonFunctionalValue<T>;
+
+  assertNonFunctionalValue(value);
+
+  return value;
+}
 function createReferenceInternal<T>(
   initialValue: T | typeof UNSET,
 ): ReferenceShape<T> {
@@ -119,15 +166,12 @@ function createReferenceInternal<T>(
     assertNonFunctionalValue(current);
   }
 
-  const resolve = <V>(valueOrGetter: ValueOrGetter<V>): V =>
-    isFunction(valueOrGetter) ? valueOrGetter() : valueOrGetter;
-
   const getOr: ReadonlyReferenceShape<T>['getOr'] = <U>(
     valueOrGetter: ValueOrGetter<NonFunctionalValue<U>>,
   ): T | NonFunctionalValue<U> => {
     if (hasStoredValue(current)) return current;
 
-    return resolve(valueOrGetter);
+    return resolveReferenceValue(valueOrGetter);
   };
 
   const getOrThrow = (messageOrFactory?: MessageOrFactory): T => {
@@ -141,9 +185,7 @@ function createReferenceInternal<T>(
   ): T => {
     if (hasStoredValue(current)) return current;
 
-    const nextValue = resolve(valueOrGetter);
-
-    assertNonFunctionalValue(nextValue);
+    const nextValue = resolveReferenceValue(valueOrGetter);
 
     current = nextValue;
 

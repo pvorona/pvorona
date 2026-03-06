@@ -1,4 +1,4 @@
-import { isObject } from '@pvorona/assert';
+import { hasOwnKey, isObject } from '@pvorona/assert';
 
 type Mutable<T> = {
   -readonly [P in keyof T]: T[P];
@@ -311,7 +311,7 @@ export const instant: Duration = milliseconds(0);
 
 /** Returns `true` when the value is a duration created by this package. */
 export function isDuration(value: unknown): value is Duration {
-  return isObject(value) && millisecondsTag in value;
+  return isObject(value) && hasOwnKey(value, millisecondsTag);
 }
 
 /** Compares two durations by their normalized millisecond payload. */
