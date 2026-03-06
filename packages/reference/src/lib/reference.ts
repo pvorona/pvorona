@@ -2,19 +2,11 @@ import { assert, isFunction } from '@pvorona/assert';
 
 const UNSET: unique symbol = Symbol('UNSET');
 
-/* eslint-disable @typescript-eslint/no-unsafe-function-type */
-type FunctionValue = Function;
-/* eslint-enable @typescript-eslint/no-unsafe-function-type */
+type FunctionValue = (...args: never[]) => unknown;
 
 type MessageOrFactory = string | (() => string);
 
-type IsNonFunctionalValue<T> = Extract<T, FunctionValue> extends never
-  ? true
-  : false;
-
 type NonFunctionalValue<T> = Extract<T, FunctionValue> extends never ? T : never;
-
-type NonFunctionalThis<T> = IsNonFunctionalValue<T> extends true ? void : never;
 
 type Getter<T> = () => T;
 
@@ -54,7 +46,21 @@ type ReferenceShape<T> = Readonly<{
  * and `getOrThrow(...)` when absence is an error. Function-valued `T` is rejected
  * because function inputs are reserved for lazy getters.
  */
-export type ReadonlyReference<T> = ReadonlyReferenceShape<NonFunctionalValue<T>>;
+export type ReadonlyReference<T> = Readonly<{
+  isSet: boolean;
+  isUnset: boolean;
+  getOr: {
+    <U>(value: Extract<U, (...args: never[]) => unknown> extends never ? U : never):
+      | (Extract<T, (...args: never[]) => unknown> extends never ? T : never)
+      | (Extract<U, (...args: never[]) => unknown> extends never ? U : never);
+    <U>(getter: () => Extract<U, (...args: never[]) => unknown> extends never ? U : never):
+      | (Extract<T, (...args: never[]) => unknown> extends never ? T : never)
+      | (Extract<U, (...args: never[]) => unknown> extends never ? U : never);
+  };
+  getOrThrow: (
+    messageOrFactory?: string | (() => string),
+  ) => Extract<T, (...args: never[]) => unknown> extends never ? T : never;
+}>;
 
 /**
  * A mutable reference with explicit empty-state semantics.
@@ -64,7 +70,34 @@ export type ReadonlyReference<T> = ReadonlyReferenceShape<NonFunctionalValue<T>>
  * valued `T` is rejected because function inputs are reserved for lazy getters
  * and lazy initializers.
  */
-export type Reference<T> = ReferenceShape<NonFunctionalValue<T>>;
+export type Reference<T> = Readonly<{
+  isSet: boolean;
+  isUnset: boolean;
+  getOr: {
+    <U>(value: Extract<U, (...args: never[]) => unknown> extends never ? U : never):
+      | (Extract<T, (...args: never[]) => unknown> extends never ? T : never)
+      | (Extract<U, (...args: never[]) => unknown> extends never ? U : never);
+    <U>(getter: () => Extract<U, (...args: never[]) => unknown> extends never ? U : never):
+      | (Extract<T, (...args: never[]) => unknown> extends never ? T : never)
+      | (Extract<U, (...args: never[]) => unknown> extends never ? U : never);
+  };
+  getOrThrow: (
+    messageOrFactory?: string | (() => string),
+  ) => Extract<T, (...args: never[]) => unknown> extends never ? T : never;
+  getOrSet: {
+    (
+      value: Extract<T, (...args: never[]) => unknown> extends never ? T : never,
+    ): Extract<T, (...args: never[]) => unknown> extends never ? T : never;
+    (
+      getter: () => Extract<T, (...args: never[]) => unknown> extends never ? T : never,
+    ): Extract<T, (...args: never[]) => unknown> extends never ? T : never;
+  };
+  set: (
+    value: Extract<T, (...args: never[]) => unknown> extends never ? T : never,
+  ) => void;
+  unset: () => void;
+  asReadonly: () => ReadonlyReference<T>;
+}>;
 
 function hasStoredValue<T>(current: T | typeof UNSET): current is T {
   return current !== UNSET;
@@ -161,7 +194,7 @@ function createReferenceInternal<T>(
  * lazy initializers.
  */
 export function createReference<T>(
-  this: NonFunctionalThis<T>,
+  this: Extract<T, (...args: never[]) => unknown> extends never ? void : never,
   initialValue: T,
 ): Reference<T> {
   assertNonFunctionalValue(initialValue);
@@ -177,7 +210,7 @@ export function createReference<T>(
  * function inputs are reserved for lazy getters and lazy initializers.
  */
 export function createUnsetReference<T>(
-  this: NonFunctionalThis<T>,
+  this: Extract<T, (...args: never[]) => unknown> extends never ? void : never,
 ): Reference<T> {
   return createReferenceInternal<NonFunctionalValue<T>>(UNSET);
 }
