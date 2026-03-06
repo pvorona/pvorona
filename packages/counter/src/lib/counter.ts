@@ -1,6 +1,4 @@
-type Mutable<T> = {
-  -readonly [Key in keyof T]: T[Key];
-};
+import type { Mutable } from '@pvorona/types';
 
 export type Counter = {
   readonly value: number;

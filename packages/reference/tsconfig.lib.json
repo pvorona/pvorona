@@ -13,6 +13,9 @@
   "references": [
     {
       "path": "../assert/tsconfig.lib.json"
+    },
+    {
+      "path": "../resolve-value-or-getter/tsconfig.lib.json"
     }
   ],
   "exclude": [

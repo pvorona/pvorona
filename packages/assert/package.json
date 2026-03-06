@@ -46,5 +46,8 @@
   "dependencies": {
     "@pvorona/throw-error": "~0.0.2",
     "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@pvorona/resolve-value-or-getter": "0.0.0"
   }
 }

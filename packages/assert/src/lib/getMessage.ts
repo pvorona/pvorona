@@ -1,4 +1,4 @@
-import { resolveValueOrGetter } from './resolveValueOrGetter.js';
+import { resolveValueOrGetter } from '@pvorona/resolve-value-or-getter';
 
 export function getMessage(
   messageOrMessageGetter?: undefined | string | (() => string),

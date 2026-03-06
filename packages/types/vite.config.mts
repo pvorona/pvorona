@@ -5,7 +5,7 @@ import dts from 'vite-plugin-dts';
 
 export default defineConfig(() => ({
   root: import.meta.dirname,
-  cacheDir: '../../node_modules/.vite/packages/reference',
+  cacheDir: '../../node_modules/.vite/packages/types',
   plugins: [
     dts({
       entryRoot: 'src',
@@ -21,16 +21,16 @@ export default defineConfig(() => ({
     },
     lib: {
       entry: 'src/index.ts',
-      name: '@pvorona/reference',
+      name: '@pvorona/types',
       fileName: 'index',
       formats: ['es' as const],
     },
     rollupOptions: {
-      external: ['@pvorona/assert'],
+      external: [],
     },
   },
   test: {
-    name: '@pvorona/reference',
+    name: '@pvorona/types',
     watch: false,
     globals: true,
     environment: 'node',

@@ -61,10 +61,16 @@
         }
       },
       "packages": {
-        "projects": ["*", "!@pvorona/source", "!@pvorona/reference"],
+        "projects": [
+          "*",
+          "!@pvorona/source",
+          "!@pvorona/reference",
+          "!@pvorona/resolve-value-or-getter",
+          "!@pvorona/types"
+        ],
         "projectsRelationship": "independent",
         "version": {
-          "groupPreVersionCommand": "npx nx run-many -t build --projects='*,!@pvorona/source,!@pvorona/reference'"
+          "groupPreVersionCommand": "npx nx run-many -t build --projects='*,!@pvorona/source,!@pvorona/reference,!@pvorona/resolve-value-or-getter,!@pvorona/types'"
         }
       }
     }

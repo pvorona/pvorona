@@ -1,8 +1,5 @@
 import { hasOwnKey, isObject } from '@pvorona/assert';
-
-type Mutable<T> = {
-  -readonly [P in keyof T]: T[P];
-};
+import type { Mutable } from '@pvorona/types';
 
 const TIME_UNIT_VALUES = {
   Millisecond: 0,

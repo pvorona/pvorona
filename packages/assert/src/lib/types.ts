@@ -1,8 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export type Mutable<T> = {
-  -readonly [P in keyof T]: T[P];
-};
-
 export type Override<A, B> = Omit<A, keyof B> & B;
 
 type Error<Message extends string, Argument> = {

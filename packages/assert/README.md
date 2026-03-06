@@ -78,15 +78,12 @@ if (hasOwnKey(value, durationBrand) && hasOwnKey(value, 'milliseconds')) {
 }
 ```
 
-### `resolveValueOrGetter(...)`
+### Breaking change: `resolveValueOrGetter(...)` is no longer public
 
-```ts
-import { resolveValueOrGetter } from '@pvorona/assert';
-
-const fallback = Math.random() > 0.5 ? 'cached' : () => 'computed';
-const value = resolveValueOrGetter(fallback);
-// value: string
-```
+`resolveValueOrGetter` is no longer exported from `@pvorona/assert`.
+It now lives in a private workspace package used internally in this repo and
+is not part of the published API.
+External consumers should define a local equivalent if they still need the helper.
 
 ### Non-empty arrays preserve readonlyness
 
@@ -103,43 +100,31 @@ const ensured = ensureNonEmptyArray(readonlyValues);
 // ensured: ReadonlyNonEmptyArray<number>
 ```
 
-### `Mutable<T>`
+### Breaking change: `Mutable<T>` is no longer public
 
-```ts
-import type { Mutable } from '@pvorona/assert';
-
-type Config = {
-  readonly retries: number;
-  readonly label: string;
-};
-
-type DraftConfig = Mutable<Config>;
-// { retries: number; label: string }
-```
+`Mutable` is no longer exported from `@pvorona/assert`.
+It now lives in a private workspace package used internally in this repo and
+is not part of the published API.
+External consumers should define a local equivalent if they still need the mapped type.
 
 ## Stable public surface
 
-- Runtime helpers: `assert`, `AssertionError`, the root `is*` / `ensure*` helpers, `isPromiseLike`, `hasOwnKey`, `hasOwnPropertyValue`, and `resolveValueOrGetter`
-- Public types: `Mutable`, `NonEmptyArray`, and `ReadonlyNonEmptyArray`
+- Runtime helpers: `assert`, `AssertionError`, the root `is*` / `ensure*` helpers, `isPromiseLike`, `hasOwnKey`, and `hasOwnPropertyValue`
+- Public types: `NonEmptyArray` and `ReadonlyNonEmptyArray`
 
 ## ESM and tooling
 
 - Import the package with standard ESM syntax: `import { assert } from '@pvorona/assert'`
-- Import types with `import type`, for example `import type { Mutable } from '@pvorona/assert'`
+- Import types with `import type`, for example `import type { ReadonlyNonEmptyArray } from '@pvorona/assert'`
 - The current workspace baseline is Node 20+ and TypeScript 5.9+
 
 ## Migration note
 
-The root package no longer re-exports the advanced helper types from the old internal `types.ts` surface.
+The root package no longer re-exports some advanced helpers from the old internal surfaces.
 
-```ts
-// Before
-import type { Mutable, Override, NotOnlyString } from '@pvorona/assert';
-
-// After
-import type { Mutable } from '@pvorona/assert';
-```
-
+- `resolveValueOrGetter` moved to a private workspace package and is no longer part of the published API
+- `Mutable` moved to a private workspace package and is no longer part of the published API
+- External consumers should define local equivalents if they still need either helper
 - Removed root exports include internal-looking helpers such as `Override`, `InferErrorMessage`, `NotOnly*`, `Includes*`, `AtLeastOneValid`, and `InferArrayType`
-- `Mutable`, `NonEmptyArray`, and `ReadonlyNonEmptyArray` remain public
+- `NonEmptyArray` and `ReadonlyNonEmptyArray` remain public
 - There is no replacement public subpath for the removed advanced types; if you still need them, define local equivalents in your own codebase
