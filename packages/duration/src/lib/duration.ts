@@ -22,6 +22,7 @@ export const TimeUnit: {
 } = TIME_UNIT_VALUES;
 
 const millisecondsTag = Symbol('milliseconds');
+const TIME_UNITS = new Set<TimeUnit>(Object.values(TimeUnit));
 
 export type Duration = {
   readonly [millisecondsTag]: number;
@@ -61,6 +62,46 @@ const MILLISECONDS_IN_UNIT = [
   /* 365.25 days */ 365.25 * 24 * 60 * 60 * 1_000,
 ] as const;
 
+function ensureTimeUnit(unit: TimeUnit): TimeUnit {
+  if (TIME_UNITS.has(unit)) {
+    return unit;
+  }
+
+  throw new TypeError('Expected a valid time unit.');
+}
+
+function ensureFiniteNumber(value: number, name: string): number {
+  if (Number.isFinite(value)) {
+    return value;
+  }
+
+  throw new TypeError(`Expected \`${name}\` to be finite.`);
+}
+
+function ensureValidDate(date: Date, name: string): number {
+  const timestamp = date.getTime();
+  if (!Number.isNaN(timestamp)) {
+    return timestamp;
+  }
+
+  throw new TypeError(`Expected \`${name}\` to be a valid date.`);
+}
+
+function normalizeMilliseconds(
+  milliseconds: number,
+  options?: { readonly allowInfinite?: boolean },
+): number {
+  if (Number.isNaN(milliseconds) || milliseconds === Number.NEGATIVE_INFINITY) {
+    throw new TypeError('Expected duration milliseconds to be finite or `Infinity`.');
+  }
+
+  if (milliseconds !== Infinity || options?.allowInfinite) {
+    return milliseconds;
+  }
+
+  throw new TypeError('Expected duration milliseconds to be finite.');
+}
+
 const BASE_DURATION: Duration = {
   [millisecondsTag]: 0,
   isFinite: false,
@@ -68,7 +109,7 @@ const BASE_DURATION: Duration = {
   isInstant: false,
 
   to(unit: TimeUnit): number {
-    return this[millisecondsTag] / MILLISECONDS_IN_UNIT[unit];
+    return this[millisecondsTag] / MILLISECONDS_IN_UNIT[ensureTimeUnit(unit)];
   },
   toMilliseconds() {
     return this.to(TimeUnit.Millisecond);
@@ -120,17 +161,24 @@ const BASE_DURATION: Duration = {
   },
 } as const;
 
-function createDuration(value: number, unit: TimeUnit): Duration {
+function createDuration(
+  milliseconds: number,
+  options?: { readonly allowInfinite?: boolean },
+): Duration {
+  const normalizedMilliseconds = normalizeMilliseconds(milliseconds, options);
   const result: Mutable<Duration> = Object.create(BASE_DURATION);
-  result[millisecondsTag] = value * MILLISECONDS_IN_UNIT[unit];
-  result.isFinite = value !== Infinity;
-  result.isInfinite = value === Infinity;
-  result.isInstant = value === 0;
+  result[millisecondsTag] = normalizedMilliseconds;
+  result.isFinite = Number.isFinite(normalizedMilliseconds);
+  result.isInfinite = normalizedMilliseconds === Infinity;
+  result.isInstant = normalizedMilliseconds === 0;
   return Object.freeze(result);
 }
 
 export function duration(value: number, unit: TimeUnit): Duration {
-  return createDuration(value, unit);
+  const normalizedValue = ensureFiniteNumber(value, 'value');
+  const normalizedUnit = ensureTimeUnit(unit);
+
+  return createDuration(normalizedValue * MILLISECONDS_IN_UNIT[normalizedUnit]);
 }
 
 export function milliseconds(value: number): Duration {
@@ -166,7 +214,10 @@ export function years(value: number): Duration {
 }
 
 export function between(start: Date, end: Date): Duration {
-  return milliseconds(end.getTime() - start.getTime());
+  const startTime = ensureValidDate(start, 'start');
+  const endTime = ensureValidDate(end, 'end');
+
+  return createDuration(endTime - startTime);
 }
 
 export function since(start: Date): Duration {
@@ -174,22 +225,63 @@ export function since(start: Date): Duration {
 }
 
 export function add(a: Duration, b: Duration): Duration {
-  return milliseconds(a[millisecondsTag] + b[millisecondsTag]);
+  if (a.isInfinite || b.isInfinite) {
+    return infinite;
+  }
+
+  return createDuration(a[millisecondsTag] + b[millisecondsTag]);
 }
 
 export function subtract(a: Duration, b: Duration): Duration {
-  return milliseconds(a[millisecondsTag] - b[millisecondsTag]);
+  if (a.isInfinite && b.isInfinite) {
+    throw new TypeError('Cannot subtract `infinite` from `infinite`.');
+  }
+
+  if (a.isInfinite) {
+    return infinite;
+  }
+
+  if (b.isInfinite) {
+    throw new TypeError('Cannot subtract `infinite` from a finite duration.');
+  }
+
+  return createDuration(a[millisecondsTag] - b[millisecondsTag]);
 }
 
 export function multiply(a: Duration, b: number): Duration {
-  return milliseconds(a[millisecondsTag] * b);
+  const scalar = ensureFiniteNumber(b, 'multiplier');
+
+  if (!a.isInfinite) {
+    return createDuration(a[millisecondsTag] * scalar);
+  }
+
+  if (scalar > 0) {
+    return infinite;
+  }
+
+  throw new TypeError(
+    'Cannot multiply `infinite` by zero or a negative number.',
+  );
 }
 
 export function divide(a: Duration, b: number): Duration {
-  return milliseconds(a[millisecondsTag] / b);
+  const scalar = ensureFiniteNumber(b, 'divisor');
+  if (scalar === 0) {
+    throw new TypeError('Cannot divide by zero.');
+  }
+
+  if (!a.isInfinite) {
+    return createDuration(a[millisecondsTag] / scalar);
+  }
+
+  if (scalar > 0) {
+    return infinite;
+  }
+
+  throw new TypeError('Cannot divide `infinite` by a negative number.');
 }
 
-export const infinite: Duration = milliseconds(Infinity);
+export const infinite: Duration = createDuration(Infinity, { allowInfinite: true });
 export const instant: Duration = milliseconds(0);
 
 export function isDuration(value: unknown): value is Duration {
