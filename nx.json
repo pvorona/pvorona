@@ -62,7 +62,7 @@
       },
       "packages": {
         "projects": ["*", "!@pvorona/source", "!@pvorona/reference"],
-        "projectsRelationship": "fixed",
+        "projectsRelationship": "independent",
         "version": {
           "groupPreVersionCommand": "npx nx run-many -t build --projects='*,!@pvorona/source,!@pvorona/reference'"
         }

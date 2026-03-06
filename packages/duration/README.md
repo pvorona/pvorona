@@ -1,6 +1,6 @@
 # @pvorona/duration
 
-An immutable duration type with unit conversions, comparisons, and basic arithmetic.
+An immutable ESM-only duration type with unit conversions, comparisons, and basic arithmetic.
 
 ## Install
 
@@ -8,25 +8,28 @@ An immutable duration type with unit conversions, comparisons, and basic arithme
 npm i @pvorona/duration
 ```
 
+This package is ESM-only. Import it from ESM modules instead of `require(...)`.
+
 ## Usage
 
 ### Create and convert
 
 ```ts
-import { minutes } from '@pvorona/duration';
+import { duration, TimeUnit } from '@pvorona/duration';
 
-const d = minutes(5);
-d.toSeconds(); // 300
-d.toMilliSeconds(); // 300_000
+const d = duration(2, TimeUnit.Minute);
+d.toSeconds(); // 120
+d.toMilliseconds(); // 300_000
+duration(250, TimeUnit.Millisecond).toSeconds(); // 0.25
 ```
 
 ### Compare
 
 ```ts
-import { milliSeconds, seconds } from '@pvorona/duration';
+import { milliseconds, seconds } from '@pvorona/duration';
 
 const a = seconds(1);
-const b = milliSeconds(900);
+const b = milliseconds(900);
 
 a.greaterThan(b); // true
 a.compare(b); // 1
@@ -35,10 +38,10 @@ a.compare(b); // 1
 ### Arithmetic
 
 ```ts
-import { add, milliSeconds, seconds } from '@pvorona/duration';
+import { add, milliseconds, seconds } from '@pvorona/duration';
 
-const total = add(seconds(1), milliSeconds(500));
-total.toMilliSeconds(); // 1500
+const total = add(seconds(1), milliseconds(500));
+total.toMilliseconds(); // 1500
 ```
 
 ### Between dates
@@ -51,37 +54,29 @@ const elapsed = since(startedAt);
 elapsed.toSeconds(); // ~2
 ```
 
+## Environment and semantics
+
+- ESM-only package: use `import`, not `require(...)`.
+- `Month` is treated as 30 days and `Year` as 365.25 days. These are approximations, not calendar-aware durations.
+- Negative finite durations are valid. `between(...)`, `since(...)`, arithmetic, and comparisons can produce or operate on negative values.
+- Constructors accept only finite numeric inputs. `infinite` is the only supported non-finite duration.
+- `add(infinite, x)`, `subtract(infinite, finite)`, `multiply(infinite, positive finite)`, and `divide(infinite, positive finite)` return `infinite`.
+- Invalid units, invalid dates, non-finite scalar inputs, divide-by-zero, `subtract(infinite, infinite)`, `subtract(finite, infinite)`, `multiply(infinite, 0)`, `multiply(infinite, negative)`, and `divide(infinite, negative)` throw `TypeError`.
+
 ## API
 
-### `const enum TimeUnit`
+### `TimeUnit`
 
-Time units supported by `duration(value, unit)` and `d.to(unit)`.
+Runtime unit constants supported by `duration(value, unit)` and `d.to(unit)`.
 
-```ts
-export const enum TimeUnit {
-  MilliSecond,
-  Second,
-  Minute,
-  Hour,
-  Day,
-  Week,
-  Month,
-  Year,
-}
-```
-
-Notes:
-
-- `Month` is treated as **30 days**
-- `Year` is treated as **365.25 days**
-
-Example:
-
-```ts
-import { duration, TimeUnit } from '@pvorona/duration';
-
-duration(2, TimeUnit.Hour).toMinutes(); // 120
-```
+- `TimeUnit.Millisecond`
+- `TimeUnit.Second`
+- `TimeUnit.Minute`
+- `TimeUnit.Hour`
+- `TimeUnit.Day`
+- `TimeUnit.Week`
+- `TimeUnit.Month`
+- `TimeUnit.Year`
 
 ### `type Duration`
 
@@ -89,14 +84,14 @@ An opaque, immutable duration value.
 
 #### Properties
 
-- **`isFinite: boolean`**: `true` unless the duration is infinite
-- **`isInfinite: boolean`**: `true` for `infinite`
+- **`isFinite: boolean`**: `true` for finite durations
+- **`isInfinite: boolean`**: `true` only for `infinite`
 - **`isInstant: boolean`**: `true` for zero duration (`instant`)
 
 #### Conversions
 
 - **`to(unit: TimeUnit): number`**: convert to an arbitrary unit
-- **`toMilliSeconds(): number`**
+- **`toMilliseconds(): number`**
 - **`toSeconds(): number`**
 - **`toMinutes(): number`**
 - **`toHours(): number`**
@@ -114,17 +109,17 @@ An opaque, immutable duration value.
 - **`greaterThanOrEqual(other: Duration): boolean`**
 - **`compare(other: Duration): -1 | 0 | 1`**
 
-Example (properties + conversion + comparison):
+Example:
 
 ```ts
-import { milliSeconds, seconds, type Duration } from '@pvorona/duration';
+import { milliseconds, seconds, type Duration } from '@pvorona/duration';
 
 function isShort(d: Duration) {
   return d.isFinite && d.toSeconds() < 5;
 }
 
 const a = seconds(1);
-const b = milliSeconds(900);
+const b = milliseconds(900);
 
 isShort(a); // true
 a.greaterThan(b); // true
@@ -135,7 +130,7 @@ a.greaterThan(b); // true
 #### Constructors
 
 - `duration(value: number, unit: TimeUnit): Duration`
-- `milliSeconds(value: number): Duration`
+- `milliseconds(value: number): Duration`
 - `seconds(value: number): Duration`
 - `minutes(value: number): Duration`
 - `hours(value: number): Duration`
@@ -173,6 +168,6 @@ import { isDuration, seconds } from '@pvorona/duration';
 
 const maybe: unknown = seconds(1);
 if (isDuration(maybe)) {
-  maybe.toMilliSeconds(); // ok, narrowed
+  maybe.toMilliseconds(); // ok, narrowed
 }
 ```
