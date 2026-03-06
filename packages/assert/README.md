@@ -1,18 +1,28 @@
 # @pvorona/assert
 
-ESM-only TypeScript assertions, intentionally restrictive guards, and compositional narrowing helpers.
+Use `@pvorona/assert` for runtime assertions, nullish narrowing, object and property checks, and a few small array and number helpers in TypeScript code.
 
-## Install
+## Install and import
 
 ```bash
 npm i @pvorona/assert
 ```
 
-## Important semantics
+- Import runtime helpers with standard ESM syntax, for example `import { assert } from '@pvorona/assert'`
+- Import public types with `import type`, for example `import type { ReadonlyNonEmptyArray } from '@pvorona/assert'`
+- The published package is ESM-only
+- The published package requires Node `>=20`
+- This repo currently verifies the package with TypeScript `5.9+`
 
-- The scalar/nullish `is*` and `ensure*` helpers are intentionally compile-time-restrictive. They are designed for values that still contain the member you want to narrow, not as loose `unknown -> whatever` casts.
-- `defined` means `not undefined`. It does not mean `not nullish`. For DOM APIs such as `document.getElementById(...)`, use `ensureNotNull(...)`.
-- The package is ESM-only. The current workspace verifies it on Node 20+ and TypeScript 5.9+.
+## When this package fits
+
+- Use it to throw on impossible states with `assert(...)` or `ensure*` helpers.
+- Use it to narrow existing unions such as `string | number`, `T | undefined`, or `T | null | undefined`.
+- Use it when you want small reusable checks like `hasOwnPropertyValue(...)`, `isPromiseLike(...)`, or `isNonEmptyArray(...)`.
+
+These helpers are mainly for narrowing values that already include the member you want to keep. They are not meant to act like loose `unknown -> whatever` casts.
+
+`defined` means `not undefined`. It does not mean `not nullish`, so use `ensureNotNull(...)` or `ensureNotNullOrUndefined(...)` when those match the actual input shape better.
 
 ## Quick start
 
@@ -78,14 +88,7 @@ if (hasOwnKey(value, durationBrand) && hasOwnKey(value, 'milliseconds')) {
 }
 ```
 
-### Breaking change: `resolveValueOrGetter(...)` is no longer public
-
-`resolveValueOrGetter` is no longer exported from `@pvorona/assert`.
-It now lives in a private workspace package used internally in this repo and
-is not part of the published API.
-External consumers should define a local equivalent if they still need the helper.
-
-### Non-empty arrays preserve readonlyness
+### Non-empty arrays
 
 ```ts
 import { ensureNonEmptyArray, isNonEmptyArray } from '@pvorona/assert';
@@ -100,27 +103,14 @@ const ensured = ensureNonEmptyArray(readonlyValues);
 // ensured: ReadonlyNonEmptyArray<number>
 ```
 
-### Breaking change: `Mutable<T>` is no longer public
-
-`Mutable` is no longer exported from `@pvorona/assert`.
-It now lives in a private workspace package used internally in this repo and
-is not part of the published API.
-External consumers should define a local equivalent if they still need the mapped type.
-
 ## Stable public surface
 
-- Runtime helpers: `assert`, `AssertionError`, the root `is*` / `ensure*` helpers, `isPromiseLike`, `hasOwnKey`, and `hasOwnPropertyValue`
+- Runtime helpers: `assert`, `AssertionError`, the root `is*` and `ensure*` helpers, `isPromiseLike`, `hasOwnKey`, and `hasOwnPropertyValue`
 - Public types: `NonEmptyArray` and `ReadonlyNonEmptyArray`
 
-## ESM and tooling
+## Migration notes
 
-- Import the package with standard ESM syntax: `import { assert } from '@pvorona/assert'`
-- Import types with `import type`, for example `import type { ReadonlyNonEmptyArray } from '@pvorona/assert'`
-- The current workspace baseline is Node 20+ and TypeScript 5.9+
-
-## Migration note
-
-The root package no longer re-exports some advanced helpers from the old internal surfaces.
+The root package no longer re-exports some advanced helpers from older internal surfaces.
 
 - `resolveValueOrGetter` moved to a private workspace package and is no longer part of the published API
 - `Mutable` moved to a private workspace package and is no longer part of the published API
