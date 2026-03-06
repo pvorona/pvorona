@@ -2,11 +2,16 @@ import {
   createFailable,
   failure,
   FailableStatus,
+  isFailableLike,
   isFailure,
   isSuccess,
   NormalizedErrors,
   success,
+  toFailableLike,
   type Failable,
+  type FailableLike,
+  type FailableLikeFailure,
+  type FailableLikeSuccess,
   type Failure,
   type Success,
 } from '@pvorona/failable';
@@ -91,6 +96,28 @@ const unionMatch = union.match(
   (error) => error
 );
 type _UnionMatch = Expect<Equal<typeof unionMatch, string>>;
+
+const successWire = toFailableLike(ok);
+
+if (!isFailableLike(successWire)) {
+  throw new Error('Expected structured-clone success wire shape');
+}
+
+type _SuccessWire = Expect<Equal<typeof successWire, FailableLikeSuccess<number>>>;
+
+const successWireAsConsumerType: FailableLike<number, string> = successWire;
+void successWireAsConsumerType;
+
+const failureWire = toFailableLike(problem);
+
+if (!isFailableLike(failureWire)) {
+  throw new Error('Expected structured-clone failure wire shape');
+}
+
+type _FailureWire = Expect<Equal<typeof failureWire, FailableLikeFailure<string>>>;
+
+const failureWireAsConsumerType: FailableLike<number, string> = failureWire;
+void failureWireAsConsumerType;
 
 const wrappedFunction = createFailable(() => 123);
 

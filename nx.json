@@ -78,6 +78,9 @@
   "targetDefaults": {
     "test": {
       "dependsOn": ["^build"]
+    },
+    "check-public-surface": {
+      "dependsOn": ["build"]
     }
   },
   "neverConnectToCloud": true

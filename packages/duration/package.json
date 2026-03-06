@@ -20,8 +20,11 @@
   ],
   "scripts": {
     "check-consumer-types": "node ./scripts/check-consumer-types.mjs",
+    "test-public-api": "vitest run --config vitest.public-surface.config.mts",
+    "typecheck-public-api": "npm run check-consumer-types",
     "check-package-surface": "node ./scripts/check-package-surface.mjs",
-    "prepublishOnly": "npm run check-consumer-types && npm run check-package-surface"
+    "check-public-surface": "npm run test-public-api && npm run typecheck-public-api && npm run check-package-surface",
+    "prepublishOnly": "npm run check-public-surface"
   },
   "publishConfig": {
     "access": "public"

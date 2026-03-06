@@ -30,8 +30,8 @@ async function main() {
     await writeFile(
       entryPath,
       [
-        "import { addTo, duration, subtractFrom, TimeUnit } from '../dist/index.js';",
-        "import type { DurationParts } from '../dist/index.js';",
+        "import { addTo, duration, subtractFrom, TimeUnit } from '@pvorona/duration';",
+        "import type { DurationParts } from '@pvorona/duration';",
         'const parts = { minutes: 1, seconds: 30 } satisfies DurationParts;',
         'const value = duration(parts);',
         'const start = new Date(1_000);',
