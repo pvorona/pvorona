@@ -1,6 +1,10 @@
-import { createDisposable } from './disposable.js';
-import { assert } from '@pvorona/assert';
-import { isFailure, isSuccess } from '@pvorona/failable';
+import {
+  createDisposable,
+  type Disposable,
+  type DisposeResult,
+  type OnDisposedListener,
+  type OnDisposeListener,
+} from './disposable.js';
 
 type Deferred<T = void, E = unknown> = {
   promise: Promise<T>;
@@ -22,6 +26,12 @@ function createDeferred<T = void, E = unknown>(): Deferred<T, E> {
     resolve: resolve as (value: T | PromiseLike<T>) => void,
     reject: reject as (reason: E) => void,
   };
+}
+
+async function flushMicrotasks(times = 4) {
+  for (let index = 0; index < times; index += 1) {
+    await Promise.resolve();
+  }
 }
 
 describe('Disposable', () => {
@@ -51,21 +61,21 @@ describe('Disposable', () => {
       expect(disposable.isDisposing).toBe(false);
     });
 
-    it('is true inside an onDisposed listener', () => {
+    it('is true inside an onDispose listener', () => {
       const disposable = createDisposable();
-      const onDisposedListener = vi.fn(() => {
+      const onDisposeListener = vi.fn(() => {
         expect(disposable.isDisposing).toBe(true);
       });
 
-      disposable.onDisposed(onDisposedListener);
+      disposable.onDispose(onDisposeListener);
       disposable.dispose();
 
-      expect(onDisposedListener).toHaveBeenCalledTimes(1);
+      expect(onDisposeListener).toHaveBeenCalledTimes(1);
     });
 
     it('is false after dispose() returns', () => {
       const disposable = createDisposable();
-      disposable.onDisposed(() => undefined);
+      disposable.onDispose(() => undefined);
 
       disposable.dispose();
 
@@ -87,152 +97,44 @@ describe('Disposable', () => {
       expect(disposable.dispose()).toBe(false);
     });
 
-    it('calls onCompleted for subsequent dispose(onCompleted) calls with the original result', () => {
+    it('invokes onDispose listeners exactly once', () => {
       const disposable = createDisposable();
-      disposable.onDisposed(() => undefined);
+      const onDisposeListener1 = vi.fn();
+      const onDisposeListener2 = vi.fn();
+      const onDisposeListener3 = vi.fn();
 
-      const onCompleted1 = vi.fn();
-      expect(disposable.dispose(onCompleted1)).toBe(true);
-      expect(onCompleted1).toHaveBeenCalledTimes(1);
-      const result1 = onCompleted1.mock.calls[0][0];
-
-      const events: string[] = [];
-      const onCompleted2 = vi.fn((result) => {
-        events.push('onCompleted2');
-        expect(result).toBe(result1);
-      });
-
-      events.push('beforeSecondDispose');
-      expect(disposable.dispose(onCompleted2)).toBe(false);
-      events.push('afterSecondDispose');
-
-      expect(events).toStrictEqual([
-        'beforeSecondDispose',
-        'onCompleted2',
-        'afterSecondDispose',
-      ]);
-      expect(onCompleted2).toHaveBeenCalledTimes(1);
-    });
-
-    it('calls onCompleted with Success when all listeners are sync and do not throw', () => {
-      const disposable = createDisposable();
-      disposable.onDisposed(() => undefined);
-
-      const onCompleted = vi.fn();
-      expect(disposable.dispose(onCompleted)).toBe(true);
-
-      expect(onCompleted).toHaveBeenCalledTimes(1);
-      expect(isSuccess(onCompleted.mock.calls[0][0])).toBe(true);
-    });
-
-    it('calls onCompleted with Failure when a listener throws', () => {
-      const disposable = createDisposable();
-
-      const consoleErrorSpy = vi
-        .spyOn(console, 'error')
-        .mockImplementation(() => undefined);
-
-      const listenerError = new Error('boom');
-      disposable.onDisposed(() => {
-        throw listenerError;
-      });
-
-      const onCompleted = vi.fn();
-
-      try {
-        expect(disposable.dispose(onCompleted)).toBe(true);
-
-        expect(onCompleted).toHaveBeenCalledTimes(1);
-        const result = onCompleted.mock.calls[0][0];
-        expect(isFailure(result)).toBe(true);
-        assert(isFailure(result));
-        expect(result.error).toBe(listenerError);
-      } finally {
-        consoleErrorSpy.mockRestore();
-      }
-    });
-
-    it('waits for promise listeners before calling onCompleted', async () => {
-      const disposable = createDisposable();
-      const deferred = createDeferred<void>();
-
-      disposable.onDisposed(() => deferred.promise);
-
-      const onCompleted = vi.fn();
-      disposable.dispose(onCompleted);
-      expect(onCompleted).not.toHaveBeenCalled();
-
-      deferred.resolve();
-      await deferred.promise;
-      await Promise.resolve();
-
-      expect(onCompleted).toHaveBeenCalledTimes(1);
-      expect(isSuccess(onCompleted.mock.calls[0][0])).toBe(true);
-    });
-
-    it('queues subsequent dispose(onCompleted) calls while completion is pending and uses the original result', async () => {
-      const disposable = createDisposable();
-      const deferred = createDeferred<void>();
-
-      disposable.onDisposed(() => deferred.promise);
-
-      const onCompleted1 = vi.fn();
-      expect(disposable.dispose(onCompleted1)).toBe(true);
-      expect(onCompleted1).not.toHaveBeenCalled();
-
-      const onCompleted2 = vi.fn();
-      expect(disposable.dispose(onCompleted2)).toBe(false);
-      expect(onCompleted2).not.toHaveBeenCalled();
-
-      deferred.resolve();
-      await deferred.promise;
-
-      await Promise.resolve();
-      await Promise.resolve();
-
-      expect(onCompleted1).toHaveBeenCalledTimes(1);
-      expect(onCompleted2).toHaveBeenCalledTimes(1);
-      expect(onCompleted2.mock.calls[0][0]).toBe(onCompleted1.mock.calls[0][0]);
-    });
-
-    it('invokes onDisposed listeners exactly once', () => {
-      const disposable = createDisposable();
-      const onDisposedListener1 = vi.fn();
-      const onDisposedListener2 = vi.fn();
-      const onDisposedListener3 = vi.fn();
-
-      disposable.onDisposed(onDisposedListener1);
-      disposable.onDisposed(onDisposedListener2);
-      disposable.onDisposed(onDisposedListener3);
+      disposable.onDispose(onDisposeListener1);
+      disposable.onDispose(onDisposeListener2);
+      disposable.onDispose(onDisposeListener3);
 
       disposable.dispose();
       disposable.dispose();
 
-      expect(onDisposedListener1).toHaveBeenCalledTimes(1);
-      expect(onDisposedListener2).toHaveBeenCalledTimes(1);
-      expect(onDisposedListener3).toHaveBeenCalledTimes(1);
+      expect(onDisposeListener1).toHaveBeenCalledTimes(1);
+      expect(onDisposeListener2).toHaveBeenCalledTimes(1);
+      expect(onDisposeListener3).toHaveBeenCalledTimes(1);
     });
 
     it('is safe to call multiple times (idempotent)', () => {
       const disposable = createDisposable();
-      const onDisposedListener = vi.fn();
-      disposable.onDisposed(onDisposedListener);
+      const onDisposeListener = vi.fn();
+      disposable.onDispose(onDisposeListener);
 
       expect(disposable.dispose()).toBe(true);
       expect(disposable.dispose()).toBe(false);
       expect(disposable.dispose()).toBe(false);
       expect(disposable.isDisposed).toBe(true);
-      expect(onDisposedListener).toHaveBeenCalledTimes(1);
+      expect(onDisposeListener).toHaveBeenCalledTimes(1);
     });
 
-    it('invokes listeners synchronously (before dispose() returns)', () => {
+    it('invokes onDispose listeners synchronously (before dispose() returns)', () => {
       const disposable = createDisposable();
       const events: string[] = [];
 
-      const onDisposedListener = vi.fn(() => {
+      const onDisposeListener = vi.fn(() => {
         events.push('listener');
       });
-      disposable.onDisposed(onDisposedListener);
+      disposable.onDispose(onDisposeListener);
 
       events.push('beforeDispose');
       disposable.dispose();
@@ -243,26 +145,26 @@ describe('Disposable', () => {
         'listener',
         'afterDispose',
       ]);
-      expect(onDisposedListener).toHaveBeenCalledTimes(1);
+      expect(onDisposeListener).toHaveBeenCalledTimes(1);
     });
 
-    it('sets isDisposed=true only after all listeners execute', () => {
+    it('sets isDisposed=true only after all onDispose listeners execute', () => {
       const disposable = createDisposable();
-      const onDisposedListener = vi.fn(() => {
+      const onDisposeListener = vi.fn(() => {
         expect(disposable.isDisposed).toBe(false);
         expect(disposable.isDisposing).toBe(true);
       });
-      disposable.onDisposed(onDisposedListener);
+      disposable.onDispose(onDisposeListener);
 
       disposable.dispose();
 
       expect(disposable.isDisposing).toBe(false);
       expect(disposable.isDisposed).toBe(true);
-      expect(onDisposedListener).toHaveBeenCalledTimes(1);
+      expect(onDisposeListener).toHaveBeenCalledTimes(1);
     });
 
     describe('re-entrancy edge cases', () => {
-      it('if a listener calls onDisposed(existingPendingListener) during dispose(), existingPendingListener is still called exactly once total', () => {
+      it('if a listener calls onDispose(existingPendingListener) during dispose(), existingPendingListener is still called exactly once total', () => {
         const disposable = createDisposable();
         const events: string[] = [];
 
@@ -272,12 +174,12 @@ describe('Disposable', () => {
 
         const outerListener = vi.fn(() => {
           events.push('outerListener-beforeSubscribe');
-          disposable.onDisposed(existingPendingListener);
+          disposable.onDispose(existingPendingListener);
           events.push('outerListener-afterSubscribe');
         });
 
-        disposable.onDisposed(outerListener);
-        disposable.onDisposed(existingPendingListener);
+        disposable.onDispose(outerListener);
+        disposable.onDispose(existingPendingListener);
 
         disposable.dispose();
 
@@ -290,7 +192,7 @@ describe('Disposable', () => {
         ]);
       });
 
-      it('if a listener calls onDisposed(existingAlreadyCalledListener) during dispose(), existingAlreadyCalledListener is called again', () => {
+      it('if a listener calls onDispose(existingAlreadyCalledListener) during dispose(), existingAlreadyCalledListener is called again', () => {
         const disposable = createDisposable();
         const events: string[] = [];
 
@@ -300,12 +202,12 @@ describe('Disposable', () => {
 
         const outerListener = vi.fn(() => {
           events.push('outerListener-beforeSubscribe');
-          disposable.onDisposed(existingAlreadyCalledListener);
+          disposable.onDispose(existingAlreadyCalledListener);
           events.push('outerListener-afterSubscribe');
         });
 
-        disposable.onDisposed(existingAlreadyCalledListener);
-        disposable.onDisposed(outerListener);
+        disposable.onDispose(existingAlreadyCalledListener);
+        disposable.onDispose(outerListener);
 
         disposable.dispose();
 
@@ -319,7 +221,7 @@ describe('Disposable', () => {
         ]);
       });
 
-      it('if a listener calls onDisposed(itself) during dispose(), it runs again', () => {
+      it('if a listener calls onDispose(itself) during dispose(), it runs again', () => {
         const disposable = createDisposable();
 
         let callCount = 0;
@@ -327,11 +229,11 @@ describe('Disposable', () => {
           callCount += 1;
 
           if (callCount === 1) {
-            disposable.onDisposed(selfSubscribingListener);
+            disposable.onDispose(selfSubscribingListener);
           }
         });
 
-        disposable.onDisposed(selfSubscribingListener);
+        disposable.onDispose(selfSubscribingListener);
 
         disposable.dispose();
 
@@ -340,23 +242,23 @@ describe('Disposable', () => {
     });
   });
 
-  describe('.onDisposed(listener)', () => {
+  describe('.onDispose(listener)', () => {
     it('does not call listener before .dispose()', () => {
       const disposable = createDisposable();
-      const onDisposedListener = vi.fn();
-      disposable.onDisposed(onDisposedListener);
+      const onDisposeListener = vi.fn();
+      disposable.onDispose(onDisposeListener);
 
-      expect(onDisposedListener).not.toHaveBeenCalled();
+      expect(onDisposeListener).not.toHaveBeenCalled();
     });
 
     it('calls listener when .dispose() is called', () => {
       const disposable = createDisposable();
-      const onDisposedListener = vi.fn();
-      disposable.onDisposed(onDisposedListener);
+      const onDisposeListener = vi.fn();
+      disposable.onDispose(onDisposeListener);
 
       disposable.dispose();
 
-      expect(onDisposedListener).toHaveBeenCalledTimes(1);
+      expect(onDisposeListener).toHaveBeenCalledTimes(1);
     });
 
     it('supports multiple listeners (all are called once)', () => {
@@ -364,7 +266,7 @@ describe('Disposable', () => {
       const listeners = Array.from({ length: 7 }, () => vi.fn());
 
       for (const listener of listeners) {
-        disposable.onDisposed(listener);
+        disposable.onDispose(listener);
       }
 
       disposable.dispose();
@@ -374,66 +276,63 @@ describe('Disposable', () => {
       }
     });
 
-    it('does not guarantee listener call order', () => {
+    it('calls listeners in insertion order', () => {
       const disposable = createDisposable();
       const callOrder: string[] = [];
 
-      const onDisposedListener1 = vi.fn(() => {
+      const onDisposeListener1 = vi.fn(() => {
         callOrder.push('listener1');
       });
-      const onDisposedListener2 = vi.fn(() => {
+      const onDisposeListener2 = vi.fn(() => {
         callOrder.push('listener2');
       });
 
-      disposable.onDisposed(onDisposedListener1);
-      disposable.onDisposed(onDisposedListener2);
+      disposable.onDispose(onDisposeListener1);
+      disposable.onDispose(onDisposeListener2);
 
       disposable.dispose();
 
-      expect(callOrder).toHaveLength(2);
-      expect(callOrder).toEqual(
-        expect.arrayContaining(['listener1', 'listener2'])
-      );
-      expect(onDisposedListener1).toHaveBeenCalledTimes(1);
-      expect(onDisposedListener2).toHaveBeenCalledTimes(1);
+      expect(callOrder).toStrictEqual(['listener1', 'listener2']);
+      expect(onDisposeListener1).toHaveBeenCalledTimes(1);
+      expect(onDisposeListener2).toHaveBeenCalledTimes(1);
     });
 
     it('de-dupes the same listener function (registering twice calls it once)', () => {
       const disposable = createDisposable();
-      const onDisposedListener = vi.fn();
+      const onDisposeListener = vi.fn();
 
-      disposable.onDisposed(onDisposedListener);
-      disposable.onDisposed(onDisposedListener);
+      disposable.onDispose(onDisposeListener);
+      disposable.onDispose(onDisposeListener);
 
       disposable.dispose();
 
-      expect(onDisposedListener).toHaveBeenCalledTimes(1);
+      expect(onDisposeListener).toHaveBeenCalledTimes(1);
     });
 
     it('returns an unsubscribe function that removes the listener', () => {
       const disposable = createDisposable();
-      const onDisposedListener = vi.fn();
+      const onDisposeListener = vi.fn();
 
-      const unsubscribe = disposable.onDisposed(onDisposedListener);
+      const unsubscribe = disposable.onDispose(onDisposeListener);
       unsubscribe();
 
       disposable.dispose();
 
-      expect(onDisposedListener).not.toHaveBeenCalled();
+      expect(onDisposeListener).not.toHaveBeenCalled();
     });
 
     it('unsubscribe is idempotent (can be called multiple times)', () => {
       const disposable = createDisposable();
-      const onDisposedListener = vi.fn();
+      const onDisposeListener = vi.fn();
 
-      const unsubscribe = disposable.onDisposed(onDisposedListener);
+      const unsubscribe = disposable.onDispose(onDisposeListener);
 
       expect(() => unsubscribe()).not.toThrow();
       expect(() => unsubscribe()).not.toThrow();
 
       disposable.dispose();
 
-      expect(onDisposedListener).not.toHaveBeenCalled();
+      expect(onDisposeListener).not.toHaveBeenCalled();
     });
 
     it('unsubscribing inside a listener does not break other listeners', () => {
@@ -441,18 +340,18 @@ describe('Disposable', () => {
 
       let unsubscribe1: () => void = () => undefined;
 
-      const onDisposedListener1 = vi.fn(() => {
+      const onDisposeListener1 = vi.fn(() => {
         unsubscribe1();
       });
-      const onDisposedListener2 = vi.fn();
+      const onDisposeListener2 = vi.fn();
 
-      unsubscribe1 = disposable.onDisposed(onDisposedListener1);
-      disposable.onDisposed(onDisposedListener2);
+      unsubscribe1 = disposable.onDispose(onDisposeListener1);
+      disposable.onDispose(onDisposeListener2);
 
       disposable.dispose();
 
-      expect(onDisposedListener1).toHaveBeenCalledTimes(1);
-      expect(onDisposedListener2).toHaveBeenCalledTimes(1);
+      expect(onDisposeListener1).toHaveBeenCalledTimes(1);
+      expect(onDisposeListener2).toHaveBeenCalledTimes(1);
     });
 
     it("if listener A unsubscribes listener B during dispose(), B isn't called if it hasn't been called yet", () => {
@@ -476,8 +375,8 @@ describe('Disposable', () => {
         callSequence.push('listenerA');
       });
 
-      disposable.onDisposed(listenerA);
-      unsubscribeB = disposable.onDisposed(listenerB);
+      disposable.onDispose(listenerA);
+      unsubscribeB = disposable.onDispose(listenerB);
 
       disposable.dispose();
 
@@ -489,52 +388,52 @@ describe('Disposable', () => {
     });
 
     describe('late subscription', () => {
-      it('if already disposed, onDisposed(listener) calls listener immediately', () => {
+      it('if already disposed, onDispose(listener) calls listener immediately', () => {
         const disposable = createDisposable();
         disposable.dispose();
 
-        const onDisposedListener = vi.fn();
-        disposable.onDisposed(onDisposedListener);
+        const onDisposeListener = vi.fn();
+        disposable.onDispose(onDisposeListener);
 
-        expect(onDisposedListener).toHaveBeenCalledTimes(1);
+        expect(onDisposeListener).toHaveBeenCalledTimes(1);
       });
 
-      it('if already disposed, unsubscribe returned from onDisposed() is a no-op', () => {
+      it('if already disposed, unsubscribe returned from onDispose() is a no-op', () => {
         const disposable = createDisposable();
         disposable.dispose();
 
-        const onDisposedListener = vi.fn();
-        const unsubscribe = disposable.onDisposed(onDisposedListener);
+        const onDisposeListener = vi.fn();
+        const unsubscribe = disposable.onDispose(onDisposeListener);
 
         expect(() => unsubscribe()).not.toThrow();
         expect(() => unsubscribe()).not.toThrow();
 
-        expect(onDisposedListener).toHaveBeenCalledTimes(1);
+        expect(onDisposeListener).toHaveBeenCalledTimes(1);
       });
     });
 
     describe('subscription during disposal', () => {
-      it('if a listener calls onDisposed(newListener) during dispose(), newListener is called later in the same dispose() call', () => {
+      it('if a listener calls onDispose(newListener) during dispose(), newListener is called later in the same dispose() call', () => {
         const disposable = createDisposable();
         const events: string[] = [];
 
-        const newOnDisposedListener = vi.fn(() => {
+        const newOnDisposeListener = vi.fn(() => {
           events.push('newListener');
         });
 
-        const onDisposedListener = vi.fn(() => {
+        const onDisposeListener = vi.fn(() => {
           events.push('outerListener-beforeSubscribe');
-          disposable.onDisposed(newOnDisposedListener);
+          disposable.onDispose(newOnDisposeListener);
           events.push('outerListener-afterSubscribe');
         });
 
-        disposable.onDisposed(onDisposedListener);
+        disposable.onDispose(onDisposeListener);
 
         events.push('beforeDispose');
         disposable.dispose();
         events.push('afterDispose');
 
-        expect(newOnDisposedListener).toHaveBeenCalledTimes(1);
+        expect(newOnDisposeListener).toHaveBeenCalledTimes(1);
         expect(events).toStrictEqual([
           'beforeDispose',
           'outerListener-beforeSubscribe',
@@ -555,16 +454,16 @@ describe('Disposable', () => {
         const throwingListener = vi.fn(() => {
           throw new Error('boom');
         });
-        const onDisposedListener = vi.fn();
+        const onDisposeListener = vi.fn();
 
         try {
-          disposable.onDisposed(throwingListener);
-          disposable.onDisposed(onDisposedListener);
+          disposable.onDispose(throwingListener);
+          disposable.onDispose(onDisposeListener);
 
           disposable.dispose();
 
           expect(throwingListener).toHaveBeenCalledTimes(1);
-          expect(onDisposedListener).toHaveBeenCalledTimes(1);
+          expect(onDisposeListener).toHaveBeenCalledTimes(1);
         } finally {
           consoleErrorSpy.mockRestore();
         }
@@ -581,7 +480,7 @@ describe('Disposable', () => {
         });
 
         try {
-          disposable.onDisposed(throwingListener);
+          disposable.onDispose(throwingListener);
 
           expect(() => disposable.dispose()).not.toThrow();
           expect(throwingListener).toHaveBeenCalledTimes(1);
@@ -602,7 +501,7 @@ describe('Disposable', () => {
           .mockImplementation(() => undefined);
 
         try {
-          disposable.onDisposed(throwingListener);
+          disposable.onDispose(throwingListener);
           disposable.dispose();
 
           expect(consoleErrorSpy).toHaveBeenCalled();
@@ -613,59 +512,7 @@ describe('Disposable', () => {
     });
 
     describe('async listener behavior', () => {
-      it('if an onDisposed listener returns a rejected promise, dispose(onCompleted) calls onCompleted with Failure', async () => {
-        const disposable = createDisposable();
-
-        const listenerError = new Error('boom');
-        const throwingAsyncListener = vi.fn(async () => {
-          throw listenerError;
-        });
-
-        const onCompleted = vi.fn();
-
-        disposable.onDisposed(throwingAsyncListener);
-        disposable.dispose(onCompleted);
-
-        expect(onCompleted).not.toHaveBeenCalled();
-
-        await Promise.resolve();
-        await Promise.resolve();
-
-        expect(throwingAsyncListener).toHaveBeenCalledTimes(1);
-        expect(onCompleted).toHaveBeenCalledTimes(1);
-        const result = onCompleted.mock.calls[0][0];
-        expect(isFailure(result)).toBe(true);
-        assert(isFailure(result));
-        expect(result.error).toBe(listenerError);
-      });
-
-      it('if dispose() is called without onCompleted, a later dispose(onCompleted) still reports async failure', async () => {
-        const disposable = createDisposable();
-
-        const deferred = createDeferred<void>();
-        disposable.onDisposed(() => deferred.promise);
-
-        expect(disposable.dispose()).toBe(true);
-
-        const onCompleted = vi.fn();
-        expect(disposable.dispose(onCompleted)).toBe(false);
-
-        expect(onCompleted).not.toHaveBeenCalled();
-
-        const listenerError = new Error('boom');
-        deferred.reject(listenerError);
-
-        await Promise.resolve();
-        await Promise.resolve();
-
-        expect(onCompleted).toHaveBeenCalledTimes(1);
-        const result = onCompleted.mock.calls[0][0];
-        expect(isFailure(result)).toBe(true);
-        assert(isFailure(result));
-        expect(result.error).toBe(listenerError);
-      });
-
-      it('if an onDisposed listener returns a promise, disposal should remain sync', async () => {
+      it('if an onDispose listener returns a promise, disposal should remain sync', async () => {
         const disposable = createDisposable();
 
         const deferred = createDeferred<void>();
@@ -676,16 +523,250 @@ describe('Disposable', () => {
           listenerCompleted = true;
         });
 
-        disposable.onDisposed(promiseReturningListener);
+        disposable.onDispose(promiseReturningListener);
 
         expect(disposable.dispose()).toBe(true);
         expect(listenerCompleted).toBe(false);
 
         deferred.resolve();
-        await Promise.resolve();
+        await deferred.promise;
+        await flushMicrotasks();
 
         expect(listenerCompleted).toBe(true);
       });
+    });
+  });
+
+  describe('.onDisposed(listener)', () => {
+    it('runs after sync onDispose listeners finish and after isDisposed becomes true', async () => {
+      const disposable = createDisposable();
+      const events: string[] = [];
+
+      disposable.onDispose(() => {
+        events.push('onDispose');
+        expect(disposable.isDisposed).toBe(false);
+      });
+
+      const onDisposedListener = vi.fn((result: DisposeResult) => {
+        events.push('onDisposed');
+        expect(disposable.isDisposed).toBe(true);
+        expect(result.isSuccess).toBe(true);
+      });
+
+      disposable.onDisposed(onDisposedListener);
+      disposable.dispose();
+
+      await flushMicrotasks();
+
+      expect(events).toStrictEqual(['onDispose', 'onDisposed']);
+      expect(onDisposedListener).toHaveBeenCalledTimes(1);
+    });
+
+    it('waits for promise-returning onDispose listeners before firing', async () => {
+      const disposable = createDisposable();
+      const deferred = createDeferred<void>();
+      const events: string[] = [];
+
+      disposable.onDispose(async () => {
+        events.push('onDispose-start');
+        await deferred.promise;
+        events.push('onDispose-end');
+      });
+
+      const onDisposedListener = vi.fn((result: DisposeResult) => {
+        events.push('onDisposed');
+        expect(result.isSuccess).toBe(true);
+      });
+
+      disposable.onDisposed(onDisposedListener);
+      disposable.dispose();
+
+      expect(onDisposedListener).not.toHaveBeenCalled();
+
+      deferred.resolve();
+      await deferred.promise;
+      await flushMicrotasks();
+
+      expect(events).toStrictEqual([
+        'onDispose-start',
+        'onDispose-end',
+        'onDisposed',
+      ]);
+      expect(onDisposedListener).toHaveBeenCalledTimes(1);
+    });
+
+    it('late onDisposed subscription after completion invokes immediately with the cached result', async () => {
+      const disposable = createDisposable();
+      const deferred = createDeferred<void>();
+
+      disposable.onDispose(() => deferred.promise);
+      disposable.dispose();
+
+      deferred.resolve();
+      await deferred.promise;
+      await flushMicrotasks();
+
+      const events: string[] = [];
+      const lateListener = vi.fn((result: DisposeResult) => {
+        events.push('lateListener');
+        expect(result.isSuccess).toBe(true);
+      });
+
+      events.push('beforeLateSubscribe');
+      disposable.onDisposed(lateListener);
+      events.push('afterLateSubscribe');
+
+      expect(events).toStrictEqual([
+        'beforeLateSubscribe',
+        'lateListener',
+        'afterLateSubscribe',
+      ]);
+      expect(lateListener).toHaveBeenCalledTimes(1);
+    });
+
+    it('multiple onDisposed subscribers receive the same final DisposeResult', async () => {
+      const disposable = createDisposable();
+      const deferred = createDeferred<void>();
+
+      disposable.onDispose(() => deferred.promise);
+
+      const onDisposed1 = vi.fn();
+      const onDisposed2 = vi.fn();
+
+      disposable.onDisposed(onDisposed1);
+      disposable.onDisposed(onDisposed2);
+      disposable.dispose();
+
+      deferred.resolve();
+      await deferred.promise;
+      await flushMicrotasks();
+
+      expect(onDisposed1).toHaveBeenCalledTimes(1);
+      expect(onDisposed2).toHaveBeenCalledTimes(1);
+      expect(onDisposed2.mock.calls[0][0]).toBe(onDisposed1.mock.calls[0][0]);
+    });
+
+    it('one failing listener produces DisposeError.errors with length 1', async () => {
+      const disposable = createDisposable();
+      const consoleErrorSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => undefined);
+      const listenerError = new Error('boom');
+
+      try {
+        disposable.onDispose(() => {
+          throw listenerError;
+        });
+
+        let result: DisposeResult | undefined;
+        disposable.onDisposed((receivedResult: DisposeResult) => {
+          result = receivedResult;
+        });
+
+        disposable.dispose();
+        await flushMicrotasks();
+
+        if (result == null) {
+          throw new Error('Expected onDisposed to receive a result');
+        }
+
+        if (result.isSuccess) {
+          throw new Error('Expected disposal to fail');
+        }
+
+        expect(result.error.errors).toHaveLength(1);
+        expect(result.error.errors[0]).toBe(listenerError);
+      } finally {
+        consoleErrorSpy.mockRestore();
+      }
+    });
+
+    it('normalizes multiple failures into a single DisposeError object', async () => {
+      const disposable = createDisposable();
+      const consoleErrorSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => undefined);
+      const syncError = new Error('sync');
+      const asyncError = new Error('async');
+
+      try {
+        disposable.onDispose(() => {
+          throw syncError;
+        });
+        disposable.onDispose(async () => {
+          throw asyncError;
+        });
+
+        let result: DisposeResult | undefined;
+        disposable.onDisposed((receivedResult: DisposeResult) => {
+          result = receivedResult;
+        });
+
+        disposable.dispose();
+        await flushMicrotasks();
+
+        if (result == null) {
+          throw new Error('Expected onDisposed to receive a result');
+        }
+
+        if (result.isSuccess) {
+          throw new Error('Expected disposal to fail');
+        }
+
+        expect(result.error.errors).toHaveLength(2);
+        expect(result.error.errors).toEqual(
+          expect.arrayContaining([syncError, asyncError])
+        );
+      } finally {
+        consoleErrorSpy.mockRestore();
+      }
+    });
+
+    it('returns an unsubscribe function that removes the completion listener', async () => {
+      const disposable = createDisposable();
+      const deferred = createDeferred<void>();
+      const onDisposedListener = vi.fn();
+
+      disposable.onDispose(() => deferred.promise);
+
+      const unsubscribe = disposable.onDisposed(onDisposedListener);
+      unsubscribe();
+
+      disposable.dispose();
+      deferred.resolve();
+      await deferred.promise;
+      await flushMicrotasks();
+
+      expect(onDisposedListener).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('public types', () => {
+    it('exposes the split lifecycle contract', () => {
+      const disposable = createDisposable();
+      const typedDisposable: Disposable = createDisposable();
+
+      expectTypeOf(typedDisposable).toEqualTypeOf<Disposable>();
+
+      const onDisposeUnsubscribe = disposable.onDispose(() => undefined);
+      expectTypeOf(onDisposeUnsubscribe).toEqualTypeOf<() => void>();
+
+      const onDisposedUnsubscribe = disposable.onDisposed(
+        (_result: DisposeResult) => undefined
+      );
+      expectTypeOf(onDisposedUnsubscribe).toEqualTypeOf<() => void>();
+      expectTypeOf<Parameters<OnDisposedListener>[0]>().toEqualTypeOf<DisposeResult>();
+
+      const onDisposeListener: OnDisposeListener = async () => undefined;
+      expectTypeOf(onDisposeListener).toEqualTypeOf<OnDisposeListener>();
+
+      // @ts-expect-error `dispose(onCompleted)` is no longer valid.
+      disposable.dispose((_result) => undefined);
+
+      // @ts-expect-error `OnDisposedListener` now observes completion, not cleanup.
+      const oldCleanupListener: OnDisposedListener = async () => undefined;
+
+      void oldCleanupListener;
     });
   });
 });
