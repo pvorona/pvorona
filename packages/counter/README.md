@@ -1,6 +1,6 @@
 # @pvorona/counter
 
-A tiny mutable counter with a minimal, typed API.
+A tiny mutable counter.
 
 ## Install
 
@@ -13,31 +13,21 @@ npm i @pvorona/counter
 ```ts
 import { createCounter } from '@pvorona/counter';
 
-const counter = createCounter();
+const counter = createCounter(10);
 
-counter.increment(); // 1
-counter.increment(2); // 3
-counter.decrement(); // 2
-counter.value; // 2
-```
-
-### A common pattern: keep internal mutability, expose readonly `value`
-
-```ts
-import type { Counter } from '@pvorona/counter';
-import { createCounter } from '@pvorona/counter';
-
-export function makeRateLimiter(): Pick<Counter, 'increment' | 'value'> {
-  const c = createCounter(0);
-  return c;
-}
+counter.value; // 10
+counter.increment(); // 11
+counter.increment(2); // 13
+counter.decrement(); // 12
+counter.set(0);
+counter.value; // 0
 ```
 
 ## API
 
 ### `type Counter`
 
-The public counter interface.
+Public counter interface.
 
 ```ts
 export type Counter = {
@@ -48,28 +38,35 @@ export type Counter = {
 };
 ```
 
+Notes:
+
+- `value` is the current count.
+- `increment(amount?)` adds `amount` (defaults to `1`) and returns the updated value.
+- `decrement(amount?)` subtracts `amount` (defaults to `1`) and returns the updated value.
+- `set(value)` replaces the current value.
+
 Example:
 
 ```ts
 import type { Counter } from '@pvorona/counter';
 
-function resetToZero(counter: Counter) {
+function reset(counter: Counter) {
   counter.set(0);
 }
 ```
 
 ### `createCounter(initialValue?: number): Counter`
 
-Creates a new counter instance.
+Creates a new counter.
 
-- **`initialValue`**: initial value (defaults to `0`)
-- **returns**: a `Counter` with a mutable internal value
+- **`initialValue`**: starting value (defaults to `0`)
+- **returns**: a `Counter`
 
 Example:
 
 ```ts
 import { createCounter } from '@pvorona/counter';
 
-const counter = createCounter(10);
-counter.decrement(3); // 7
+const clicks = createCounter();
+clicks.increment(); // 1
 ```
