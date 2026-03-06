@@ -1,9 +1,7 @@
-import { isFunction } from './isFunction.js';
+import { resolveValueOrGetter } from './resolveValueOrGetter.js';
 
 export function getMessage(
   messageOrMessageGetter?: undefined | string | (() => string),
 ) {
-  if (!isFunction(messageOrMessageGetter)) return messageOrMessageGetter;
-
-  return messageOrMessageGetter();
+  return resolveValueOrGetter<string | undefined>(messageOrMessageGetter);
 }
