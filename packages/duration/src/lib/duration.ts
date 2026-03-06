@@ -1,4 +1,4 @@
-import { isObject } from '@pvorona/assert';
+import { hasOwnKey, isObject } from '@pvorona/assert';
 
 type Mutable<T> = {
   -readonly [P in keyof T]: T[P];
@@ -187,7 +187,7 @@ export const infinite: Duration = milliSeconds(Infinity);
 export const instant: Duration = milliSeconds(0);
 
 export function isDuration(value: unknown): value is Duration {
-  return isObject(value) && millisecondsTag in value;
+  return isObject(value) && hasOwnKey(value, millisecondsTag);
 }
 
 export function isEqual(a: Duration, b: Duration): boolean {

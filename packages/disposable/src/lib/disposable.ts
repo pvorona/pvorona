@@ -1,11 +1,7 @@
-import { isFunction } from '@pvorona/assert';
+import { isFunction, isPromiseLike } from '@pvorona/assert';
 import { failure, success } from '@pvorona/failable';
 import type { Failable } from '@pvorona/failable';
 import { noop } from '@pvorona/noop';
-
-function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
-  return value != null && isFunction((value as Record<string, unknown>).then);
-}
 
 enum DisposableStatus {
   Active = 'active',

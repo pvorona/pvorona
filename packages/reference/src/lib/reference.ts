@@ -1,4 +1,4 @@
-import { assert, isFunction } from '@pvorona/assert';
+import { assert, resolveValueOrGetter } from '@pvorona/assert';
 
 const UNSET: unique symbol = Symbol('UNSET');
 
@@ -23,13 +23,10 @@ function isSet<T>(current: T | typeof UNSET): current is T {
 export function createReference<T>(initialValue: T): Reference<T> {
   let current: T | typeof UNSET = initialValue;
 
-  const resolve = <V>(valueOrGetter: V | (() => V)): V =>
-    isFunction(valueOrGetter) ? valueOrGetter() : valueOrGetter;
-
   const getOr = <U>(valueOrGetter: U | (() => U)): T | U => {
     if (isSet(current)) return current;
 
-    return resolve(valueOrGetter);
+    return resolveValueOrGetter(valueOrGetter);
   };
 
   const getOrThrow = (messageOrFactory?: string | (() => string)): T => {
@@ -44,7 +41,7 @@ export function createReference<T>(initialValue: T): Reference<T> {
     getOrSet: (valueOrGetter: T | (() => T)) => {
       if (isSet(current)) return current;
 
-      current = resolve(valueOrGetter);
+      current = resolveValueOrGetter(valueOrGetter);
 
       return current;
     },

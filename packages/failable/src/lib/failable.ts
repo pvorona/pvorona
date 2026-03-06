@@ -1,4 +1,10 @@
-import { isFunction, isObject, type Mutable } from '@pvorona/assert';
+import {
+  hasOwnKey,
+  hasOwnPropertyValue,
+  isFunction,
+  isObject,
+  type Mutable,
+} from '@pvorona/assert';
 import { notImplemented } from '@pvorona/not-implemented';
 import { FailableTag, SuccessTag, FailureTag } from './constants.js';
 
@@ -44,9 +50,8 @@ function isFailableLikeSuccess(
   return (
     isObject(value) &&
     Object.keys(value).length === 2 &&
-    Object.getOwnPropertyDescriptor(value, 'status')?.value ===
-      FailableStatus.Success &&
-    Object.prototype.hasOwnProperty.call(value, 'data')
+    hasOwnPropertyValue(value, 'status', FailableStatus.Success) &&
+    hasOwnKey(value, 'data')
   );
 }
 
@@ -56,9 +61,8 @@ function isFailableLikeFailure(
   return (
     isObject(value) &&
     Object.keys(value).length === 2 &&
-    Object.getOwnPropertyDescriptor(value, 'status')?.value ===
-      FailableStatus.Failure &&
-    Object.prototype.hasOwnProperty.call(value, 'error')
+    hasOwnPropertyValue(value, 'status', FailableStatus.Failure) &&
+    hasOwnKey(value, 'error')
   );
 }
 
