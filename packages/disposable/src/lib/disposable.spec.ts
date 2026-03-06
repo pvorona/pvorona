@@ -681,6 +681,65 @@ describe('Disposable', () => {
       }
     });
 
+    it('treats thrown undefined as a disposal failure', async () => {
+      const disposable = createDisposable();
+      const consoleErrorSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => undefined);
+
+      try {
+        disposable.onDispose(() => {
+          throw undefined;
+        });
+
+        let result: DisposeResult | undefined;
+        disposable.onDisposed((receivedResult: DisposeResult) => {
+          result = receivedResult;
+        });
+
+        disposable.dispose();
+        await flushMicrotasks();
+
+        if (result == null) {
+          throw new Error('Expected onDisposed to receive a result');
+        }
+
+        if (result.isSuccess) {
+          throw new Error('Expected disposal to fail');
+        }
+
+        expect(result.error.errors).toHaveLength(1);
+        expect(result.error.errors[0]).toBeUndefined();
+      } finally {
+        consoleErrorSpy.mockRestore();
+      }
+    });
+
+    it('treats rejected undefined as a disposal failure', async () => {
+      const disposable = createDisposable();
+
+      disposable.onDispose(() => Promise.reject(undefined));
+
+      let result: DisposeResult | undefined;
+      disposable.onDisposed((receivedResult: DisposeResult) => {
+        result = receivedResult;
+      });
+
+      disposable.dispose();
+      await flushMicrotasks();
+
+      if (result == null) {
+        throw new Error('Expected onDisposed to receive a result');
+      }
+
+      if (result.isSuccess) {
+        throw new Error('Expected disposal to fail');
+      }
+
+      expect(result.error.errors).toHaveLength(1);
+      expect(result.error.errors[0]).toBeUndefined();
+    });
+
     it('normalizes multiple failures into a single DisposeError object', async () => {
       const disposable = createDisposable();
       const consoleErrorSpy = vi

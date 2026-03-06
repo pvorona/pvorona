@@ -60,11 +60,13 @@ export function createDisposable(): Disposable {
     additionalErrors: readonly unknown[] = []
   ): DisposeResult {
     const allErrors = disposalErrors.concat(additionalErrors);
-    const [firstError, ...restErrors] = allErrors;
 
-    if (firstError === undefined) {
+    if (allErrors.length === 0) {
       return success(null);
     }
+
+    const firstError = allErrors[0];
+    const restErrors = allErrors.slice(1);
 
     return failure(createDisposeError(firstError, restErrors));
   }
