@@ -1,6 +1,6 @@
 # @pvorona/reference
 
-A mutable value container with safe access patterns.
+A mutable value container with explicit empty-state semantics and lazy fallback APIs.
 
 ## Install
 
@@ -8,95 +8,127 @@ A mutable value container with safe access patterns.
 npm i @pvorona/reference
 ```
 
+## Important semantics
+
+- `createReference(value)` always starts set, even when `value` is `undefined` or `null`.
+- `createUnsetReference<T>()` is the only empty-at-start constructor.
+- `undefined` and `null` are stored values, not absence.
+- Functions are reserved for lazy getters and lazy initializers, so a reference cannot store a bare function value.
+- `isSet` and `isUnset` are the intended presence checks.
+- `asReadonly()` returns a live view of the same underlying reference.
+
+```ts
+import { createReference, createUnsetReference } from '@pvorona/reference';
+
+const storedUndefined = createReference<string | undefined>(undefined);
+storedUndefined.isSet; // true
+storedUndefined.getOr('fallback'); // undefined
+
+const emptyToken = createUnsetReference<string>();
+emptyToken.isUnset; // true
+emptyToken.getOr('fallback'); // 'fallback'
+```
+
 ## Usage
 
+### Lazy client initialization
+
 ```ts
-import { createReference } from '@pvorona/reference';
+import { createUnsetReference } from '@pvorona/reference';
 
-const config = createReference<string | undefined>(undefined);
+type Connection = {
+  readonly id: string;
+};
 
-config.set('production');
-config.getOrThrow();      // 'production'
-config.getOr('default');  // 'production'
-config.unset();
-config.getOr('default');  // 'default'
-config.getOrThrow();      // throws — reference is not set
+declare function createConnection(): Connection;
+
+const connection = createUnsetReference<Connection>();
+
+const first = connection.getOrSet(() => createConnection());
+const second = connection.getOrSet(() => createConnection());
+
+first === second; // true
+connection.isSet; // true
 ```
 
-### Lazy initialization
+### Resettable token slot
 
 ```ts
-const connection = createReference<Connection | undefined>(undefined);
+import { createUnsetReference } from '@pvorona/reference';
 
-// Sets and returns value on first call, returns cached value after
-const conn = connection.getOrSet(() => createConnection());
+const token = createUnsetReference<string>();
+
+token.isUnset; // true
+token.getOr(''); // ''
+
+token.set('abc');
+token.getOrThrow(); // 'abc'
+token.isSet; // true
+
+token.unset();
+token.isUnset; // true
 ```
 
-### Readonly view
+### Live readonly view
 
 ```ts
-const ref = createReference(42);
-const readonly = ref.asReadonly();
+import { createUnsetReference } from '@pvorona/reference';
 
-readonly.getOrThrow(); // 42
+const mode = createUnsetReference<'dev' | 'prod'>();
+const readonlyMode = mode.asReadonly();
+
+mode.set('prod');
+
+readonlyMode.isSet; // true
+readonlyMode.getOr('dev'); // 'prod'
 ```
 
 ## API
 
 ### `type ReadonlyReference<T>`
 
-A readonly “view” of a reference. It exposes only safe reads:
+A live readonly view of a reference.
 
-- `getOr(valueOrGetter)` — return the current value if set, otherwise return the provided fallback value (or call the fallback getter)
-- `getOrThrow(messageOrFactory?)` — return the current value if set, otherwise throw
-
-Example:
-
-```ts
-import type { ReadonlyReference } from '@pvorona/reference';
-
-export function readEnv(mode: ReadonlyReference<'dev' | 'prod'>) {
-  return mode.getOr('dev');
-}
-```
+- `isSet` / `isUnset` expose the current presence state.
+- `getOr(value)` returns the stored value when set, otherwise the literal fallback.
+- `getOr(() => value)` evaluates the fallback lazily only when unset.
+- `getOrThrow(messageOrFactory?)` throws when the reference is unset.
 
 ### `type Reference<T>`
 
-A mutable reference with safe reads + mutation.
+A mutable reference that extends the readonly API with mutation and lazy initialization.
 
-It includes everything from `ReadonlyReference<T>`, plus:
-
-- `getOrSet(valueOrGetter)` — if set, return current value; otherwise set to the provided value (or getter result) and return it
-- `set(value)` — set the current value
-- `unset()` — clear the current value (future reads behave as “not set”)
-- `asReadonly()` — get a `ReadonlyReference<T>` view
-
-Example:
-
-```ts
-import type { Reference } from '@pvorona/reference';
-
-export function reset<T>(ref: Reference<T>, value: T) {
-  ref.set(value);
-}
-```
+- `getOrSet(value)` stores the literal value only when unset.
+- `getOrSet(() => value)` initializes lazily only when unset.
+- `set(value)` overwrites the stored value.
+- `unset()` transitions the reference to the empty state.
+- `asReadonly()` returns a live `ReadonlyReference<T>` view.
 
 ### `createReference<T>(initialValue: T): Reference<T>`
 
-Creates a new reference.
+Creates a reference that starts set to `initialValue`.
 
-- The reference starts “set” to `initialValue`.
-- Calling `unset()` transitions it to “not set” (reads require fallback or throw).
+- Passing `undefined` or `null` stores that exact value.
+- Use `createUnsetReference<T>()` instead when you need an empty reference.
 
-Example:
+### `createUnsetReference<T>(): Reference<T>`
+
+Creates a reference that starts unset.
+
+- Use `getOr(...)`, `getOrThrow(...)`, `getOrSet(...)`, `isSet`, and `isUnset` to read or initialize it later.
+
+## Migration
+
+- If you previously used `createReference<T | undefined>(undefined)` to mean "empty", replace it with `createUnsetReference<T>()`.
+- Storing callbacks or handlers directly in a reference is no longer supported because function inputs are reserved for lazy getters and initializers.
+- If you need to keep callable behavior in a reference, wrap it in a non-callable object first.
 
 ```ts
 import { createReference } from '@pvorona/reference';
 
-const token = createReference<string | undefined>(undefined);
+const onSave = () => console.log('saved');
 
-token.getOr(''); // ''
-token.set('abc');
-token.getOrThrow(); // 'abc'
-token.unset();
+const handlerRef = createReference({ onSave });
+
+handlerRef.getOrThrow().onSave();
 ```

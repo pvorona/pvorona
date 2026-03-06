@@ -154,19 +154,29 @@ describe('Reference', () => {
 
   describe('function guards', () => {
     it('throws when createReference receives a function from a JS or any caller', () => {
-      expect(() => createReference((() => 'value') as any)).toThrow(/function/i);
+      const createReferenceFromUntyped = createReference as (
+        value: unknown,
+      ) => unknown;
+
+      expect(() => createReferenceFromUntyped(() => 'value')).toThrow(
+        /function/i,
+      );
     });
 
     it('throws when set receives a function from a JS or any caller', () => {
       const ref = createReference('value');
+      const setFromUntyped = ref.set as (value: unknown) => void;
 
-      expect(() => ref.set((() => 'next') as any)).toThrow(/function/i);
+      expect(() => setFromUntyped(() => 'next')).toThrow(/function/i);
     });
 
     it('throws when a lazy initializer resolves to a function', () => {
       const ref = createUnsetReference<string>();
+      const getOrSetFromUntyped = ref.getOrSet as (
+        valueOrGetter: unknown,
+      ) => unknown;
 
-      expect(() => ref.getOrSet((() => (() => 'value')) as any)).toThrow(
+      expect(() => getOrSetFromUntyped(() => (() => 'value'))).toThrow(
         /function/i,
       );
     });

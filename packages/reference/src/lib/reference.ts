@@ -47,8 +47,23 @@ type ReferenceShape<T> = Readonly<{
   asReadonly: () => ReadonlyReferenceShape<T>;
 }>;
 
+/**
+ * A live readonly view of a reference.
+ *
+ * Use `isSet` and `isUnset` for presence checks, `getOr(...)` for fallback reads,
+ * and `getOrThrow(...)` when absence is an error. Function-valued `T` is rejected
+ * because function inputs are reserved for lazy getters.
+ */
 export type ReadonlyReference<T> = ReadonlyReferenceShape<NonFunctionalValue<T>>;
 
+/**
+ * A mutable reference with explicit empty-state semantics.
+ *
+ * `createReference(value)` starts set, `createUnsetReference<T>()` starts unset,
+ * and `asReadonly()` returns a live readonly view of the same state. Function-
+ * valued `T` is rejected because function inputs are reserved for lazy getters
+ * and lazy initializers.
+ */
 export type Reference<T> = ReferenceShape<NonFunctionalValue<T>>;
 
 function hasStoredValue<T>(current: T | typeof UNSET): current is T {
@@ -137,17 +152,34 @@ function createReferenceInternal<T>(
   };
 }
 
+/**
+ * Create a reference that starts set to `initialValue`.
+ *
+ * Passing `undefined` or `null` stores that exact value. Use
+ * `createUnsetReference<T>()` when you need an empty reference instead. Functions
+ * cannot be stored directly; function inputs are reserved for lazy getters and
+ * lazy initializers.
+ */
 export function createReference<T>(
   initialValue: T,
   ..._guard: NonFunctionalReferenceGuard<T>
 ): Reference<T> {
+  void _guard;
   assertNonFunctionalValue(initialValue);
 
   return createReferenceInternal<NonFunctionalValue<T>>(initialValue);
 }
 
+/**
+ * Create a reference that starts unset.
+ *
+ * Use `isSet`, `isUnset`, `getOr(...)`, `getOrThrow(...)`, and `getOrSet(...)`
+ * to observe or initialize it later. Functions cannot be used as `T` because
+ * function inputs are reserved for lazy getters and lazy initializers.
+ */
 export function createUnsetReference<T>(
   ..._guard: NonFunctionalReferenceGuard<T>
 ): Reference<T> {
+  void _guard;
   return createReferenceInternal<NonFunctionalValue<T>>(UNSET);
 }
