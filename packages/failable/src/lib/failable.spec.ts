@@ -47,7 +47,7 @@ function ensureSuccess(result: unknown): asserts result is Success<unknown> {
   throw new Error('Expected Success result');
 }
 
-function createSuccessLookalike<T>(data: T) {
+function createSuccessLookalike<T>(data: T): unknown {
   return {
     status: FailableStatus.Success,
     isSuccess: true as const,
@@ -63,7 +63,7 @@ function createSuccessLookalike<T>(data: T) {
   };
 }
 
-function createFailureLookalike<E>(error: E) {
+function createFailureLookalike<E>(error: E): unknown {
   return {
     status: FailableStatus.Failure,
     isSuccess: false as const,
