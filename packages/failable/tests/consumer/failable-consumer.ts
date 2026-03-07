@@ -8,6 +8,7 @@ import {
   success,
   type Failable,
   type Failure,
+  type Success,
 } from '@pvorona/failable';
 
 type Expect<T extends true> = T;
@@ -35,6 +36,18 @@ type _NoFailureTag = Expect<
 
 const ok = success(123);
 
+const okOrElse = ok.orElse(() => 456);
+type _OkOrElse = Expect<Equal<typeof okOrElse, Success<number>>>;
+
+const okGetOrElse = ok.getOrElse(() => 456);
+type _OkGetOrElse = Expect<Equal<typeof okGetOrElse, number>>;
+
+const okMatch = ok.match(
+  (value) => value.toString(),
+  () => 'unexpected'
+);
+type _OkMatch = Expect<Equal<typeof okMatch, string>>;
+
 if (!isSuccess(ok)) {
   throw new Error('Expected success result');
 }
@@ -45,9 +58,39 @@ void FailableStatus.Success;
 
 const problem = failure('boom');
 
+const problemOrElse = problem.orElse(() => 123);
+type _ProblemOrElse = Expect<Equal<typeof problemOrElse, Success<number>>>;
+
+const problemGetOrElse = problem.getOrElse(() => 123);
+type _ProblemGetOrElse = Expect<Equal<typeof problemGetOrElse, number>>;
+
+const problemMatch = problem.match(
+  () => 'unexpected',
+  (error) => error
+);
+type _ProblemMatch = Expect<Equal<typeof problemMatch, string>>;
+
 if (!isFailure(problem)) {
   throw new Error('Expected failure result');
 }
+
+const union: Failable<number, string> = Math.random() > 0.5 ? ok : problem;
+
+const unionOrElse = union.orElse(() => ({ a: 1 }));
+type _UnionOrElse = Expect<
+  Equal<typeof unionOrElse, Success<number> | Success<{ a: number }>>
+>;
+
+const unionGetOrElse = union.getOrElse(() => ({ b: 'b' }));
+type _UnionGetOrElse = Expect<
+  Equal<typeof unionGetOrElse, number | { b: string }>
+>;
+
+const unionMatch = union.match(
+  (value) => value.toString(),
+  (error) => error
+);
+type _UnionMatch = Expect<Equal<typeof unionMatch, string>>;
 
 const wrappedFunction = createFailable(() => 123);
 

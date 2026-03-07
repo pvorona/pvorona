@@ -47,6 +47,38 @@ function ensureSuccess(result: unknown): asserts result is Success<unknown> {
   throw new Error('Expected Success result');
 }
 
+function createSuccessLookalike<T>(data: T) {
+  return {
+    status: FailableStatus.Success,
+    isSuccess: true as const,
+    isError: false as const,
+    data,
+    error: null,
+    or: vi.fn(),
+    orElse: vi.fn(),
+    getOr: vi.fn(),
+    getOrElse: vi.fn(),
+    getOrThrow: vi.fn(),
+    match: vi.fn(),
+  };
+}
+
+function createFailureLookalike<E>(error: E) {
+  return {
+    status: FailableStatus.Failure,
+    isSuccess: false as const,
+    isError: true as const,
+    data: null,
+    error,
+    or: vi.fn(),
+    orElse: vi.fn(),
+    getOr: vi.fn(),
+    getOrElse: vi.fn(),
+    getOrThrow: vi.fn(),
+    match: vi.fn(),
+  };
+}
+
 describe('success', () => {
   it('creates a frozen Success instance with correct properties', () => {
     const value = faker.number.float();
@@ -79,6 +111,37 @@ describe('failure', () => {
     expect(result.data).toBeNull();
     expect(result.error).toBe(error);
     expect(() => result.getOrThrow()).toThrow(error);
+  });
+});
+
+describe('runtime guards', () => {
+  it('recognizes hydrated Success and Failure instances', () => {
+    const ok = success(faker.number.float());
+    const problem = failure(new Error(faker.string.uuid()));
+
+    expect(isFailable(ok)).toBe(true);
+    expect(isSuccess(ok)).toBe(true);
+    expect(isFailure(ok)).toBe(false);
+
+    expect(isFailable(problem)).toBe(true);
+    expect(isSuccess(problem)).toBe(false);
+    expect(isFailure(problem)).toBe(true);
+  });
+
+  it('returns false for plain success lookalike objects', () => {
+    const lookalike = createSuccessLookalike(faker.number.float());
+
+    expect(isFailable(lookalike)).toBe(false);
+    expect(isSuccess(lookalike)).toBe(false);
+    expect(isFailure(lookalike)).toBe(false);
+  });
+
+  it('returns false for plain failure lookalike objects', () => {
+    const lookalike = createFailureLookalike(new Error(faker.string.uuid()));
+
+    expect(isFailable(lookalike)).toBe(false);
+    expect(isSuccess(lookalike)).toBe(false);
+    expect(isFailure(lookalike)).toBe(false);
   });
 });
 
@@ -264,6 +327,34 @@ describe('or', () => {
   });
 });
 
+describe('orElse', () => {
+  it('Success keeps original and does not call fallback factory', () => {
+    type ValueType = 123;
+    const value: ValueType = 123;
+    const original = success(value);
+    const getFallback = vi.fn(() => 'fallback');
+    const result = original.orElse(getFallback);
+
+    expect(result).toBe(original);
+    expect(result).toStrictEqual(success(value));
+    expect(getFallback).not.toHaveBeenCalled();
+    expectTypeOf(result).toEqualTypeOf<Success<ValueType>>();
+  });
+
+  it('Failure recovers lazily and calls fallback factory once', () => {
+    type FallbackType = string;
+    const error = new Error(faker.string.uuid());
+    const original = failure(error);
+    const fallback: FallbackType = faker.string.uuid();
+    const getFallback = vi.fn(() => fallback);
+    const result = original.orElse(getFallback);
+
+    expect(result).toStrictEqual(success(fallback));
+    expect(getFallback).toHaveBeenCalledTimes(1);
+    expectTypeOf(result).toEqualTypeOf<Success<FallbackType>>();
+  });
+});
+
 describe('getOr', () => {
   it('Success returns its data', () => {
     type ValueType = 123;
@@ -286,8 +377,63 @@ describe('getOr', () => {
   });
 });
 
+describe('getOrElse', () => {
+  it('Success returns its data and does not call fallback factory', () => {
+    type ValueType = 123;
+    const value: ValueType = 123;
+    const original = success(value);
+    const getFallback = vi.fn(() => 'fallback');
+    const result = original.getOrElse(getFallback);
+
+    expect(result).toBe(value);
+    expect(getFallback).not.toHaveBeenCalled();
+    expectTypeOf(result).toEqualTypeOf<ValueType>();
+  });
+
+  it('Failure returns a lazy fallback value and calls fallback factory once', () => {
+    type FallbackType = 456;
+    const error = new Error(faker.string.uuid());
+    const original = failure(error);
+    const fallback: FallbackType = 456;
+    const getFallback = vi.fn(() => fallback);
+    const result = original.getOrElse(getFallback);
+
+    expect(result).toBe(fallback);
+    expect(getFallback).toHaveBeenCalledTimes(1);
+    expectTypeOf(result).toEqualTypeOf<FallbackType>();
+  });
+});
+
+describe('match', () => {
+  it('Success calls only onSuccess and returns its value', () => {
+    const value = faker.number.float();
+    const onSuccess = vi.fn((data: number) => data.toString());
+    const onFailure = vi.fn((error: Error) => error.message);
+    const result = success(value).match(onSuccess, onFailure);
+
+    expect(result).toBe(value.toString());
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(onSuccess).toHaveBeenCalledWith(value);
+    expect(onFailure).not.toHaveBeenCalled();
+    expectTypeOf(result).toEqualTypeOf<string>();
+  });
+
+  it('Failure calls only onFailure and returns its value', () => {
+    const error = new Error(faker.string.uuid());
+    const onSuccess = vi.fn((data: number) => data.toString());
+    const onFailure = vi.fn((value: Error) => value.message);
+    const result = failure(error).match(onSuccess, onFailure);
+
+    expect(result).toBe(error.message);
+    expect(onSuccess).not.toHaveBeenCalled();
+    expect(onFailure).toHaveBeenCalledTimes(1);
+    expect(onFailure).toHaveBeenCalledWith(error);
+    expectTypeOf(result).toEqualTypeOf<string>();
+  });
+});
+
 describe('type ergonomics (Failable union)', () => {
-  it('infers correct types for or, getOr, getOrThrow', () => {
+  it('infers correct types for or, orElse, getOr, getOrElse, getOrThrow, and match', () => {
     const union: Failable<number, string> = faker.helpers.arrayElement([
       success(123),
       failure('boom'),
@@ -298,12 +444,26 @@ describe('type ergonomics (Failable union)', () => {
       Success<number> | Success<{ a: number }>
     >();
 
+    const orElseResult = union.orElse(() => ({ a: 1 }));
+    expectTypeOf(orElseResult).toEqualTypeOf<
+      Success<number> | Success<{ a: number }>
+    >();
+
     const getOrResult = union.getOr({ b: 'b' });
     expectTypeOf(getOrResult).toEqualTypeOf<number | { b: string }>();
+
+    const getOrElseResult = union.getOrElse(() => ({ b: 'b' }));
+    expectTypeOf(getOrElseResult).toEqualTypeOf<number | { b: string }>();
 
     expectTypeOf<ReturnType<typeof union.getOrThrow>>().toEqualTypeOf<
       number | never
     >();
+
+    const matchResult = union.match(
+      (value) => value.toString(),
+      (error) => error
+    );
+    expectTypeOf(matchResult).toEqualTypeOf<string>();
   });
 });
 
@@ -385,6 +545,14 @@ describe('createFailable (function)', () => {
     expect(result).toBe(original);
   });
 
+  it('wraps plain success lookalike return values as plain data', () => {
+    const lookalike = createSuccessLookalike(faker.number.float());
+    const result = createFailable(() => lookalike);
+
+    ensureSuccess(result);
+    expect(result.data).toBe(lookalike);
+  });
+
   it('treats async functions as plain success values and does not await them', async () => {
     const value = faker.number.float();
     const result = createFailable(async () => value);
@@ -452,6 +620,14 @@ describe('createFailable (promise)', () => {
     const original = failure(value);
     const result = await createFailable(Promise.resolve(original));
     expect(result).toBe(original);
+  });
+
+  it('wraps plain failure lookalike resolved values as plain data', async () => {
+    const lookalike = createFailureLookalike(faker.string.uuid());
+    const result = await createFailable(Promise.resolve(lookalike));
+
+    ensureSuccess(result);
+    expect(result.data).toBe(lookalike);
   });
 
   it('infers Promise<FailableLike<T, E>> as Promise<Failable<T, E>>', async () => {
