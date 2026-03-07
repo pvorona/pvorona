@@ -1,14 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export type Override<A, B> = Omit<A, keyof B> & B;
 
-type Error<Message extends string, Argument> = {
-  __kind: 'Error';
+type ConstraintDiagnostic<Message extends string, Argument> = {
+  __kind: 'ConstraintDiagnostic';
   message: Message;
   argument: Argument;
 };
 
 export type InferErrorMessage<T, V = T> = [T] extends [
-  Error<infer Message, unknown>
+  ConstraintDiagnostic<infer Message, unknown>
 ]
   ? Message
   : V;
@@ -30,7 +30,7 @@ export type NotOnlyNumber<T> = [T] extends [number]
   : T;
 
 export type NotOnlyString<T> = [T] extends [string]
-  ? Error<'Must not be string only type', T>
+  ? ConstraintDiagnostic<'Must not be string only type', T>
   : T;
 
 export type NotOnlyArray<T> = [T] extends [unknown[]]
@@ -55,29 +55,29 @@ export type IncludesNumberOrNumberLiteralMember<T> = number extends T
   ? T
   : T extends number
   ? T
-  : Error<'Must include number or number literal', T>;
+  : ConstraintDiagnostic<'Must include number or number literal', T>;
 
 export type IncludesErrorOrBoundaryInput<T> = [unknown] extends [T]
   ? T
   : [Extract<T, globalThis.Error>] extends [never]
-  ? Error<'Must include Error, unknown, or any', T>
+  ? ConstraintDiagnostic<'Must include Error, unknown, or any', T>
   : T;
 
 export type NotOnlyErrorUnlessBoundaryInput<T> = [unknown] extends [T]
   ? T
   : [Exclude<T, globalThis.Error>] extends [never]
-  ? Error<'Must not be error-only type', T>
+  ? ConstraintDiagnostic<'Must not be error-only type', T>
   : T;
 
-type InferErrorArguments<T> = T extends Error<any, infer U> ? U : T;
+type InferErrorArguments<T> = T extends ConstraintDiagnostic<any, infer U> ? U : T;
 
-type InferErrorsArguments<T> = Error<any, any> extends T
+type InferErrorsArguments<T> = ConstraintDiagnostic<any, any> extends T
   ?
-      | InferErrorArguments<Extract<T, Error<any, any>>>
-      | Exclude<T, Error<any, any>>
+      | InferErrorArguments<Extract<T, ConstraintDiagnostic<any, any>>>
+      | Exclude<T, ConstraintDiagnostic<any, any>>
   : T;
 
-export type AtLeastOneValid<T> = [T] extends [Error<string, unknown>]
+export type AtLeastOneValid<T> = [T] extends [ConstraintDiagnostic<string, unknown>]
   ? T
   : InferErrorsArguments<T>;
 
@@ -85,13 +85,13 @@ export type IncludesStringOrStringLiteralMember<T> = string extends T
   ? T
   : T extends string
   ? T
-  : Error<'Must include string or string literal', T>;
+  : ConstraintDiagnostic<'Must include string or string literal', T>;
 
 export type IncludesArrayOrArrayLiteralMember<T> = any[] extends T
   ? T
   : T extends any[]
   ? T
-  : Error<'Must include array or array literal', T>;
+  : ConstraintDiagnostic<'Must include array or array literal', T>;
 
 export type IncludesSymbolMember<T> = symbol extends T
   ? T
