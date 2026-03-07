@@ -2,7 +2,7 @@
 
 Typed success/failure results for expected failures in TypeScript.
 
-`Failable<T, E>` is a discriminated union of `Success<T>` and `Failure<E>`. In normal application code, return `success(...)` / `failure(...)`, then branch with `result.isSuccess` / `result.isError`. Keep `isSuccess(...)` / `isFailure(...)` for validating `unknown` values or external inputs.
+`Failable<T, E>` is a discriminated union of `Success<T>` and `Failure<E>`. In normal application code, return `success(...)` / `failure(...)`, then branch with `result.isSuccess` / `result.isError`. Keep `isSuccess(...)` / `isFailure(...)` for validating hydrated unknown values, and use `isFailableLike(...)` for plain transport shapes.
 
 ## Install
 
@@ -70,19 +70,62 @@ console.log(port, ensuredPort.data);
 ```
 
 - `result.isSuccess` / `result.isError`: branch on a hydrated result
-- `result.getOr(fallback)`: get the success value or a fallback
-- `result.or(fallback)`: always end up with `Success<T>`
+- `result.getOr(fallback)`: eagerly get the success value or a fallback
+- `result.getOrElse(() => fallback)`: lazily compute a fallback value only on failure
+- `result.or(fallback)`: eagerly end up with `Success<T>`
+- `result.orElse(() => fallback)`: lazily recover to `Success<T>` only on failure
+- `result.match(onSuccess, onFailure)`: map both branches to one output type
 - `result.getOrThrow()`: unwrap success or throw the failure value
+
+Use the lazy forms when the fallback is expensive or has side effects:
+
+```ts
+import { failure, success } from '@pvorona/failable';
+
+function readFallbackPort() {
+  console.log('Reading fallback port from disk');
+  return 3000;
+}
+
+const portResult = Math.random() > 0.5
+  ? success(8080)
+  : failure('Missing port');
+
+const eagerPort = portResult.getOr(readFallbackPort());
+const lazyPort = portResult.getOrElse(() => readFallbackPort());
+const ensuredPort = portResult.orElse(() => readFallbackPort());
+
+console.log(eagerPort, lazyPort, ensuredPort.data);
+```
+
+`readFallbackPort()` runs before `getOr(...)` because the fallback expression is evaluated eagerly. With `getOrElse(...)` and `orElse(...)`, the callback runs only if the result is a failure.
+
+`match(...)` is often clearer than a fallback when both branches need real handling:
+
+```ts
+import { failure, success } from '@pvorona/failable';
+
+const portResult = Math.random() > 0.5
+  ? success(3000)
+  : failure('Missing port');
+
+const status = portResult.match(
+  (port) => `Listening on ${port}`,
+  (error) => `Cannot start server: ${error}`
+);
+```
 
 ### `createFailable(...)` for throwy or rejecting code
 
 `createFailable(...)` is the convenience entrypoint when you want to capture sync throws, promise rejections, or reuse an existing result shape:
 
-- `createFailable(failable)` returns the same instance
-- `createFailable(failableLike)` rehydrates into a real `Success` / `Failure`
+- `createFailable(failable)` returns the same tagged hydrated instance
+- `createFailable(failableLike)` rehydrates a strict wire shape into a real `Success` / `Failure`
 - `createFailable(() => value)` captures sync throws into `Failure`
 - `createFailable(promise)` captures promise rejections into `Failure`
 - If a callback returns, or a promise resolves to, a `Failable` or `FailableLike`, `createFailable(...)` preserves that result instead of nesting it inside `Success`
+
+Plain lookalike objects are not treated as hydrated `Failable` instances. If you have plain `{ status, data }` or `{ status, error }` transport data, validate it with `isFailableLike(...)` or pass it to `createFailable(...)` to rehydrate before calling instance methods.
 
 ```ts
 import {
@@ -128,7 +171,7 @@ if (responseResult.isError) console.error(responseResult.error);
 
 ### Use guards for `unknown` values
 
-Use `isFailable(...)`, `isSuccess(...)`, and `isFailure(...)` when you are validating something that might already be a hydrated `Failable`:
+Use `isFailable(...)`, `isSuccess(...)`, and `isFailure(...)` when you are validating something that might already be a hydrated `Failable` instance:
 
 ```ts
 import { isFailable } from '@pvorona/failable';
@@ -140,12 +183,18 @@ if (isFailable(candidate) && candidate.isError) {
 }
 ```
 
-Use `isSuccess(...)` / `isFailure(...)` when you only care about one branch. If you are validating plain wire data, use `isFailableLike(...)` and then rehydrate with `createFailable(...)`.
+These guards only recognize tagged hydrated instances created by `success(...)`, `failure(...)`, or `createFailable(...)`. Plain objects that merely look similar are not enough.
+
+Use `isSuccess(...)` / `isFailure(...)` when you only care about one branch. If you are validating plain wire data, use `isFailableLike(...)` and then rehydrate with `createFailable(...)` before calling instance methods.
 
 ## Important Semantics
 
 - Hydrated `Failable` values are frozen plain objects with methods. Prefer `result.isSuccess` / `result.isError`, and do not use `instanceof`.
 - `or(...)` and `getOr(...)` are eager. The fallback expression runs before the method call.
+- `orElse(...)` and `getOrElse(...)` are lazy. The callback runs only on failure.
+- `match(onSuccess, onFailure)` is useful when both branches should converge to the same output type.
+- `isFailable(...)`, `isSuccess(...)`, and `isFailure(...)` recognize only tagged hydrated instances, not public-shape lookalikes.
+- `isFailableLike(...)` remains the validator for transport shapes, and `createFailable(failableLike)` is the supported rehydration path before calling instance methods.
 - By default, `createFailable(...)` preserves raw thrown and rejected values. If something throws `'boom'`, `{ code: 'bad_request' }`, or `[error1, error2]`, that exact value becomes `.error`.
 - `getOrThrow()` throws `result.error` unchanged on failures. If you want `Error` values, opt into normalization.
 - `createFailable(async () => value)` is a footgun. The async function itself is treated as a sync return value, so the result is `Success<Promise<T>>`. If you want rejection capture, pass the promise directly: `await createFailable(somePromise)`.
@@ -209,13 +258,13 @@ const hydrated = createFailable(wire);
 ## API At A Glance
 
 - `type Failable<T, E>`: `Success<T> | Failure<E>`
-- `type Success<T>`: success variant with `isSuccess`, `data`, `or(...)`, `getOr(...)`, and `getOrThrow()`
-- `type Failure<E>`: failure variant with `isError`, `error`, `or(...)`, `getOr(...)`, and `getOrThrow()`
+- `type Success<T>`: success variant with `isSuccess`, `data`, `or(...)`, `orElse(...)`, `getOr(...)`, `getOrElse(...)`, `match(...)`, and `getOrThrow()`
+- `type Failure<E>`: failure variant with `isError`, `error`, `or(...)`, `orElse(...)`, `getOr(...)`, `getOrElse(...)`, `match(...)`, and `getOrThrow()`
 - `type FailableLike<T, E>`: strict structured-clone-friendly wire shape
 - `const NormalizedErrors`: built-in token for `Error` normalization
 - `success(data)` / `failure(error)`: explicit constructors
 - `createFailable(...)`: wrap, preserve, rehydrate, or normalize results
-- `isFailable(...)`, `isSuccess(...)`, `isFailure(...)`: runtime validators for hydrated values
+- `isFailable(...)`, `isSuccess(...)`, `isFailure(...)`: runtime validators for tagged hydrated values
 - `toFailableLike(...)`: convert a hydrated result into a plain transport shape
 - `isFailableLike(...)`: validate the strict wire shape
 - `const FailableStatus`: runtime `{ Success, Failure }` object for wire values
