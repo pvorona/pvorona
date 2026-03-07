@@ -1,7 +1,7 @@
+import { resolveValueOrGetter } from '@pvorona/resolve-value-or-getter';
 import { throwError } from '@pvorona/throw-error';
 
 import { AssertionError } from './AssertionError.js';
-import { getMessage } from './getMessage.js';
 
 export function assert(
   condition: boolean,
@@ -10,7 +10,7 @@ export function assert(
 ): asserts condition {
   if (condition) return;
 
-  const message = getMessage(messageOrMessageGetter);
+  const message = resolveValueOrGetter(messageOrMessageGetter);
   const error = new AssertionError(message);
 
   throwError(error, functionToSkipStackFrames);
