@@ -1,7 +1,7 @@
 import { expectTypeOf } from 'expect-type';
-import type { Duration } from './duration.js';
 import {
   add,
+  addTo,
   between,
   days,
   divide,
@@ -18,12 +18,23 @@ import {
   seconds,
   since,
   subtract,
+  subtractFrom,
   TimeUnit,
   weeks,
   years,
+  type Duration,
+  type DurationParts,
 } from './duration.js';
 
 type DurationModule = typeof import('./duration.js');
+
+function callDurationWithParts(parts: DurationParts): Duration {
+  return duration(parts);
+}
+
+function callDurationWithUnknownParts(parts: Record<string, number>): Duration {
+  return (duration as unknown as (parts: Record<string, number>) => Duration)(parts);
+}
 
 describe('duration factories', () => {
   it('duration(value, unit) supports conversions', () => {
@@ -46,6 +57,24 @@ describe('duration factories', () => {
     expect(d.isInstant).toBe(true);
     expect(d.toSeconds()).toBe(0);
     expect(d.toMilliseconds()).toBe(0);
+  });
+
+  it('duration(parts) supports exact multi-unit construction', () => {
+    const d = callDurationWithParts({ minutes: 1, seconds: 30 });
+
+    expect(d.toSeconds()).toBe(90);
+  });
+
+  it('duration(parts) supports negative same-sign units', () => {
+    const d = callDurationWithParts({ hours: -1, minutes: -30 });
+
+    expect(d.toMilliseconds()).toBe(-5_400_000);
+  });
+
+  it('duration(parts) supports fractional units', () => {
+    const d = callDurationWithParts({ hours: 1.5 });
+
+    expect(d.toMilliseconds()).toBe(5_400_000);
   });
 });
 
@@ -76,6 +105,24 @@ describe('date helpers', () => {
     expect(d.toMilliseconds()).toBe(2_500);
 
     vi.useRealTimers();
+  });
+
+  it('addTo returns a fresh date at the exact timestamp', () => {
+    const start = new Date(1_000);
+    const result = addTo(start, seconds(2));
+
+    expect(result).not.toBe(start);
+    expect(start.getTime()).toBe(1_000);
+    expect(result.getTime()).toBe(3_000);
+  });
+
+  it('subtractFrom returns a fresh date at the exact timestamp', () => {
+    const start = new Date(1_000);
+    const result = subtractFrom(start, seconds(2));
+
+    expect(result).not.toBe(start);
+    expect(start.getTime()).toBe(1_000);
+    expect(result.getTime()).toBe(-1_000);
   });
 });
 
@@ -123,7 +170,30 @@ describe('public millisecond API', () => {
     expectTypeOf<DurationModule['milliseconds']>().toEqualTypeOf<
       (value: number) => Duration
     >();
+    expectTypeOf<typeof addTo>().toEqualTypeOf<
+      (date: Date, duration: Duration) => Date
+    >();
+    expectTypeOf<typeof subtractFrom>().toEqualTypeOf<
+      (date: Date, duration: Duration) => Date
+    >();
     expectTypeOf<Duration['toMilliseconds']>().returns.toEqualTypeOf<number>();
+
+    const parts = { minutes: 1, seconds: 30 } satisfies DurationParts;
+    expect(duration(parts).toSeconds()).toBe(90);
+  });
+
+  it('requires at least one duration part in TypeScript consumers', () => {
+    const assertTypeErrors = () => {
+      // @ts-expect-error `DurationParts` must contain at least one supported key.
+      const emptyParts: DurationParts = {};
+
+      // @ts-expect-error `duration({})` should not type-check.
+      duration({});
+
+      return emptyParts;
+    };
+
+    expectTypeOf(assertTypeErrors).toBeFunction();
   });
 
   it('removes the legacy millisecond spellings from TypeScript consumers', () => {
@@ -148,6 +218,51 @@ describe('runtime contract', () => {
   it('rejects invalid dates', () => {
     expect(() => between(new Date('invalid'), new Date())).toThrow();
     expect(() => since(new Date('invalid'))).toThrow();
+  });
+
+  it('rejects invalid duration parts inputs', () => {
+    expect(() => callDurationWithUnknownParts({})).toThrow(TypeError);
+    expect(() => callDurationWithUnknownParts({ minute: 1 })).toThrow(TypeError);
+    expect(() => callDurationWithUnknownParts({ ms: 5 })).toThrow(TypeError);
+    expect(() => callDurationWithUnknownParts({ hours: 1, minutes: -30 })).toThrow(
+      TypeError,
+    );
+    expect(() => callDurationWithUnknownParts({ hours: Number.NaN })).toThrow(
+      TypeError,
+    );
+    expect(() => callDurationWithUnknownParts({ hours: Infinity })).toThrow(TypeError);
+  });
+
+  it.each([
+    ['addTo', addTo],
+    ['subtractFrom', subtractFrom],
+  ] as const)(
+    '%s rejects invalid dates',
+    (_, helper) => {
+      expect(() => helper(new Date('invalid'), seconds(1))).toThrow(TypeError);
+    },
+  );
+
+  it.each([
+    ['addTo', addTo],
+    ['subtractFrom', subtractFrom],
+  ] as const)(
+    '%s rejects infinite durations',
+    (_, helper) => {
+      expect(() => helper(new Date(0), infinite)).toThrow(TypeError);
+    },
+  );
+
+  it('addTo rejects out-of-range result timestamps', () => {
+    expect(() => addTo(new Date(8_640_000_000_000_000), milliseconds(1))).toThrow(
+      TypeError,
+    );
+  });
+
+  it('subtractFrom rejects out-of-range result timestamps', () => {
+    expect(() =>
+      subtractFrom(new Date(-8_640_000_000_000_000), milliseconds(1)),
+    ).toThrow(TypeError);
   });
 
   it('rejects undefined arithmetic', () => {

@@ -1,5 +1,4 @@
 import { hasOwnKey, isObject } from '@pvorona/assert';
-import type { Mutable } from '@pvorona/types';
 
 const TIME_UNIT_VALUES = {
   Millisecond: 0,
@@ -24,8 +23,37 @@ export const TimeUnit: {
   readonly [Key in keyof typeof TIME_UNIT_VALUES]: TimeUnit;
 } = TIME_UNIT_VALUES;
 
+const DURATION_PART_TIME_UNITS = {
+  milliseconds: TimeUnit.Millisecond,
+  seconds: TimeUnit.Second,
+  minutes: TimeUnit.Minute,
+  hours: TimeUnit.Hour,
+  days: TimeUnit.Day,
+  weeks: TimeUnit.Week,
+  months: TimeUnit.Month,
+  years: TimeUnit.Year,
+} as const;
+
+type DurationPartKey = keyof typeof DURATION_PART_TIME_UNITS;
+
+type RequireAtLeastOne<T> = {
+  [Key in keyof T]-?: Required<Pick<T, Key>> & Partial<Omit<T, Key>>;
+}[keyof T];
+
+type MutableDuration = {
+  -readonly [Key in keyof Duration]: Duration[Key];
+};
+
+/** Input bag accepted by `duration(parts)` for strict multi-unit construction. */
+export type DurationParts = RequireAtLeastOne<{
+  readonly [Key in DurationPartKey]?: number;
+}>;
+
 const millisecondsTag = Symbol('milliseconds');
 const TIME_UNITS = new Set<TimeUnit>(Object.values(TimeUnit));
+const DURATION_PART_KEYS = new Set<DurationPartKey>(
+  Object.keys(DURATION_PART_TIME_UNITS) as DurationPartKey[],
+);
 
 /** Immutable duration value with conversions, comparisons, and state flags. */
 export type Duration = {
@@ -89,6 +117,50 @@ function ensureValidDate(date: Date, name: string): number {
   }
 
   throw new TypeError(`Expected \`${name}\` to be a valid date.`);
+}
+
+function createValidDate(timestamp: number, name: string): Date {
+  const result = new Date(timestamp);
+  ensureValidDate(result, name);
+  return result;
+}
+
+function ensureDurationPartsKey(key: string): DurationPartKey {
+  if (DURATION_PART_KEYS.has(key as DurationPartKey)) {
+    return key as DurationPartKey;
+  }
+
+  throw new TypeError(`Expected \`${key}\` to be a supported duration part.`);
+}
+
+function toMillisecondsFromParts(parts: DurationParts): number {
+  const entries = Object.entries(parts);
+  if (entries.length === 0) {
+    throw new TypeError('Expected `parts` to include at least one duration part.');
+  }
+
+  let milliseconds = 0;
+  let nonZeroSign: -1 | 1 | undefined;
+
+  for (const [rawKey, rawValue] of entries) {
+    const key = ensureDurationPartsKey(rawKey);
+    const value = ensureFiniteNumber(rawValue, `parts.${key}`);
+    if (value === 0) {
+      continue;
+    }
+
+    const sign = Math.sign(value) as -1 | 1;
+    if (nonZeroSign == null) {
+      nonZeroSign = sign;
+    }
+    if (nonZeroSign !== sign) {
+      throw new TypeError('Expected non-zero duration parts to share the same sign.');
+    }
+
+    milliseconds += value * MILLISECONDS_IN_UNIT[DURATION_PART_TIME_UNITS[key]];
+  }
+
+  return milliseconds;
 }
 
 function normalizeMilliseconds(
@@ -170,7 +242,7 @@ function createDuration(
   options?: { readonly allowInfinite?: boolean },
 ): Duration {
   const normalizedMilliseconds = normalizeMilliseconds(milliseconds, options);
-  const result: Mutable<Duration> = Object.create(BASE_DURATION);
+  const result: MutableDuration = Object.create(BASE_DURATION);
   result[millisecondsTag] = normalizedMilliseconds;
   result.isFinite = Number.isFinite(normalizedMilliseconds);
   result.isInfinite = normalizedMilliseconds === Infinity;
@@ -179,9 +251,18 @@ function createDuration(
 }
 
 /** Creates a duration from a finite numeric value in the provided unit. */
-export function duration(value: number, unit: TimeUnit): Duration {
-  const normalizedValue = ensureFiniteNumber(value, 'value');
-  const normalizedUnit = ensureTimeUnit(unit);
+export function duration(value: number, unit: TimeUnit): Duration;
+
+/** Creates a duration from strict multi-unit parts. */
+export function duration(parts: DurationParts): Duration;
+
+export function duration(valueOrParts: number | DurationParts, unit?: TimeUnit): Duration {
+  if (isObject(valueOrParts)) {
+    return createDuration(toMillisecondsFromParts(valueOrParts));
+  }
+
+  const normalizedValue = ensureFiniteNumber(valueOrParts, 'value');
+  const normalizedUnit = ensureTimeUnit(unit as TimeUnit);
 
   return createDuration(normalizedValue * MILLISECONDS_IN_UNIT[normalizedUnit]);
 }
@@ -237,6 +318,14 @@ export function between(start: Date, end: Date): Duration {
 /** Returns the duration since a valid start date. The result may be negative. */
 export function since(start: Date): Duration {
   return between(start, new Date());
+}
+
+function ensureFiniteDurationForDateMath(duration: Duration): number {
+  if (!duration.isInfinite) {
+    return duration.toMilliseconds();
+  }
+
+  throw new TypeError('Expected `duration` to be finite.');
 }
 
 /** Adds two durations and preserves the explicit `infinite` sentinel. */
@@ -298,6 +387,22 @@ export function divide(a: Duration, b: number): Duration {
   }
 
   throw new TypeError('Cannot divide `infinite` by a negative number.');
+}
+
+/** Returns a new date shifted forward by an exact duration timestamp delta. */
+export function addTo(date: Date, duration: Duration): Date {
+  const timestamp = ensureValidDate(date, 'date');
+  const milliseconds = ensureFiniteDurationForDateMath(duration);
+
+  return createValidDate(timestamp + milliseconds, 'result');
+}
+
+/** Returns a new date shifted backward by an exact duration timestamp delta. */
+export function subtractFrom(date: Date, duration: Duration): Date {
+  const timestamp = ensureValidDate(date, 'date');
+  const milliseconds = ensureFiniteDurationForDateMath(duration);
+
+  return createValidDate(timestamp - milliseconds, 'result');
 }
 
 /** The explicit non-finite duration sentinel supported by this package. */

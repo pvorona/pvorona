@@ -1,6 +1,6 @@
 {
   "name": "@pvorona/duration",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -18,13 +18,15 @@
     "dist",
     "!**/*.tsbuildinfo"
   ],
+  "scripts": {
+    "check-consumer-types": "node ./scripts/check-consumer-types.mjs",
+    "check-package-surface": "node ./scripts/check-package-surface.mjs",
+    "prepublishOnly": "npm run check-consumer-types && npm run check-package-surface"
+  },
   "publishConfig": {
     "access": "public"
   },
   "dependencies": {
     "@pvorona/assert": "~0.1.0"
-  },
-  "devDependencies": {
-    "@pvorona/types": "0.0.0"
   }
 }
