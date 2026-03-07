@@ -24,9 +24,6 @@
   },
   "dependencies": {
     "@pvorona/assert": "~0.1.0",
-    "tslib": "^2.3.0"
-  },
-  "devDependencies": {
     "@pvorona/resolve-value-or-getter": "0.0.0"
   }
 }
