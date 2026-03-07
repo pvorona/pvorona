@@ -24,6 +24,44 @@ describe('assert', () => {
         expect(() => assert(false)).toThrow(AssertionError);
       });
     });
+
+    describe('when failure is an Error instance', () => {
+      it('throws the provided error instance', () => {
+        class CustomError extends Error {
+          override readonly name = 'CustomError';
+        }
+
+        const error = new CustomError('custom');
+
+        expect(() => assert(false, error)).toThrow(error);
+      });
+    });
+
+    describe('when failure is an Error getter', () => {
+      it('throws the error returned by the getter', () => {
+        class CustomError extends Error {
+          override readonly name = 'CustomError';
+        }
+
+        expect(() => assert(false, () => new CustomError('from getter'))).toThrow(
+          CustomError
+        );
+      });
+    });
+
+    describe('when functionToSkipStackFrames is specified', () => {
+      it('removes the given function from the stack trace', () => {
+        function wrapper() {
+          assert(false, new Error('trace'), wrapper);
+        }
+
+        try {
+          wrapper();
+        } catch (error) {
+          expect((error as Error).stack).not.toContain('wrapper');
+        }
+      });
+    });
   });
 
   describe('when condition is true', () => {
@@ -42,6 +80,15 @@ describe('assert', () => {
 
         expect(() => assert(true, messageGetter)).not.toThrow();
         expect(messageGetter).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('when failure is an Error getter', () => {
+      it("doesn't invoke the getter when condition is true", () => {
+        const errorGetter = vi.fn(() => new Error('boom'));
+
+        expect(() => assert(true, errorGetter)).not.toThrow();
+        expect(errorGetter).not.toHaveBeenCalled();
       });
     });
 
