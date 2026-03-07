@@ -31,7 +31,14 @@ type CreateFailableNormalizeErrorInput =
   | typeof NormalizedErrors
   | CreateFailableNormalizeErrorOptions;
 
-export type Failable<T, E> = Success<T> | Failure<E>;
+type Match<T, E> = <U>(
+  onSuccess: (data: T) => U,
+  onFailure: (error: E) => U
+) => U;
+
+export type Failable<T, E> =
+  | (Success<T> & { readonly match: Match<T, E> })
+  | (Failure<E> & { readonly match: Match<T, E> });
 
 /**
  * Structured-clone-friendly representation of {@link Failable}.
@@ -60,6 +67,14 @@ export type FailableLikeSuccess<T> = {
 export type FailableLikeFailure<E> = {
   readonly status: typeof FailableStatus.Failure;
   readonly error: E;
+};
+
+type SuccessMatch<T> = {
+  <U, E>(onSuccess: (data: T) => U, onFailure: (error: E) => U): U;
+};
+
+type FailureMatch<E> = {
+  <U, T>(onSuccess: (data: T) => U, onFailure: (error: E) => U): U;
 };
 
 function isFailableLikeSuccess(
@@ -97,8 +112,11 @@ export type Success<T> = {
   readonly data: T;
   readonly error: null;
   readonly or: <U>(value: U) => Success<T>;
+  readonly orElse: <U>(getValue: () => U) => Success<T>;
   readonly getOr: <U>(value: U) => T;
+  readonly getOrElse: <U>(getValue: () => U) => T;
   readonly getOrThrow: () => T;
+  readonly match: SuccessMatch<T>;
 };
 
 export type Failure<E> = {
@@ -108,8 +126,11 @@ export type Failure<E> = {
   readonly error: E;
   readonly data: null;
   readonly or: <U>(value: U) => Success<U>;
+  readonly orElse: <U>(getValue: () => U) => Success<U>;
   readonly getOr: <U>(value: U) => U;
+  readonly getOrElse: <U>(getValue: () => U) => U;
   readonly getOrThrow: () => never;
+  readonly match: FailureMatch<E>;
 };
 
 type InternalSuccess<T> = Success<T> & {
@@ -129,8 +150,11 @@ const BASE_FAILABLE = {
   data: null,
   error: null,
   or: notImplemented,
+  orElse: notImplemented,
   getOr: notImplemented,
+  getOrElse: notImplemented,
   getOrThrow: notImplemented,
+  match: notImplemented,
 } as const;
 
 const BASE_SUCCESS = (() => {
@@ -141,12 +165,24 @@ const BASE_SUCCESS = (() => {
   node.or = function orSuccess() {
     return this;
   };
+  node.orElse = function orElseSuccess() {
+    return this;
+  };
   node.getOr = function getOrSuccess() {
+    return this.data;
+  };
+  node.getOrElse = function getOrElseSuccess() {
     return this.data;
   };
   node.getOrThrow = function getOrThrowSuccess() {
     return this.data;
   };
+  node.match = function matchSuccess(
+    this: InternalSuccess<unknown>,
+    onSuccess: (data: unknown) => unknown
+  ) {
+    return onSuccess(this.data);
+  } as SuccessMatch<unknown>;
   return Object.freeze(node);
 })();
 
@@ -158,12 +194,25 @@ const BASE_FAILURE = (() => {
   node.or = function orFailure(value) {
     return success(value);
   };
+  node.orElse = function orElseFailure(getValue) {
+    return success(getValue());
+  };
   node.getOr = function getOrFailure(value) {
     return value;
+  };
+  node.getOrElse = function getOrElseFailure(getValue) {
+    return getValue();
   };
   node.getOrThrow = function getOrThrowFailure() {
     throw this.error;
   };
+  node.match = function matchFailure(
+    this: InternalFailure<unknown>,
+    _onSuccess: (data: unknown) => unknown,
+    onFailure: (error: unknown) => unknown
+  ) {
+    return onFailure(this.error);
+  } as FailureMatch<unknown>;
   return Object.freeze(node);
 })();
 
@@ -218,46 +267,27 @@ const BASE_FAILURE = (() => {
  * // ... send wire ...
  * const hydrated = createFailable(wire);
  */
-function isPublicSuccessShape(value: unknown): value is Success<unknown> {
+function hasInternalTag<Tag extends symbol>(
+  value: unknown,
+  tag: Tag
+): value is { readonly [Key in Tag]: true } {
   if (!isObject(value)) return false;
-  if (value.status !== FailableStatus.Success) return false;
-  if (value.isSuccess !== true) return false;
-  if (value.isError !== false) return false;
-  if (!('data' in value)) return false;
-  if (value.error !== null) return false;
-  if (!isFunction(value.or)) return false;
-  if (!isFunction(value.getOr)) return false;
-  if (!isFunction(value.getOrThrow)) return false;
 
-  return true;
-}
-
-function isPublicFailureShape(value: unknown): value is Failure<unknown> {
-  if (!isObject(value)) return false;
-  if (value.status !== FailableStatus.Failure) return false;
-  if (value.isSuccess !== false) return false;
-  if (value.isError !== true) return false;
-  if (!('error' in value)) return false;
-  if (value.data !== null) return false;
-  if (!isFunction(value.or)) return false;
-  if (!isFunction(value.getOr)) return false;
-  if (!isFunction(value.getOrThrow)) return false;
-
-  return true;
+  return value[tag] === true;
 }
 
 export function isFailable(
   value: unknown
 ): value is Failable<unknown, unknown> {
-  return isPublicFailureShape(value) || isPublicSuccessShape(value);
+  return hasInternalTag(value, FAILABLE_TAG);
 }
 
 export function isSuccess(value: unknown): value is Success<unknown> {
-  return isPublicSuccessShape(value);
+  return hasInternalTag(value, SUCCESS_TAG);
 }
 
 export function isFailure(value: unknown): value is Failure<unknown> {
-  return isPublicFailureShape(value);
+  return hasInternalTag(value, FAILURE_TAG);
 }
 
 export function success<T = void>(data: T): Success<T> {
