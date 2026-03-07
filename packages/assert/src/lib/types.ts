@@ -57,6 +57,18 @@ export type IncludesNumberOrNumberLiteralMember<T> = number extends T
   ? T
   : Error<'Must include number or number literal', T>;
 
+export type IncludesErrorOrBoundaryInput<T> = [unknown] extends [T]
+  ? T
+  : [Extract<T, globalThis.Error>] extends [never]
+  ? Error<'Must include Error, unknown, or any', T>
+  : T;
+
+export type NotOnlyErrorUnlessBoundaryInput<T> = [unknown] extends [T]
+  ? T
+  : [Exclude<T, globalThis.Error>] extends [never]
+  ? Error<'Must not be error-only type', T>
+  : T;
+
 type InferErrorArguments<T> = T extends Error<any, infer U> ? U : T;
 
 type InferErrorsArguments<T> = Error<any, any> extends T

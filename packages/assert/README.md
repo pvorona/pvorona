@@ -20,7 +20,7 @@ npm i @pvorona/assert
 - Use it to narrow existing unions such as `string | number`, `T | undefined`, or `T | null | undefined`.
 - Use it when you want small reusable checks like `hasOwnPropertyValue(...)`, `isPromiseLike(...)`, or `isNonEmptyArray(...)`.
 
-These helpers are mainly for narrowing values that already include the member you want to keep. They are not meant to act like loose `unknown -> whatever` casts.
+Most helpers are mainly for narrowing values that already include the member you want to keep. They are not meant to act like loose `unknown -> whatever` casts. `isError(...)` is the deliberate exception for caught errors and other boundary inputs typed as `unknown` or `any`.
 
 `defined` means `not undefined`. It does not mean `not nullish`, so use `ensureNotNull(...)` or `ensureNotNullOrUndefined(...)` when those match the actual input shape better.
 
@@ -104,6 +104,26 @@ This is the intended style of use:
 - Good fit: `isString(value)` when `value` is `string | number`
 - Not a good fit: treating `isString(...)` like a loose parser for arbitrary `unknown`
 
+### Narrow caught errors and boundary inputs
+
+```ts
+import { isError } from '@pvorona/assert';
+
+function formatProblem(problem: Error | string): string {
+  if (!isError(problem)) return problem.toUpperCase();
+
+  return problem.message;
+}
+
+function messageFromUnknown(value: unknown): string {
+  if (!isError(value)) return 'Unknown failure';
+
+  return value.message;
+}
+```
+
+`isError(...)` accepts `unknown` and `any` as boundary inputs. `unknown` narrows to `Error`; `any` is allowed but remains `any`.
+
 ## API reference
 
 ### Core assertion helpers
@@ -137,6 +157,7 @@ This is the intended style of use:
 - `ensureObject(...)`: narrows to a non-null object and throws on failure
 - `hasOwnKey(...)`: boolean guard for own properties on objects or functions
 - `hasOwnPropertyValue(...)`: boolean guard for own data properties matching an exact value
+- `isError(...)`: boolean guard for same-realm `Error` instances, including `unknown` boundary inputs and unions that include `Error` or error subtypes
 - `isFunction(...)`: boolean guard for unions that already include a function member
 - `isSymbol(...)`: boolean guard for unions that include `symbol`
 
@@ -172,6 +193,9 @@ This is the intended style of use:
 - `hasOwnKey(...)` and `hasOwnPropertyValue(...)` work with both objects and functions that have own properties.
 - `hasOwnPropertyValue(...)` only matches own data properties. Inherited properties and getters return `false`.
 - `isPromiseLike(...)` accepts object or function thenables and returns `false` if reading `.then` throws.
+- `isError(...)` uses same-realm `value instanceof globalThis.Error` at runtime. Plain objects with `name` and `message` fields return `false`, and errors created in another realm also return `false`.
+- `isError(...)` accepts `unknown` and `any` as boundary inputs. `unknown` narrows to `Error`; `any` remains `any`.
+- `isError(...)` still follows the restrictive compile-time style for typed inputs: plain `Error`, error subtypes, and unions made only of error subtypes are rejected.
 - `ensureNever(...)` is for exhaustive checks. It throws plain `Error`, not `AssertionError`, and `silent = true` skips throwing.
 - The unified `AssertFailure` input and caller-provided custom-error support apply to `assert(...)`, not the `ensure*` helpers.
 - `isFunction(...)` is most useful when the union already contains a function member.

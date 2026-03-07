@@ -14,6 +14,7 @@ export * from './lib/hasOwnPropertyValue.js';
 export * from './lib/isArray.js';
 export * from './lib/isDefined.js';
 export * from './lib/isEmptyArray.js';
+export * from './lib/isError.js';
 export * from './lib/isFunction.js';
 export * from './lib/isInteger.js';
 export * from './lib/isNegative.js';
