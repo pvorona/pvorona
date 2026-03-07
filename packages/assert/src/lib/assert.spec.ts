@@ -32,8 +32,15 @@ describe('assert', () => {
         }
 
         const error = new CustomError('custom');
+        let thrownError: unknown;
 
-        expect(() => assert(false, error)).toThrow(error);
+        try {
+          assert(false, error);
+        } catch (caughtError) {
+          thrownError = caughtError;
+        }
+
+        expect(thrownError).toBe(error);
       });
     });
 
@@ -43,9 +50,18 @@ describe('assert', () => {
           override readonly name = 'CustomError';
         }
 
-        expect(() => assert(false, () => new CustomError('from getter'))).toThrow(
-          CustomError
-        );
+        const error = new CustomError('from getter');
+        const errorGetter = vi.fn(() => error);
+        let thrownError: unknown;
+
+        try {
+          assert(false, errorGetter);
+        } catch (caughtError) {
+          thrownError = caughtError;
+        }
+
+        expect(errorGetter).toHaveBeenCalledTimes(1);
+        expect(thrownError).toBe(error);
       });
     });
 
@@ -55,11 +71,16 @@ describe('assert', () => {
           assert(false, new Error('trace'), wrapper);
         }
 
+        let thrownError: unknown;
+
         try {
           wrapper();
-        } catch (error) {
-          expect((error as Error).stack).not.toContain('wrapper');
+        } catch (caughtError) {
+          thrownError = caughtError;
         }
+
+        expect(thrownError).toBeInstanceOf(Error);
+        expect((thrownError as Error).stack).not.toContain('wrapper');
       });
     });
   });
