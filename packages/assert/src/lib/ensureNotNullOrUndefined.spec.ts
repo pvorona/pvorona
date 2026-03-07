@@ -26,6 +26,10 @@ test('ensureNotNullOrUndefined', () => {
   ensureNotNullOrUndefined([] as const);
   // @ts-expect-error "Must include (null | undefined)"
   ensureNotNullOrUndefined([1, 2] as const);
+  // @ts-expect-error "Must include (null | undefined)"
+  ensureNotNullOrUndefined('' as string | null);
+  // @ts-expect-error "Must include (null | undefined)"
+  ensureNotNullOrUndefined('' as string | undefined);
 
   const a1 = ensureNotNullOrUndefined(1 as number | undefined | null);
   expectTypeOf(a1).toEqualTypeOf<number>();

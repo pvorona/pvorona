@@ -7,55 +7,90 @@ type ConstraintDiagnostic<Message extends string, Argument> = {
   argument: Argument;
 };
 
+type RejectOnly<T, Only, Result> = [T] extends [Only] ? Result : T;
+
+type IncludesBroadOrLiteral<T, Broad, Message extends string> = Broad extends T
+  ? T
+  : T extends Broad
+  ? T
+  : ConstraintDiagnostic<Message, T>;
+
+type IncludesExactMember<T, Member, Message extends string> = Member extends T
+  ? T
+  : Message;
+
+type IncludesAllMembers<T, Members, Message extends string> = [Members] extends
+  [T]
+  ? T
+  : Message;
+
 export type InferErrorMessage<T, V = T> = [T] extends [
   ConstraintDiagnostic<infer Message, unknown>
 ]
   ? Message
   : V;
 
-export type NotOnlyNull<T> = [T] extends [null]
-  ? 'Must not be null only type'
-  : T;
+export type NotOnlyNull<T> = RejectOnly<T, null, 'Must not be null only type'>;
 
-export type NotOnlyUndefined<T> = [T] extends [undefined]
-  ? 'Must not be undefined only type'
-  : T;
+export type NotOnlyUndefined<T> = RejectOnly<
+  T,
+  undefined,
+  'Must not be undefined only type'
+>;
 
-export type NotOnlyNullOrUndefined<T> = [T] extends [null | undefined]
-  ? 'Must not be (null | undefined) only type'
-  : T;
+export type NotOnlyNullOrUndefined<T> = RejectOnly<
+  T,
+  null | undefined,
+  'Must not be (null | undefined) only type'
+>;
 
-export type NotOnlyNumber<T> = [T] extends [number]
-  ? 'Must not be number only type'
-  : T;
+export type NotOnlyNumber<T> = RejectOnly<
+  T,
+  number,
+  'Must not be number only type'
+>;
 
-export type NotOnlyString<T> = [T] extends [string]
-  ? ConstraintDiagnostic<'Must not be string only type', T>
-  : T;
+export type NotOnlyString<T> = RejectOnly<
+  T,
+  string,
+  ConstraintDiagnostic<'Must not be string only type', T>
+>;
 
-export type NotOnlyArray<T> = [T] extends [unknown[]]
-  ? 'Must not be array only type'
-  : T;
+export type NotOnlyArray<T> = RejectOnly<
+  T,
+  unknown[],
+  'Must not be array only type'
+>;
 
-export type NotOnlySymbol<T> = [T] extends [symbol]
-  ? 'Must not be symbol only type'
-  : T;
+export type NotOnlySymbol<T> = RejectOnly<
+  T,
+  symbol,
+  'Must not be symbol only type'
+>;
 
-export type IncludesNullMember<T> = null extends T ? T : 'Must include null';
+export type IncludesNullMember<T> = IncludesExactMember<
+  T,
+  null,
+  'Must include null'
+>;
 
-export type IncludesUndefinedMember<T> = undefined extends T
-  ? T
-  : 'Must include undefined';
+export type IncludesUndefinedMember<T> = IncludesExactMember<
+  T,
+  undefined,
+  'Must include undefined'
+>;
 
-export type IncludesNullOrUndefinedMember<T> = null | undefined extends T
-  ? T
-  : 'Must include (null | undefined)';
+export type IncludesNullOrUndefinedMember<T> = IncludesAllMembers<
+  T,
+  null | undefined,
+  'Must include (null | undefined)'
+>;
 
-export type IncludesNumberOrNumberLiteralMember<T> = number extends T
-  ? T
-  : T extends number
-  ? T
-  : ConstraintDiagnostic<'Must include number or number literal', T>;
+export type IncludesNumberOrNumberLiteralMember<T> = IncludesBroadOrLiteral<
+  T,
+  number,
+  'Must include number or number literal'
+>;
 
 export type IncludesErrorOrBoundaryInput<T> = [unknown] extends [T]
   ? T
@@ -81,17 +116,17 @@ export type AtLeastOneValid<T> = [T] extends [ConstraintDiagnostic<string, unkno
   ? T
   : InferErrorsArguments<T>;
 
-export type IncludesStringOrStringLiteralMember<T> = string extends T
-  ? T
-  : T extends string
-  ? T
-  : ConstraintDiagnostic<'Must include string or string literal', T>;
+export type IncludesStringOrStringLiteralMember<T> = IncludesBroadOrLiteral<
+  T,
+  string,
+  'Must include string or string literal'
+>;
 
-export type IncludesArrayOrArrayLiteralMember<T> = any[] extends T
-  ? T
-  : T extends any[]
-  ? T
-  : ConstraintDiagnostic<'Must include array or array literal', T>;
+export type IncludesArrayOrArrayLiteralMember<T> = IncludesBroadOrLiteral<
+  T,
+  any[],
+  'Must include array or array literal'
+>;
 
 export type IncludesSymbolMember<T> = symbol extends T
   ? T

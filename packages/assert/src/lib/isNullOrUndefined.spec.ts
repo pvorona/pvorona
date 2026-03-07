@@ -24,6 +24,10 @@ test('isNullOrUndefined', () => {
   isNullOrUndefined([] as const);
   // @ts-expect-error "Must include (null | undefined)"
   isNullOrUndefined([1, 2] as const);
+  // @ts-expect-error "Must include (null | undefined)"
+  isNullOrUndefined('' as string | null);
+  // @ts-expect-error "Must include (null | undefined)"
+  isNullOrUndefined('' as string | undefined);
 
   const a1 = undefined as number | undefined | null;
   if (isNullOrUndefined(a1)) {
