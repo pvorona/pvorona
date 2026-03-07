@@ -29,7 +29,7 @@ export function assert(
   if (condition) return;
 
   const resolvedFailure = isFunction(failure)
-    ? resolveValueOrGetter<string | Error>(failure)
+    ? resolveValueOrGetter(failure)
     : failure;
 
   if (resolvedFailure instanceof Error) {
