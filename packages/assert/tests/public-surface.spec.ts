@@ -23,7 +23,7 @@ describe('public surface', () => {
   });
 
   it('removes null and undefined with ensureNotNullOrUndefined', () => {
-    const envPort: null | string | undefined = '3000';
+    const envPort = '3000' as null | string | undefined;
     const port = ensureNotNullOrUndefined(envPort);
 
     expect(port).toBe('3000');
