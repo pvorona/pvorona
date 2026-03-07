@@ -5,10 +5,7 @@ import {
   isObject,
 } from '@pvorona/assert';
 import { notImplemented } from '@pvorona/not-implemented';
-
-type Mutable<T> = {
-  -readonly [Key in keyof T]: T[Key];
-};
+import type { Mutable } from '@pvorona/types';
 
 const FAILABLE_TAG = Symbol('Failable');
 const SUCCESS_TAG = Symbol('Success');

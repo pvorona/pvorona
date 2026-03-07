@@ -22,9 +22,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@pvorona/assert": "~0.1.0"
-  },
-  "devDependencies": {
-    "@pvorona/types": "0.0.0"
+    "@pvorona/assert": "~0.1.0",
+    "@pvorona/types": "^0.0.0"
   }
 }
