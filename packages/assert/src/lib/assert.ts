@@ -2,6 +2,7 @@ import { resolveValueOrGetter } from '@pvorona/resolve-value-or-getter';
 import { throwError } from '@pvorona/throw-error';
 
 import { AssertionError } from './AssertionError.js';
+import { isFunction } from './isFunction.js';
 
 /**
  * Failure input accepted by `assert(...)`.
@@ -27,10 +28,9 @@ export function assert(
 ): asserts condition {
   if (condition) return;
 
-  const resolvedFailure =
-    typeof failure === 'function'
-      ? resolveValueOrGetter<string | Error>(failure)
-      : failure;
+  const resolvedFailure = isFunction(failure)
+    ? resolveValueOrGetter<string | Error>(failure)
+    : failure;
 
   if (resolvedFailure instanceof Error) {
     throwError(resolvedFailure, functionToSkipStackFrames);
