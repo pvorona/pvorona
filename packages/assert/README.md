@@ -28,9 +28,16 @@ These helpers are mainly for narrowing values that already include the member yo
 
 ### Throw on impossible state with `assert(...)`
 
-`assert(...)` takes a boolean condition. If the condition is `false`, it throws `AssertionError`.
+`assert(condition, failure?, functionToSkipStackFrames?)` takes a boolean condition. If the condition is `false`, it throws either `AssertionError` or the caller-provided `Error`.
 
-The message can be a string or a lazy getter.
+`failure` supports these shapes:
+
+- `string`
+- `() => string`
+- `Error`
+- `() => Error`
+
+The function form is lazy and only runs on failure. Return the message or error from the callback instead of throwing it directly if you want `functionToSkipStackFrames` to apply consistently.
 
 ```ts
 import { assert } from '@pvorona/assert';
@@ -43,6 +50,18 @@ export function parsePort(input: string): number {
   return port;
 }
 ```
+
+### Throw a custom error with `assert(...)`
+
+Prefer the function form for custom errors when construction is non-trivial or should stay off the success path.
+
+```ts
+import { assert } from '@pvorona/assert';
+
+assert(user != null, () => new MissingUserError('User is required'));
+```
+
+This unified `failure` contract applies to `assert(...)` only. The `ensure*` helpers keep their existing contracts.
 
 ### Remove `null` and `undefined`
 
@@ -89,7 +108,8 @@ This is the intended style of use:
 
 ### Core assertion helpers
 
-- `assert(condition, message?, functionToSkipStackFrames?)`: asserts a boolean condition and throws `AssertionError` on failure
+- `assert(condition, failure?, functionToSkipStackFrames?)`: asserts a boolean condition and throws either `AssertionError` or the caller-provided `Error` on failure
+- `AssertFailure`: public `assert(...)` input contract, `undefined | string | Error | (() => string | Error)`
 - `AssertionError`: error class used by failed `assert(...)` calls
 - `ensureNever(value, silent?, message?)`: throws plain `Error` for exhaustive-check failures unless `silent` is `true`
 
@@ -140,6 +160,7 @@ This is the intended style of use:
 
 ### Public types
 
+- `AssertFailure`: public union for the supported `assert(...)` failure inputs
 - `NonEmptyArray<T>`: mutable non-empty array whose `map(...)` stays non-empty
 - `ReadonlyNonEmptyArray<T>`: readonly non-empty array whose `map(...)` returns a mutable `NonEmptyArray<U>`
 
@@ -152,6 +173,7 @@ This is the intended style of use:
 - `hasOwnPropertyValue(...)` only matches own data properties. Inherited properties and getters return `false`.
 - `isPromiseLike(...)` accepts object or function thenables and returns `false` if reading `.then` throws.
 - `ensureNever(...)` is for exhaustive checks. It throws plain `Error`, not `AssertionError`, and `silent = true` skips throwing.
+- The unified `AssertFailure` input and caller-provided custom-error support apply to `assert(...)`, not the `ensure*` helpers.
 - `isFunction(...)` is most useful when the union already contains a function member.
 - `isSymbol(...)` expects the broad `symbol` type in the input union.
 - `isNullOrUndefined(...)` and `ensureNotNullOrUndefined(...)` expect unions that include both `null` and `undefined`.
