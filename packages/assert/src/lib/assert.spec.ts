@@ -4,18 +4,65 @@ import { AssertionError } from './AssertionError.js';
 describe('assert', () => {
   describe('assert(false)', () => {
     describe('assert(false, string)', () => {
-      it('throws error with specified message', () => {
+      it('throws AssertionError with the exact specified message', () => {
         const TEST_MESSAGE = 'TEST_MESSAGE';
 
-        expect(() => assert(false, TEST_MESSAGE)).toThrow(TEST_MESSAGE);
+        let thrownError: unknown;
+
+        try {
+          assert(false, TEST_MESSAGE);
+        } catch (caughtError) {
+          thrownError = caughtError;
+        }
+
+        expect(thrownError).toBeInstanceOf(AssertionError);
+        expect((thrownError as Error).message).toBe(TEST_MESSAGE);
+      });
+
+      it('removes assert from the stack trace by default', () => {
+        const TEST_MESSAGE = 'trace';
+
+        function defaultStackElisionCaller() {
+          assert(false, TEST_MESSAGE);
+        }
+
+        let thrownError: unknown;
+
+        try {
+          defaultStackElisionCaller();
+        } catch (caughtError) {
+          thrownError = caughtError;
+        }
+
+        expect(thrownError).toBeInstanceOf(AssertionError);
+        expect((thrownError as Error).message).toBe(TEST_MESSAGE);
+
+        const stackLines = ((thrownError as Error).stack ?? '').split('\n');
+        expect(
+          stackLines.some((line) => line.includes('defaultStackElisionCaller'))
+        ).toBe(true);
+        expect(stackLines.some((line) => /\bat assert \(/.test(line))).toBe(
+          false
+        );
       });
     });
 
     describe('assert(false, () => string)', () => {
-      it('throws error with specified message', () => {
+      it('throws AssertionError with the exact specified message and evaluates the getter once', () => {
         const TEST_MESSAGE = 'TEST_MESSAGE';
+        const messageGetter = vi.fn(() => TEST_MESSAGE);
 
-        expect(() => assert(false, () => TEST_MESSAGE)).toThrow(TEST_MESSAGE);
+        let thrownError: unknown;
+
+        try {
+          assert(false, messageGetter);
+        } catch (caughtError) {
+          thrownError = caughtError;
+        }
+
+        expect(messageGetter).toHaveBeenCalledTimes(1);
+        expect(thrownError).toBeInstanceOf(AssertionError);
+        expect((thrownError as Error).message).toBe(TEST_MESSAGE);
       });
     });
 
@@ -66,21 +113,67 @@ describe('assert', () => {
     });
 
     describe('assert(false, Error, function)', () => {
-      it('removes the given function from the stack trace', () => {
-        function wrapper() {
-          assert(false, new Error('trace'), wrapper);
+      it('removes the given function from the stack trace while keeping the outer caller', () => {
+        const error = new Error('trace');
+
+        function stackFrameToSkip() {
+          assert(false, error, stackFrameToSkip);
+        }
+
+        function directErrorOuterCaller() {
+          stackFrameToSkip();
         }
 
         let thrownError: unknown;
 
         try {
-          wrapper();
+          directErrorOuterCaller();
         } catch (caughtError) {
           thrownError = caughtError;
         }
 
-        expect(thrownError).toBeInstanceOf(Error);
-        expect((thrownError as Error).stack).not.toContain('wrapper');
+        expect(thrownError).toBe(error);
+
+        const stackLines = (error.stack ?? '').split('\n');
+        expect(
+          stackLines.some((line) => line.includes('stackFrameToSkip'))
+        ).toBe(false);
+        expect(
+          stackLines.some((line) => line.includes('directErrorOuterCaller'))
+        ).toBe(true);
+      });
+    });
+
+    describe('assert(false, string, function)', () => {
+      it('removes the given function from the AssertionError stack trace while keeping the outer caller', () => {
+        const TEST_MESSAGE = 'trace';
+
+        function stackFrameToSkip() {
+          assert(false, TEST_MESSAGE, stackFrameToSkip);
+        }
+
+        function assertionErrorOuterCaller() {
+          stackFrameToSkip();
+        }
+
+        let thrownError: unknown;
+
+        try {
+          assertionErrorOuterCaller();
+        } catch (caughtError) {
+          thrownError = caughtError;
+        }
+
+        expect(thrownError).toBeInstanceOf(AssertionError);
+        expect((thrownError as Error).message).toBe(TEST_MESSAGE);
+
+        const stackLines = ((thrownError as Error).stack ?? '').split('\n');
+        expect(
+          stackLines.some((line) => line.includes('stackFrameToSkip'))
+        ).toBe(false);
+        expect(
+          stackLines.some((line) => line.includes('assertionErrorOuterCaller'))
+        ).toBe(true);
       });
     });
   });

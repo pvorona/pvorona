@@ -28,7 +28,7 @@ Most helpers are mainly for narrowing values that already include the member you
 
 ### Throw on impossible state with `assert(...)`
 
-`assert(condition, failure?, functionToSkipStackFrames?)` takes a boolean condition. If the condition is `false`, it throws either `AssertionError` or the caller-provided `Error`.
+`assert(condition, failure?, functionToSkipStackFrames?)` takes a boolean condition. If the condition is `false`, it throws either `AssertionError` or the caller-provided `Error`. When `failure` is a `string` or `() => string`, the thrown `AssertionError.message` matches the provided string exactly. If `functionToSkipStackFrames` is omitted, `assert` omits its own frame from the captured stack trace by default.
 
 `failure` supports these shapes:
 
@@ -60,6 +60,8 @@ import { assert } from '@pvorona/assert';
 
 assert(user != null, () => new MissingUserError('User is required'));
 ```
+
+Passing `Error` directly or via a callback preserves the caller-provided error instance.
 
 This unified `failure` contract applies to `assert(...)` only. The `ensure*` helpers keep their existing contracts.
 
@@ -128,7 +130,7 @@ function messageFromUnknown(value: unknown): string {
 
 ### Core assertion helpers
 
-- `assert(condition, failure?, functionToSkipStackFrames?)`: asserts a boolean condition and throws either `AssertionError` or the caller-provided `Error` on failure
+- `assert(condition, failure?, functionToSkipStackFrames?)`: asserts a boolean condition; string-based failures preserve the exact message, caller-provided `Error` values pass through, and omitting `functionToSkipStackFrames` omits `assert` from captured stack traces by default
 - `AssertFailure`: public `assert(...)` input contract, `undefined | string | Error | (() => string | Error)`
 - `AssertionError`: error class used by failed `assert(...)` calls
 - `ensureNever(value, silent?, message?)`: throws plain `Error` for exhaustive-check failures unless `silent` is `true`
@@ -197,6 +199,8 @@ function messageFromUnknown(value: unknown): string {
 - `isError(...)` accepts `unknown` and `any` as boundary inputs. `unknown` narrows to `Error`; `any` remains `any`.
 - `isError(...)` still follows the restrictive compile-time style for typed inputs: plain `Error`, error subtypes, and unions made only of error subtypes are rejected.
 - `ensureNever(...)` is for exhaustive checks. It throws plain `Error`, not `AssertionError`, and `silent = true` skips throwing.
+- `assert(...)` preserves string messages exactly for both `string` and `() => string` failures.
+- Omitting `functionToSkipStackFrames` makes `assert(...)` omit its own frame from the captured stack trace by default.
 - The unified `AssertFailure` input and caller-provided custom-error support apply to `assert(...)`, not the `ensure*` helpers.
 - `isFunction(...)` is most useful when the union already contains a function member.
 - `isSymbol(...)` expects the broad `symbol` type in the input union.

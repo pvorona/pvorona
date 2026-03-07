@@ -17,9 +17,18 @@ export type AssertFailure = undefined | string | Error | (() => string | Error);
 /**
  * Throws when `condition` is `false`.
  *
- * `failure` may be a message, a custom `Error`, or a lazy callback that
- * returns either one. Failed assertions throw `AssertionError` unless a
- * caller-provided `Error` is passed directly or returned by the callback.
+ * `failure` may be omitted, a message string, a custom `Error`, or a lazy
+ * callback that returns either one. String failures and `() => string`
+ * failures preserve the provided message exactly, and lazy callbacks are only
+ * evaluated on failure.
+ *
+ * Failed assertions throw `AssertionError` unless a caller-provided `Error` is
+ * passed directly or returned by the callback. When
+ * `functionToSkipStackFrames` is omitted, `assert` itself is omitted from the
+ * captured stack trace by default.
+ *
+ * These guarantees apply to `assert(...)` only. The `ensure*` helpers keep
+ * their own contracts.
  */
 export function assert(
   condition: boolean,
