@@ -23,6 +23,22 @@ d.toMilliseconds(); // 120_000
 duration(250, TimeUnit.Millisecond).toSeconds(); // 0.25
 ```
 
+### Compose from multiple units
+
+```ts
+import { duration } from '@pvorona/duration';
+
+const total = duration({ minutes: 1, seconds: 30 });
+total.toSeconds(); // 90
+
+const negative = duration({ hours: -1, minutes: -30 });
+negative.toMilliseconds(); // -5_400_000
+```
+
+`duration(parts)` accepts only the exact plural keys `milliseconds`, `seconds`, `minutes`, `hours`, `days`, `weeks`, `months`, and `years`.
+
+All non-zero parts must share the same sign. For example, `duration({ hours: 1, minutes: -30 })` throws `TypeError`.
+
 ### Compare
 
 ```ts
@@ -54,18 +70,35 @@ const elapsed = since(startedAt);
 elapsed.toSeconds(); // ~2
 ```
 
+### Apply a duration to a date
+
+```ts
+import { addTo, seconds, subtractFrom } from '@pvorona/duration';
+
+const start = new Date(1_000);
+
+addTo(start, seconds(2)).getTime(); // 3_000
+subtractFrom(start, seconds(2)).getTime(); // -1_000
+```
+
 ## Important semantics
 
 - ESM-only package: use `import`, not `require(...)`.
 - Duration values are frozen branded objects created by this package. Use `isDuration(...)` for unknown inputs instead of duck typing.
 - Compare durations by value with `d.equals(other)` or `isEqual(a, b)`, not `===`.
 - Do not spread, JSON-serialize, or structured-clone `Duration` values as a transport format. Serialize your own explicit shape and reconstruct with `milliseconds(...)` for finite values or `infinite` for the sentinel.
+- `DurationParts` is constructor input only. It is not a serialized `Duration` format and should not be treated as one.
 - `instant` is the exported zero-duration constant, but any zero-valued duration has `isInstant === true`.
 - The public millisecond APIs are `TimeUnit.Millisecond`, `milliseconds(...)`, and `toMilliseconds()`.
 - `Month` is treated as 30 days and `Year` as 365.25 days. These are approximations, not calendar-aware durations.
 - Negative finite durations are valid. `between(...)`, `since(...)`, arithmetic, and comparisons can produce or operate on negative values.
 - Constructors accept only finite numeric inputs. `infinite` is the only supported non-finite duration.
+- `duration(parts)` requires at least one supported plural key, rejects unknown keys, rejects non-finite part values, and rejects mixed-sign non-zero parts.
 - `add(infinite, x)`, `subtract(infinite, finite)`, `multiply(infinite, positive finite)`, and `divide(infinite, positive finite)` return `infinite`.
+- `addTo(date, duration)` and `subtractFrom(date, duration)` do exact timestamp arithmetic equivalent to `new Date(date.getTime() +/- duration.toMilliseconds())`.
+- `addTo(...)` and `subtractFrom(...)` reject invalid dates, reject `infinite`, and reject result timestamps outside the JavaScript `Date` range.
+- `addTo(...)` and `subtractFrom(...)` are timestamp-based, not calendar-aware. Local clock time may shift across DST or timezone offset transitions.
+- `Date` values only have millisecond precision, so the date helpers follow native JavaScript `Date` semantics for fractional-millisecond timestamps.
 - Invalid units, invalid dates, non-finite scalar inputs, divide-by-zero, `subtract(infinite, infinite)`, `subtract(finite, infinite)`, `multiply(infinite, 0)`, `multiply(infinite, negative)`, and `divide(infinite, negative)` throw `TypeError`.
 
 ## API
@@ -133,11 +166,27 @@ isShort(a); // true
 a.greaterThan(b); // true
 ```
 
+### `type DurationParts`
+
+Strict constructor input for `duration(parts)`. Supported keys:
+
+- `milliseconds?: number`
+- `seconds?: number`
+- `minutes?: number`
+- `hours?: number`
+- `days?: number`
+- `weeks?: number`
+- `months?: number`
+- `years?: number`
+
+At least one key is required. All non-zero keys must share the same sign.
+
 ### Function API
 
 #### Constructors
 
 - `duration(value: number, unit: TimeUnit): Duration`
+- `duration(parts: DurationParts): Duration`
 - `milliseconds(value: number): Duration`
 - `seconds(value: number): Duration`
 - `minutes(value: number): Duration`
@@ -151,6 +200,8 @@ a.greaterThan(b); // true
 
 - `between(start: Date, end: Date): Duration`
 - `since(start: Date): Duration`
+- `addTo(date: Date, duration: Duration): Date`
+- `subtractFrom(date: Date, duration: Duration): Date`
 
 #### Arithmetic helpers
 

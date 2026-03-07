@@ -30,9 +30,15 @@ async function main() {
     await writeFile(
       entryPath,
       [
-        "import { duration, TimeUnit } from '../dist/index.js';",
-        'const value = duration(1, TimeUnit.Hour);',
+        "import { addTo, duration, subtractFrom, TimeUnit } from '../dist/index.js';",
+        "import type { DurationParts } from '../dist/index.js';",
+        'const parts = { minutes: 1, seconds: 30 } satisfies DurationParts;',
+        'const value = duration(parts);',
+        'const start = new Date(1_000);',
         'value.toSeconds();',
+        'addTo(start, value).getTime();',
+        'subtractFrom(start, value).getTime();',
+        'duration(1, TimeUnit.Hour).toSeconds();',
         '',
       ].join('\n'),
     );
