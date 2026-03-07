@@ -2,8 +2,8 @@ import { assert } from './assert.js';
 import { AssertionError } from './AssertionError.js';
 
 describe('assert', () => {
-  describe('when condition is false', () => {
-    describe('and message is specified as string', () => {
+  describe('assert(false)', () => {
+    describe('assert(false, string)', () => {
       it('throws error with specified message', () => {
         const TEST_MESSAGE = 'TEST_MESSAGE';
 
@@ -11,7 +11,7 @@ describe('assert', () => {
       });
     });
 
-    describe('and message is specified as function', () => {
+    describe('assert(false, () => string)', () => {
       it('throws error with specified message', () => {
         const TEST_MESSAGE = 'TEST_MESSAGE';
 
@@ -19,13 +19,13 @@ describe('assert', () => {
       });
     });
 
-    describe('and message is not specified', () => {
+    describe('assert(false)', () => {
       it('throws AssertionError', () => {
         expect(() => assert(false)).toThrow(AssertionError);
       });
     });
 
-    describe('when failure is an Error instance', () => {
+    describe('assert(false, Error)', () => {
       it('throws the provided error instance', () => {
         class CustomError extends Error {
           override readonly name = 'CustomError';
@@ -44,7 +44,7 @@ describe('assert', () => {
       });
     });
 
-    describe('when failure is an Error getter', () => {
+    describe('assert(false, () => Error)', () => {
       it('throws the error returned by the getter', () => {
         class CustomError extends Error {
           override readonly name = 'CustomError';
@@ -65,7 +65,7 @@ describe('assert', () => {
       });
     });
 
-    describe('when functionToSkipStackFrames is specified', () => {
+    describe('assert(false, Error, function)', () => {
       it('removes the given function from the stack trace', () => {
         function wrapper() {
           assert(false, new Error('trace'), wrapper);
@@ -85,8 +85,8 @@ describe('assert', () => {
     });
   });
 
-  describe('when condition is true', () => {
-    describe('and message is specified as string', () => {
+  describe('assert(true)', () => {
+    describe('assert(true, string)', () => {
       it("doesn't throw", () => {
         const TEST_MESSAGE = 'TEST_MESSAGE';
 
@@ -94,7 +94,7 @@ describe('assert', () => {
       });
     });
 
-    describe('and message is specified as function', () => {
+    describe('assert(true, () => string)', () => {
       it("doesn't throw and doesn't invoke the function", () => {
         const TEST_MESSAGE = 'TEST_MESSAGE';
         const messageGetter = vi.fn(() => TEST_MESSAGE);
@@ -104,7 +104,7 @@ describe('assert', () => {
       });
     });
 
-    describe('when failure is an Error getter', () => {
+    describe('assert(true, () => Error)', () => {
       it("doesn't invoke the getter when condition is true", () => {
         const errorGetter = vi.fn(() => new Error('boom'));
 
@@ -113,7 +113,7 @@ describe('assert', () => {
       });
     });
 
-    describe('and message is not specified', () => {
+    describe('assert(true)', () => {
       it("doesn't throw", () => {
         expect(() => assert(true)).not.toThrow();
       });
