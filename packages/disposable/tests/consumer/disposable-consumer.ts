@@ -6,8 +6,8 @@ import {
 
 const disposable: Disposable = createDisposable();
 
-disposable.onDispose(() => {});
-disposable.onDispose(async () => {});
+disposable.onDispose(() => undefined);
+disposable.onDispose(async () => undefined);
 disposable.onDisposed((result: DisposeResult) => {
   if (result.isSuccess) return;
 

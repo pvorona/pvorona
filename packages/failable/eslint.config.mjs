@@ -8,10 +8,12 @@ export default [
       '@nx/dependency-checks': [
         'error',
         {
+          ignoredDependencies: ['vitest'],
           ignoredFiles: [
             '{projectRoot}/eslint.config.{js,cjs,mjs,ts,cts,mts}',
             '{projectRoot}/vite.config.{js,ts,mjs,mts}',
             '{projectRoot}/vitest.config.{js,ts,mjs,mts}',
+            '{projectRoot}/vitest.public-surface.config.{js,ts,mjs,mts}',
           ],
         },
       ],
@@ -21,10 +23,12 @@ export default [
     },
   },
   {
-    ignores: [
-      '**/out-tsc',
-      // This fixture intentionally imports the published package entry.
-      '**/tests/consumer/**',
-    ],
+    files: ['tests/public-surface.spec.{ts,tsx,js,jsx}', 'tests/consumer/**/*.{ts,tsx,js,jsx}'],
+    rules: {
+      '@nx/enforce-module-boundaries': 'off',
+    },
+  },
+  {
+    ignores: ['**/out-tsc'],
   },
 ];

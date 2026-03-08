@@ -16,8 +16,6 @@ import {
   type Success,
 } from '@pvorona/failable';
 
-type Expect<T extends true> = T;
-
 type Equal<Left, Right> =
   (<T>() => T extends Left ? 1 : 2) extends
   (<T>() => T extends Right ? 1 : 2)
@@ -27,31 +25,34 @@ type Equal<Left, Right> =
       : false
     : false;
 
-type ConsumerModule = typeof import('@pvorona/failable');
+function expectType<Condition extends true>(condition: Condition): void {
+  void condition;
+}
 
-type _NoFailableTag = Expect<
-  Equal<'FailableTag' extends keyof ConsumerModule ? true : false, false>
->;
-type _NoSuccessTag = Expect<
-  Equal<'SuccessTag' extends keyof ConsumerModule ? true : false, false>
->;
-type _NoFailureTag = Expect<
-  Equal<'FailureTag' extends keyof ConsumerModule ? true : false, false>
->;
+type ConsumerModule = typeof import('@pvorona/failable');
+expectType<Equal<'FailableTag' extends keyof ConsumerModule ? true : false, false>>(
+  true
+);
+expectType<Equal<'SuccessTag' extends keyof ConsumerModule ? true : false, false>>(
+  true
+);
+expectType<Equal<'FailureTag' extends keyof ConsumerModule ? true : false, false>>(
+  true
+);
 
 const ok = success(123);
 
 const okOrElse = ok.orElse(() => 456);
-type _OkOrElse = Expect<Equal<typeof okOrElse, Success<number>>>;
+expectType<Equal<typeof okOrElse, Success<number>>>(true);
 
 const okGetOrElse = ok.getOrElse(() => 456);
-type _OkGetOrElse = Expect<Equal<typeof okGetOrElse, number>>;
+expectType<Equal<typeof okGetOrElse, number>>(true);
 
 const okMatch = ok.match(
   (value) => value.toString(),
   () => 'unexpected'
 );
-type _OkMatch = Expect<Equal<typeof okMatch, string>>;
+expectType<Equal<typeof okMatch, string>>(true);
 
 if (!isSuccess(ok)) {
   throw new Error('Expected success result');
@@ -64,16 +65,16 @@ void FailableStatus.Success;
 const problem = failure('boom');
 
 const problemOrElse = problem.orElse(() => 123);
-type _ProblemOrElse = Expect<Equal<typeof problemOrElse, Success<number>>>;
+expectType<Equal<typeof problemOrElse, Success<number>>>(true);
 
 const problemGetOrElse = problem.getOrElse(() => 123);
-type _ProblemGetOrElse = Expect<Equal<typeof problemGetOrElse, number>>;
+expectType<Equal<typeof problemGetOrElse, number>>(true);
 
 const problemMatch = problem.match(
   () => 'unexpected',
   (error) => error
 );
-type _ProblemMatch = Expect<Equal<typeof problemMatch, string>>;
+expectType<Equal<typeof problemMatch, string>>(true);
 
 if (!isFailure(problem)) {
   throw new Error('Expected failure result');
@@ -82,20 +83,18 @@ if (!isFailure(problem)) {
 const union: Failable<number, string> = Math.random() > 0.5 ? ok : problem;
 
 const unionOrElse = union.orElse(() => ({ a: 1 }));
-type _UnionOrElse = Expect<
+expectType<
   Equal<typeof unionOrElse, Success<number> | Success<{ a: number }>>
->;
+>(true);
 
 const unionGetOrElse = union.getOrElse(() => ({ b: 'b' }));
-type _UnionGetOrElse = Expect<
-  Equal<typeof unionGetOrElse, number | { b: string }>
->;
+expectType<Equal<typeof unionGetOrElse, number | { b: string }>>(true);
 
 const unionMatch = union.match(
   (value) => value.toString(),
   (error) => error
 );
-type _UnionMatch = Expect<Equal<typeof unionMatch, string>>;
+expectType<Equal<typeof unionMatch, string>>(true);
 
 const successWire = toFailableLike(ok);
 
@@ -103,7 +102,7 @@ if (!isFailableLike(successWire)) {
   throw new Error('Expected structured-clone success wire shape');
 }
 
-type _SuccessWire = Expect<Equal<typeof successWire, FailableLikeSuccess<number>>>;
+expectType<Equal<typeof successWire, FailableLikeSuccess<number>>>(true);
 
 const successWireAsConsumerType: FailableLike<number, string> = successWire;
 void successWireAsConsumerType;
@@ -114,30 +113,24 @@ if (!isFailableLike(failureWire)) {
   throw new Error('Expected structured-clone failure wire shape');
 }
 
-type _FailureWire = Expect<Equal<typeof failureWire, FailableLikeFailure<string>>>;
+expectType<Equal<typeof failureWire, FailableLikeFailure<string>>>(true);
 
 const failureWireAsConsumerType: FailableLike<number, string> = failureWire;
 void failureWireAsConsumerType;
 
 const wrappedFunction = createFailable(() => 123);
-
-type _WrappedFunctionDefaultsToUnknown = Expect<
-  Equal<typeof wrappedFunction, Failable<number, unknown>>
->;
+expectType<Equal<typeof wrappedFunction, Failable<number, unknown>>>(true);
 
 const wrappedPromise = createFailable(Promise.resolve(123));
-
-type _WrappedPromiseDefaultsToUnknown = Expect<
+expectType<
   Equal<typeof wrappedPromise, Promise<Failable<number, unknown>>>
->;
+>(true);
 
 const normalizedExplicitFailure = createFailable(
   failure(['first', 'second']),
   NormalizedErrors
 );
-type _NormalizedExplicitFailure = Expect<
-  Equal<typeof normalizedExplicitFailure, Failure<Error>>
->;
+expectType<Equal<typeof normalizedExplicitFailure, Failure<Error>>>(true);
 
 const normalizedCustomFailure = createFailable(
   () => {
@@ -151,6 +144,18 @@ const normalizedCustomFailure = createFailable(
     },
   }
 );
-type _NormalizedCustomFailure = Expect<
-  Equal<typeof normalizedCustomFailure, Failure<Error>>
->;
+expectType<Equal<typeof normalizedCustomFailure, Failure<Error>>>(true);
+
+void okOrElse;
+void okGetOrElse;
+void okMatch;
+void problemOrElse;
+void problemGetOrElse;
+void problemMatch;
+void unionOrElse;
+void unionGetOrElse;
+void unionMatch;
+void wrappedFunction;
+void wrappedPromise;
+void normalizedExplicitFailure;
+void normalizedCustomFailure;

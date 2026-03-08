@@ -22,7 +22,7 @@ describe('public surface', () => {
   it('waits for async cleanup before notifying onDisposed listeners', async () => {
     const disposable = createDisposable();
     const results: DisposeResult[] = [];
-    let resolveCleanup = () => {};
+    let resolveCleanup = (): void => undefined;
 
     const cleanup = new Promise<void>((resolve) => {
       resolveCleanup = resolve;

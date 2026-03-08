@@ -8,15 +8,23 @@ export default [
       '@nx/dependency-checks': [
         'error',
         {
+          ignoredDependencies: ['vitest'],
           ignoredFiles: [
             '{projectRoot}/eslint.config.{js,cjs,mjs,ts,cts,mts}',
             '{projectRoot}/vite.config.{js,ts,mjs,mts}',
+            '{projectRoot}/vitest.public-surface.config.{js,ts,mjs,mts}',
           ],
         },
       ],
     },
     languageOptions: {
       parser: await import('jsonc-eslint-parser'),
+    },
+  },
+  {
+    files: ['tests/consumer/**/*.{ts,tsx,js,jsx}'],
+    rules: {
+      '@nx/enforce-module-boundaries': 'off',
     },
   },
   {

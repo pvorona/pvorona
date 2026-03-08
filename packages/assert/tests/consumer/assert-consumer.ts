@@ -8,8 +8,6 @@ import {
   type ReadonlyNonEmptyArray,
 } from '@pvorona/assert';
 
-type Expect<T extends true> = T;
-
 type Equal<Left, Right> =
   (<T>() => T extends Left ? 1 : 2) extends
   (<T>() => T extends Right ? 1 : 2)
@@ -19,11 +17,14 @@ type Equal<Left, Right> =
       : false
     : false;
 
-type ConsumerModule = typeof import('@pvorona/assert');
+function expectType<Condition extends true>(condition: Condition): void {
+  void condition;
+}
 
-type _NoResolveValueOrGetter = Expect<
+type ConsumerModule = typeof import('@pvorona/assert');
+expectType<
   Equal<'resolveValueOrGetter' extends keyof ConsumerModule ? true : false, false>
->;
+>(true);
 
 const envPort =
   Math.random() > 0.5
@@ -53,11 +54,8 @@ assert(format('port') === 'PORT', 'Expected uppercase result');
 const values: readonly string[] = ['1', '2'];
 const ensuredValues = ensureNonEmptyArray(values);
 const lengths = ensuredValues.map((value) => Number(value));
+expectType<Equal<typeof ensuredValues, ReadonlyNonEmptyArray<string>>>(true);
+expectType<Equal<typeof lengths, NonEmptyArray<number>>>(true);
 
-type _EnsuredValues = Expect<
-  Equal<typeof ensuredValues, ReadonlyNonEmptyArray<string>>
->;
-
-type _Lengths = Expect<Equal<typeof lengths, NonEmptyArray<number>>>;
-
+void lengths;
 void requiredPort;
