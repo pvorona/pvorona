@@ -8,9 +8,7 @@ export default [
       '@nx/dependency-checks': [
         'error',
         {
-          // `@pvorona/failable` is used by this package, but
-          // `@nx/dependency-checks` is false-positiving here. Tracked in `pvorona-kh3`.
-          ignoredDependencies: ['@pvorona/failable', 'vitest'],
+          ignoredDependencies: ['vitest'],
           ignoredFiles: [
             '{projectRoot}/eslint.config.{js,cjs,mjs,ts,cts,mts}',
             '{projectRoot}/vite.config.{js,ts,mjs,mts}',
