@@ -1,17 +1,16 @@
-import { assert } from './assert.js';
-import { isNull } from './isNull.js';
-import { IncludesNullMember, NotOnlyNull } from './types.js';
+import { assert, type AssertionFailure } from './assert.js';
+import { isNull, type NullConstraint } from './isNull.js';
 
-export function ensureNotNull<
-  T extends V,
-  V = NotOnlyNull<IncludesNullMember<T>>,
->(
+export function ensureNotNull<T extends V, V = NullConstraint<T>>(
   value: T,
-  message = `Expected ${String(value)} not to be null`,
-): Exclude<T, null> {
-  // @ts-expect-error TS doesn't allow this since V is not constrained as a subtype of null
-  assert(!isNull(value), message, ensureNotNull);
+  message?: AssertionFailure,
+): Exclude<T, null>;
 
-  // @ts-expect-error TS doesn't allow this since V is not constrained as a subtype of null
+export function ensureNotNull<T extends V, V = NullConstraint<T>>(
+  value: T,
+  message: AssertionFailure = () => `Expected ${String(value)} not to be null`,
+) {
+  assert(!isNull<T, V>(value), message, ensureNotNull);
+
   return value;
 }

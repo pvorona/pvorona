@@ -1,25 +1,16 @@
-import { assert } from './assert.js';
-import { isArray } from './isArray.js';
-import {
-  AtLeastOneValid,
-  IncludesArrayOrArrayLiteralMember,
-  InferArrayType,
-  InferErrorMessage,
-  NotOnlyArray,
-} from './types.js';
+import { assert, type AssertionFailure } from './assert.js';
+import { isArray, type ArrayConstraint } from './isArray.js';
 
-export function ensureArray<
-  T extends V,
-  V = InferErrorMessage<
-    NotOnlyArray<AtLeastOneValid<IncludesArrayOrArrayLiteralMember<T>>>
-  >,
->(
+export function ensureArray<T extends V, V = ArrayConstraint<T>>(
   value: T,
-  message = `Expected ${String(value)} to be array`,
-): Extract<T, unknown[]> {
-  // @ts-expect-error TS doesn't allow this since V is not constrained as a subtype of unknown[]
-  assert(isArray(value), message, ensureArray);
+  message?: AssertionFailure,
+): Extract<T, readonly unknown[]>;
 
-  // @ts-expect-error TS doesn't allow this since V is not constrained as a subtype of unknown[]
-  return value as InferArrayType<T>;
+export function ensureArray<T extends V, V = ArrayConstraint<T>>(
+  value: T,
+  message: AssertionFailure = () => `Expected ${String(value)} to be array`,
+) {
+  assert(isArray<T, V>(value), message, ensureArray);
+
+  return value;
 }

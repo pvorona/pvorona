@@ -51,4 +51,33 @@ test('isArray', () => {
   } else {
     expectTypeOf(a4).toEqualTypeOf<string>();
   }
+
+  const a5 = [1, 2] as readonly [number, number] | string;
+  if (isArray(a5)) {
+    expectTypeOf(a5).toEqualTypeOf<readonly [number, number]>();
+  } else {
+    expectTypeOf(a5).toEqualTypeOf<string>();
+  }
+
+  const a6 = [1, 2] as readonly number[] | string;
+  if (isArray(a6)) {
+    expectTypeOf(a6).toEqualTypeOf<readonly number[]>();
+  } else {
+    expectTypeOf(a6).toEqualTypeOf<string>();
+  }
+
+  const a7 = [1, 2] as unknown;
+  if (isArray(a7)) {
+    expectTypeOf(a7).toEqualTypeOf<unknown[]>();
+  } else {
+    expectTypeOf(a7).toEqualTypeOf<unknown>();
+  }
+
+  // `any` is intentional here to verify the boundary-input contract.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const a8 = [1, 2] as any;
+  if (isArray(a8)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expectTypeOf(a8).toEqualTypeOf<any>();
+  }
 });

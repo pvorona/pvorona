@@ -1,9 +1,15 @@
-import { IncludesNullMember, NotOnlyNull } from './types.js';
+import {
+  type IncludesNullMember,
+  type NotOnlyNull,
+  type DisplayDiagnostics,
+} from './types.js';
 
-export function isNull<
-  T extends V,
-  V = NotOnlyNull<IncludesNullMember<T>>,
-  // @ts-expect-error TS doesn't allow this since V is not constrained as a subtype of null
->(value: T): value is null {
+export type NullConstraint<T> = DisplayDiagnostics<
+  NotOnlyNull<IncludesNullMember<T>>
+>;
+
+export function isNull<T extends V, V = NullConstraint<T>>(
+  value: T,
+): value is Extract<T, null> {
   return value === null;
 }

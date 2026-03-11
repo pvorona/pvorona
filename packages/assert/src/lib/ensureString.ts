@@ -1,24 +1,11 @@
-import { assert } from './assert.js';
-import { isString } from './isString.js';
-import {
-  AtLeastOneValid,
-  IncludesStringOrStringLiteralMember,
-  InferErrorMessage,
-  NotOnlyString,
-} from './types.js';
+import { assert, type AssertionFailure } from './assert.js';
+import { isString, type StringConstraint } from './isString.js';
 
-export function ensureString<
-  T extends V,
-  V = InferErrorMessage<
-    NotOnlyString<AtLeastOneValid<IncludesStringOrStringLiteralMember<T>>>
-  >,
->(
+export function ensureString<T extends V, V = StringConstraint<T>>(
   value: T,
-  message = `Expected ${String(value)} to be string`,
+  message: AssertionFailure = () => `Expected ${String(value)} to be string`,
 ): Extract<T, string> {
-  // @ts-expect-error TS doesn't allow this since V is not constrained as a subtype of string
-  assert(isString(value), message, ensureString);
+  assert(isString<T, V>(value), message, ensureString);
 
-  // @ts-expect-error TS doesn't allow this since V is not constrained as a subtype of string
   return value;
 }

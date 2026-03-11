@@ -9,7 +9,7 @@ npm i @pvorona/assert
 ```
 
 - Import runtime helpers with standard ESM syntax, for example `import { assert } from '@pvorona/assert'`
-- Import public types with `import type`, for example `import type { ReadonlyNonEmptyArray } from '@pvorona/assert'`
+- Import public types with `import type`, for example `import type { AssertionFailure } from '@pvorona/assert'`
 - The published package is ESM-only
 - The published package requires Node `>=20`
 - This repo currently verifies the package with TypeScript `5.9+`
@@ -18,7 +18,7 @@ npm i @pvorona/assert
 
 - Use it to throw on impossible states with `assert(...)` or `ensure*` helpers.
 - Use it to narrow existing unions such as `string | number`, `T | undefined`, or `T | null | undefined`.
-- Use it when you want small reusable checks like `hasOwnPropertyValue(...)`, `isPromiseLike(...)`, or `isNonEmptyArray(...)`.
+- Use it when you want small reusable checks like `hasOwnPropertyValue(...)`, `isPromiseLike(...)`, or `ensureArray(...)`.
 
 Most helpers are mainly for narrowing values that already include the member you want to keep. They are not meant to act like loose `unknown -> whatever` casts. `isError(...)` is the deliberate exception for caught errors and other boundary inputs typed as `unknown` or `any`.
 
@@ -131,7 +131,7 @@ function messageFromUnknown(value: unknown): string {
 ### Core assertion helpers
 
 - `assert(condition, failure?, functionToSkipStackFrames?)`: asserts a boolean condition; string-based failures preserve the exact message, caller-provided `Error` values pass through, and omitting `functionToSkipStackFrames` omits `assert` from captured stack traces by default
-- `AssertFailure`: public `assert(...)` input contract, `undefined | string | Error | (() => string | Error)`
+- `AssertionFailure`: public `assert(...)` input contract, `undefined | string | Error | (() => string | Error)`
 - `AssertionError`: error class used by failed `assert(...)` calls
 - `ensureNever(value, silent?, message?)`: throws plain `Error` for exhaustive-check failures unless `silent` is `true`
 
@@ -140,7 +140,6 @@ function messageFromUnknown(value: unknown): string {
 - `isDefined(...)`: boolean type guard that narrows `T | undefined` to `T`
 - `ensureDefined(...)`: narrows `T | undefined` and throws on `undefined`
 - `isNull(...)`: boolean type guard for unions that include `null`
-- `isNotNull(...)`: boolean type guard that excludes `null`
 - `ensureNotNull(...)`: narrows `T | null` and throws on `null`
 - `isUndefined(...)`: boolean type guard for unions that include `undefined`
 - `isNullOrUndefined(...)`: boolean type guard for unions that include both `null` and `undefined`
@@ -165,17 +164,8 @@ function messageFromUnknown(value: unknown): string {
 
 ### Array helpers
 
-- `isArray(...)`: boolean type guard for unions that include mutable arrays
-- `ensureArray(...)`: narrows to mutable arrays and throws on failure
-- `isEmptyArray(...)`: boolean type guard for the exact empty tuple `[]`
-- `isNonEmptyArray(...)`: boolean guard for non-empty mutable or readonly arrays
-- `ensureNonEmptyArray(...)`: narrows to `NonEmptyArray<T>` or `ReadonlyNonEmptyArray<T>` and throws on failure
-
-### Numeric predicates
-
-- `isInteger(...)`: returns `true` for integers
-- `isPositive(...)`: returns `true` for numbers greater than `0`
-- `isNegative(...)`: returns `true` for numbers less than `0`
+- `isArray(...)`: boolean type guard for unions that include mutable or readonly arrays
+- `ensureArray(...)`: narrows to arrays and preserves readonlyness when the input is readonly
 
 ### Async helper
 
@@ -183,9 +173,7 @@ function messageFromUnknown(value: unknown): string {
 
 ### Public types
 
-- `AssertFailure`: public union for the supported `assert(...)` failure inputs
-- `NonEmptyArray<T>`: mutable non-empty array whose `map(...)` stays non-empty
-- `ReadonlyNonEmptyArray<T>`: readonly non-empty array whose `map(...)` returns a mutable `NonEmptyArray<U>`
+- `AssertionFailure`: public union for the supported `assert(...)` failure inputs
 
 ## Behavior notes
 
@@ -201,50 +189,22 @@ function messageFromUnknown(value: unknown): string {
 - `ensureNever(...)` is for exhaustive checks. It throws plain `Error`, not `AssertionError`, and `silent = true` skips throwing.
 - `assert(...)` preserves string messages exactly for both `string` and `() => string` failures.
 - Omitting `functionToSkipStackFrames` makes `assert(...)` omit its own frame from the captured stack trace by default.
-- The unified `AssertFailure` input and caller-provided custom-error support apply to `assert(...)`, not the `ensure*` helpers.
+- The unified `AssertionFailure` input and caller-provided custom-error support apply to `assert(...)`, not the `ensure*` helpers.
 - `isFunction(...)` is most useful when the union already contains a function member.
 - `isSymbol(...)` expects the broad `symbol` type in the input union.
 - `isNullOrUndefined(...)` and `ensureNotNullOrUndefined(...)` expect unions that include both `null` and `undefined`.
 
-## Array helpers and non-empty array types
+## Array helpers
 
-`isArray(...)` and `ensureArray(...)` are typed around mutable arrays. The empty and non-empty helpers also support readonly arrays:
-
-- `isEmptyArray(...)` accepts `readonly T[]` and narrows the true branch to `[]`
-- `isNonEmptyArray(...)` accepts mutable and readonly arrays
-- `ensureNonEmptyArray(...)` preserves readonlyness when the input is readonly
+`isArray(...)` and `ensureArray(...)` accept mutable and readonly arrays. `ensureArray(...)` preserves readonlyness when the input is readonly.
 
 ```ts
-import { isEmptyArray } from '@pvorona/assert';
+import { ensureArray } from '@pvorona/assert';
 
-const values = [] as [] | [number];
-
-if (isEmptyArray(values)) {
-  // values: []
-} else {
-  // values: [number]
-}
+const values = ['1', '2'] as readonly string[] | string;
+const ensured = ensureArray(values);
+// ensured: readonly string[]
 ```
-
-```ts
-import { ensureNonEmptyArray } from '@pvorona/assert';
-
-const readonlyValues: readonly number[] = [1, 2];
-const ensured = ensureNonEmptyArray(readonlyValues);
-// ensured: ReadonlyNonEmptyArray<number>
-```
-
-The public non-empty array types also preserve non-empty-ness through `map(...)`:
-
-```ts
-import type { ReadonlyNonEmptyArray } from '@pvorona/assert';
-
-const values: ReadonlyNonEmptyArray<string> = ['1', '2'];
-const lengths = values.map((value) => Number(value));
-// lengths: NonEmptyArray<number>
-```
-
-Ensuring or narrowing a readonly array stays readonly. Mapping a `ReadonlyNonEmptyArray<T>` returns a new mutable `NonEmptyArray<U>`.
 
 ## Restrictive helper contracts
 
@@ -270,5 +230,4 @@ The root package no longer re-exports some advanced helpers from older internal 
 - `Mutable` moved to a private workspace package and is no longer part of the published API
 - External consumers should define local equivalents if they still need either helper
 - Removed root exports include internal-looking helpers such as `Override`, `InferErrorMessage`, `NotOnly*`, `Includes*`, `AtLeastOneValid`, and `InferArrayType`
-- `NonEmptyArray` and `ReadonlyNonEmptyArray` remain public
 - There is no replacement public subpath for the removed advanced types; if you still need them, define local equivalents in your own codebase

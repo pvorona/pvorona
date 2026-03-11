@@ -1,17 +1,12 @@
-import { assert } from './assert.js';
+import { assert, type AssertionFailure } from './assert.js';
 import { isDefined } from './isDefined.js';
-import { IncludesUndefinedMember, NotOnlyUndefined } from './types.js';
+import { type UndefinedConstraint } from './isUndefined.js';
 
-export function ensureDefined<
-  T extends V,
-  V = NotOnlyUndefined<IncludesUndefinedMember<T>>,
->(
+export function ensureDefined<T extends V, V = UndefinedConstraint<T>>(
   value: T,
-  message = `Expected ${String(value)} to be defined`,
+  message: AssertionFailure = () => `Expected ${String(value)} to be defined`,
 ): Exclude<T, undefined> {
-  // @ts-expect-error TS doesn't allow this since V is not constrained as a subtype of undefined
-  assert(isDefined(value), message, ensureDefined);
+  assert(isDefined<T, V>(value), message, ensureDefined);
 
-  // @ts-expect-error TS doesn't allow this since V is not constrained as a subtype of undefined
   return value;
 }

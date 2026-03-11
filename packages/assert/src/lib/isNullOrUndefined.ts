@@ -1,15 +1,18 @@
 import { isNull } from './isNull.js';
 import { isUndefined } from './isUndefined.js';
 import {
-  IncludesNullOrUndefinedMember,
-  NotOnlyNullOrUndefined,
+  type IncludesNullOrUndefinedMember,
+  type NotOnlyNullOrUndefined,
+  type DisplayDiagnostics,
 } from './types.js';
+
+export type NullOrUndefinedConstraint<T> = DisplayDiagnostics<
+  NotOnlyNullOrUndefined<IncludesNullOrUndefinedMember<T>>
+>;
 
 export function isNullOrUndefined<
   T extends V,
-  V = NotOnlyNullOrUndefined<IncludesNullOrUndefinedMember<T>>,
-  // @ts-expect-error TS doesn't allow this since V is not constrained as a subtype of null | undefined
->(value: T): value is null | undefined {
-  // @ts-expect-error TS doesn't allow this since V is not constrained as a subtype of null | undefined
-  return isNull(value) || isUndefined(value);
+  V = NullOrUndefinedConstraint<T>,
+>(value: T): value is Extract<T, null | undefined> {
+  return isNull<T, V>(value) || isUndefined<T, V>(value);
 }

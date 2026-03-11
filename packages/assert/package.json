@@ -1,6 +1,6 @@
 {
   "name": "@pvorona/assert",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "description": "ESM-only TypeScript assertions, restrictive guards, and narrowing helpers.",
   "keywords": [
     "assert",
@@ -45,7 +45,7 @@
     "typecheck-public-api": "tsc --project tests/consumer/tsconfig.json --noEmit",
     "check-package-surface": "node ./scripts/check-package-surface.mjs",
     "check-public-surface": "npm run test-public-api && npm run typecheck-public-api && npm run check-package-surface",
-    "prepublishOnly": "npm run check-package-surface"
+    "prepublishOnly": "npm run check-public-surface"
   },
   "publishConfig": {
     "access": "public"

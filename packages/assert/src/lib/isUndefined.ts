@@ -1,9 +1,15 @@
-import { IncludesUndefinedMember, NotOnlyUndefined } from './types.js';
+import {
+  type IncludesUndefinedMember,
+  type NotOnlyUndefined,
+  type DisplayDiagnostics,
+} from './types.js';
 
-export function isUndefined<
-  T extends V,
-  V = NotOnlyUndefined<IncludesUndefinedMember<T>>,
-  // @ts-expect-error TS doesn't allow this since V is not constrained as a subtype of undefined
->(value: T): value is undefined {
+export type UndefinedConstraint<T> = DisplayDiagnostics<
+  NotOnlyUndefined<IncludesUndefinedMember<T>>
+>;
+
+export function isUndefined<T extends V, V = UndefinedConstraint<T>>(
+  value: T,
+): value is Extract<T, undefined> {
   return typeof value === 'undefined';
 }

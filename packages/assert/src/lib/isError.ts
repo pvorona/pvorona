@@ -1,22 +1,20 @@
 import {
-  AtLeastOneValid,
-  IncludesErrorOrBoundaryInput,
-  InferErrorMessage,
-  NotOnlyErrorUnlessBoundaryInput,
+  type AtLeastOneValid,
+  type IncludesErrorOrBoundaryInput,
+  type DisplayDiagnostics,
+  type NotOnlyErrorUnlessBoundaryInput,
 } from './types.js';
 
-export function isError<
-  T extends V,
-  V = InferErrorMessage<
-    NotOnlyErrorUnlessBoundaryInput<
-      AtLeastOneValid<IncludesErrorOrBoundaryInput<T>>
-    >
-  >,
->(
+type isErrorConstraint<T> = DisplayDiagnostics<
+  NotOnlyErrorUnlessBoundaryInput<
+    AtLeastOneValid<IncludesErrorOrBoundaryInput<T>>
+  >
+>;
+
+export function isError<T extends V, V = isErrorConstraint<T>>(
   value: T,
-  // @ts-expect-error TS can't express this predicate precisely for all `T`
-): value is Extract<T, globalThis.Error> | ([unknown] extends [T]
-  ? globalThis.Error
-  : never) {
+): value is  // @ts-expect-error TS can't express this predicate precisely for all `T`
+  | Extract<T, globalThis.Error>
+  | ([unknown] extends [T] ? globalThis.Error : never) {
   return value instanceof globalThis.Error;
 }

@@ -12,7 +12,11 @@ import { isFunction } from './isFunction.js';
  * instead of throwing it directly if you want `functionToSkipStackFrames` to
  * apply consistently.
  */
-export type AssertFailure = undefined | string | Error | (() => string | Error);
+export type AssertionFailure =
+  | undefined
+  | string
+  | Error
+  | (() => string | Error);
 
 /**
  * Throws when `condition` is `false`.
@@ -32,7 +36,7 @@ export type AssertFailure = undefined | string | Error | (() => string | Error);
  */
 export function assert(
   condition: boolean,
-  failure?: AssertFailure,
+  failure?: AssertionFailure,
   functionToSkipStackFrames: /* eslint-disable-line @typescript-eslint/no-unsafe-function-type */ Function = assert,
 ): asserts condition {
   if (condition) return;

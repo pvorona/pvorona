@@ -1,9 +1,15 @@
-import { IncludesSymbolMember, NotOnlySymbol } from './types.js';
+import {
+  type IncludesSymbolMember,
+  type NotOnlySymbol,
+  type DisplayDiagnostics,
+} from './types.js';
 
-export function isSymbol<
-  T extends V,
-  V = NotOnlySymbol<IncludesSymbolMember<T>>,
-  // @ts-expect-error TS doesn't allow this since V is not constrained as a subtype of symbol
->(value: T): value is symbol {
+export type SymbolConstraint<T> = DisplayDiagnostics<
+  NotOnlySymbol<IncludesSymbolMember<T>>
+>;
+
+export function isSymbol<T extends V, V = SymbolConstraint<T>>(
+  value: T,
+): value is Extract<T, symbol> {
   return typeof value === 'symbol';
 }

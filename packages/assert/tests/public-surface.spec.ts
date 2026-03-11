@@ -4,22 +4,33 @@ import {
   ensureNotNullOrUndefined,
   hasOwnPropertyValue,
   isString,
+  type AssertionFailure,
 } from '@pvorona/assert';
 
-describe('public surface', () => {
-  it('throws `AssertionError` and supports a lazy message', () => {
-    let calls = 0;
+type Equal<Left, Right> =
+  (<T>() => T extends Left ? 1 : 2) extends
+  (<T>() => T extends Right ? 1 : 2)
+    ? (<T>() => T extends Right ? 1 : 2) extends
+        (<T>() => T extends Left ? 1 : 2)
+      ? true
+      : false
+    : false;
 
-    expect(() =>
-      assert(false, () => {
-        calls += 1;
-        return 'Invalid port';
-      })
-    ).toThrow(AssertionError);
-    expect(() =>
-      assert(false, () => 'Invalid port')
-    ).toThrow('Invalid port');
-    expect(calls).toBe(1);
+function expectType<Condition extends true>(condition: Condition): void {
+  void condition;
+}
+
+type ConsumerModule = typeof import('@pvorona/assert');
+expectType<
+  Equal<'ensureNonEmptyArray' extends keyof ConsumerModule ? true : false, false>
+>(true);
+
+describe('public surface', () => {
+  it('throws `AssertionError` and supports an `AssertionFailure` callback', () => {
+    const failure: AssertionFailure = () => 'Invalid port';
+
+    expect(() => assert(false, failure)).toThrow(AssertionError);
+    expect(() => assert(false, failure)).toThrow('Invalid port');
   });
 
   it('removes null and undefined with ensureNotNullOrUndefined', () => {

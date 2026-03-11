@@ -3,9 +3,14 @@ import { throwError } from '@pvorona/throw-error';
 export function ensureNever(
   value: never,
   silent = false,
-  message = `Expected ${String(value)} to be never`,
+  message?: string,
 ): never {
-  if (silent) return value;
+  if (silent) {
+    return value;
+  }
 
-  throwError(new Error(message), ensureNever);
+  throwError(
+    new Error(message ?? `Expected ${String(value)} to be never`),
+    ensureNever,
+  );
 }

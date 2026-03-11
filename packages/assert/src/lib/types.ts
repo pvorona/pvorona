@@ -23,35 +23,36 @@ type IncludesBroadOrLiteral<T, Broad, Message extends string> = Broad extends T
   ? T
   : ConstraintDiagnostic<Message, T>;
 
-type IncludesAllMembers<T, Members, Message extends string> = [Members] extends
-  [T]
+type IncludesAllMembers<T, Members, Message extends string> = [
+  Members,
+] extends [T]
   ? T
   : ConstraintDiagnostic<Message, T>;
 
-export type InferErrorMessage<T, V = T> = [T] extends [
-  ConstraintDiagnostic<infer Message, unknown>
+export type DisplayDiagnostics<T, V = T> = [T] extends [
+  ConstraintDiagnostic<infer Message, unknown>,
 ]
   ? Message
   : V;
 
-export type NotOnlyNull<T> = InferErrorMessage<
-  NotOnly<T, null, 'Must not be null only type'>,
-  T
+export type NotOnlyNull<T> = NotOnly<T, null, 'Must not be null only type'>;
+
+export type NotOnlyUndefined<T> = NotOnly<
+  T,
+  undefined,
+  'Must not be undefined only type'
 >;
 
-export type NotOnlyUndefined<T> = InferErrorMessage<
-  NotOnly<T, undefined, 'Must not be undefined only type'>,
-  T
+export type NotOnlyNullOrUndefined<T> = NotOnly<
+  T,
+  null | undefined,
+  'Must not be (null | undefined) only type'
 >;
 
-export type NotOnlyNullOrUndefined<T> = InferErrorMessage<
-  NotOnly<T, null | undefined, 'Must not be (null | undefined) only type'>,
-  T
->;
-
-export type NotOnlyNumber<T> = InferErrorMessage<
-  NotOnly<T, number, 'Must not be number only type'>,
-  T
+export type NotOnlyNumber<T> = NotOnly<
+  T,
+  number,
+  'Must not be number only type'
 >;
 
 export type NotOnlyString<T> = NotOnly<
@@ -60,29 +61,34 @@ export type NotOnlyString<T> = NotOnly<
   'Must not be string only type'
 >;
 
-export type NotOnlyArray<T> = InferErrorMessage<
-  NotOnly<T, unknown[], 'Must not be array only type'>,
-  T
+export type NotOnlyArray<T> = NotOnly<
+  T,
+  unknown[],
+  'Must not be array only type'
 >;
 
-export type NotOnlySymbol<T> = InferErrorMessage<
-  NotOnly<T, symbol, 'Must not be symbol only type'>,
-  T
+export type NotOnlySymbol<T> = NotOnly<
+  T,
+  symbol,
+  'Must not be symbol only type'
 >;
 
-export type IncludesNullMember<T> = InferErrorMessage<
-  IncludesSomeMember<T, null, 'Must include null'>,
-  T
+export type IncludesNullMember<T> = IncludesSomeMember<
+  T,
+  null,
+  'Must include null'
 >;
 
-export type IncludesUndefinedMember<T> = InferErrorMessage<
-  IncludesSomeMember<T, undefined, 'Must include undefined'>,
-  T
+export type IncludesUndefinedMember<T> = IncludesSomeMember<
+  T,
+  undefined,
+  'Must include undefined'
 >;
 
-export type IncludesNullOrUndefinedMember<T> = InferErrorMessage<
-  IncludesAllMembers<T, null | undefined, 'Must include (null | undefined)'>,
-  T
+export type IncludesNullOrUndefinedMember<T> = IncludesAllMembers<
+  T,
+  null | undefined,
+  'Must include (null | undefined)'
 >;
 
 export type IncludesNumberOrNumberLiteralMember<T> = IncludesBroadOrLiteral<
@@ -103,7 +109,9 @@ export type NotOnlyErrorUnlessBoundaryInput<T> = [unknown] extends [T]
   ? ConstraintDiagnostic<'Must not be error-only type', T>
   : T;
 
-type InferErrorArguments<T> = T extends ConstraintDiagnostic<any, infer U> ? U : T;
+type InferErrorArguments<T> = T extends ConstraintDiagnostic<any, infer U>
+  ? U
+  : T;
 
 type InferErrorsArguments<T> = ConstraintDiagnostic<any, any> extends T
   ?
@@ -111,7 +119,9 @@ type InferErrorsArguments<T> = ConstraintDiagnostic<any, any> extends T
       | Exclude<T, ConstraintDiagnostic<any, any>>
   : T;
 
-export type AtLeastOneValid<T> = [T] extends [ConstraintDiagnostic<string, unknown>]
+export type AtLeastOneValid<T> = [T] extends [
+  ConstraintDiagnostic<string, unknown>,
+]
   ? T
   : InferErrorsArguments<T>;
 
@@ -123,12 +133,10 @@ export type IncludesStringOrStringLiteralMember<T> = IncludesBroadOrLiteral<
 
 export type IncludesArrayOrArrayLiteralMember<T> = IncludesBroadOrLiteral<
   T,
-  any[],
+  readonly any[],
   'Must include array or array literal'
 >;
 
 export type IncludesSymbolMember<T> = symbol extends T
   ? T
   : 'Must include symbol';
-
-export type InferArrayType<T> = T extends Array<infer U> ? U[] : never;
