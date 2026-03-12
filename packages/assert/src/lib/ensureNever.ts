@@ -1,16 +1,16 @@
 import { throwError } from '@pvorona/throw-error';
+import { resolveFailure, type AssertionFailure } from './assert.js';
 
 export function ensureNever(
   value: never,
-  silent = false,
-  message?: string,
+  failureOrNotThrow: AssertionFailure | true = () =>
+    `Expected ${String(value)} to be never`,
 ): never {
-  if (silent) {
+  if (failureOrNotThrow) {
     return value;
   }
 
-  throwError(
-    new Error(message ?? `Expected ${String(value)} to be never`),
-    ensureNever,
-  );
+  const error = resolveFailure(failureOrNotThrow);
+
+  throwError(error, ensureNever);
 }

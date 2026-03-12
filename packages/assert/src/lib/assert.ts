@@ -2,7 +2,8 @@ import { resolveValueOrGetter } from '@pvorona/resolve-value-or-getter';
 import { throwError } from '@pvorona/throw-error';
 
 import { AssertionError } from './AssertionError.js';
-import { isFunction } from './isFunction.js';
+import { isUndefined } from './isUndefined.js';
+import { isString } from './isString.js';
 
 /**
  * Failure input accepted by `assert(...)`.
@@ -17,6 +18,20 @@ export type AssertionFailure =
   | string
   | Error
   | (() => string | Error);
+
+export function resolveFailure(failure: AssertionFailure) {
+  if (isUndefined(failure)) {
+    return new AssertionError();
+  }
+
+  const resolved = resolveValueOrGetter(failure);
+
+  if (isString(resolved)) {
+    return new AssertionError(resolved);
+  }
+
+  return resolved;
+}
 
 /**
  * Throws when `condition` is `false`.
@@ -39,15 +54,11 @@ export function assert(
   failure?: AssertionFailure,
   functionToSkipStackFrames: /* eslint-disable-line @typescript-eslint/no-unsafe-function-type */ Function = assert,
 ): asserts condition {
-  if (condition) return;
-
-  const resolvedFailure = isFunction(failure)
-    ? resolveValueOrGetter(failure)
-    : failure;
-
-  if (resolvedFailure instanceof Error) {
-    throwError(resolvedFailure, functionToSkipStackFrames);
+  if (condition) {
+    return;
   }
 
-  throwError(new AssertionError(resolvedFailure), functionToSkipStackFrames);
+  const error = resolveFailure(failure);
+
+  throwError(error, functionToSkipStackFrames);
 }
