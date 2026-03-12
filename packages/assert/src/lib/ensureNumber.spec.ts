@@ -41,4 +41,12 @@ test('ensureNumber', () => {
 
   const a4 = ensureNumber(1 as [number, number] | number);
   expectTypeOf(a4).toEqualTypeOf<number>();
+
+  expect(ensureNumber(Number.NaN as string | number)).toBeNaN();
+  expect(ensureNumber(Number.POSITIVE_INFINITY as string | number)).toBe(
+    Number.POSITIVE_INFINITY,
+  );
+  expect(ensureNumber(Number.NEGATIVE_INFINITY as string | number)).toBe(
+    Number.NEGATIVE_INFINITY,
+  );
 });

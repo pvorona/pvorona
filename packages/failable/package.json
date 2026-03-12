@@ -40,7 +40,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@pvorona/assert": "~0.1.0",
+    "@pvorona/assert": "~1.0.0",
     "@pvorona/not-implemented": "~0.0.1",
     "@pvorona/types": "^0.0.0"
   }

@@ -177,7 +177,7 @@ function messageFromUnknown(value: unknown): string {
 
 ## Behavior notes
 
-- `isNumber(...)` and `ensureNumber(...)` reject `NaN`, `Infinity`, and `-Infinity`.
+- `isNumber(...)` and `ensureNumber(...)` accept any JavaScript number value, including `NaN`, `Infinity`, and `-Infinity`.
 - `ensureNumber(...)` is an exception to the stricter compile-time pattern used by helpers like `isNumber(...)`: plain `number` inputs are allowed.
 - `isObject(...)` and `ensureObject(...)` accept arrays but reject functions.
 - `hasOwnKey(...)` and `hasOwnPropertyValue(...)` work with both objects and functions that have own properties.

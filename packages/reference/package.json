@@ -30,7 +30,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@pvorona/assert": "~0.1.0",
+    "@pvorona/assert": "~1.0.0",
     "@pvorona/resolve-value-or-getter": "0.0.0"
   }
 }

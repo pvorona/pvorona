@@ -12,5 +12,5 @@ export type NumberConstraint<T> = DisplayDiagnostics<
 export function isNumber<T extends V, V = NumberConstraint<T>>(
   value: T,
 ): value is Extract<T, number> {
-  return typeof value === 'number' && !isNaN(value) && isFinite(value);
+  return typeof value === 'number';
 }

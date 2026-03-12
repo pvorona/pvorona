@@ -49,4 +49,8 @@ test('isNumber', () => {
   } else {
     expectTypeOf(a4).toEqualTypeOf<[number, number]>();
   }
+
+  expect(isNumber(Number.NaN as string | number)).toBe(true);
+  expect(isNumber(Number.POSITIVE_INFINITY as string | number)).toBe(true);
+  expect(isNumber(Number.NEGATIVE_INFINITY as string | number)).toBe(true);
 });
