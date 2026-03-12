@@ -1,4 +1,4 @@
-import { hasOwnKey, isObject } from '@pvorona/assert';
+import { isObject } from '@pvorona/assert';
 
 const TIME_UNIT_VALUES = {
   Millisecond: 0,
@@ -133,10 +133,13 @@ function ensureDurationPartsKey(key: string): DurationPartKey {
   throw new TypeError(`Expected \`${key}\` to be a supported duration part.`);
 }
 
-function toMillisecondsFromParts(parts: DurationParts): number {
+function durationPartsToMilliseconds(parts: DurationParts): number {
   const entries = Object.entries(parts);
+
   if (entries.length === 0) {
-    throw new TypeError('Expected `parts` to include at least one duration part.');
+    throw new TypeError(
+      'Expected `parts` to include at least one duration part.',
+    );
   }
 
   let milliseconds = 0;
@@ -154,7 +157,9 @@ function toMillisecondsFromParts(parts: DurationParts): number {
       nonZeroSign = sign;
     }
     if (nonZeroSign !== sign) {
-      throw new TypeError('Expected non-zero duration parts to share the same sign.');
+      throw new TypeError(
+        'Expected non-zero duration parts to share the same sign.',
+      );
     }
 
     milliseconds += value * MILLISECONDS_IN_UNIT[DURATION_PART_TIME_UNITS[key]];
@@ -168,7 +173,9 @@ function normalizeMilliseconds(
   options?: { readonly allowInfinite?: boolean },
 ): number {
   if (Number.isNaN(milliseconds) || milliseconds === Number.NEGATIVE_INFINITY) {
-    throw new TypeError('Expected duration milliseconds to be finite or `Infinity`.');
+    throw new TypeError(
+      'Expected duration milliseconds to be finite or `Infinity`.',
+    );
   }
 
   if (milliseconds !== Infinity || options?.allowInfinite) {
@@ -256,9 +263,12 @@ export function duration(value: number, unit: TimeUnit): Duration;
 /** Creates a duration from strict multi-unit parts. */
 export function duration(parts: DurationParts): Duration;
 
-export function duration(valueOrParts: number | DurationParts, unit?: TimeUnit): Duration {
+export function duration(
+  valueOrParts: number | DurationParts,
+  unit?: TimeUnit,
+): Duration {
   if (isObject(valueOrParts)) {
-    return createDuration(toMillisecondsFromParts(valueOrParts));
+    return createDuration(durationPartsToMilliseconds(valueOrParts));
   }
 
   const normalizedValue = ensureFiniteNumber(valueOrParts, 'value');
@@ -406,14 +416,16 @@ export function subtractFrom(date: Date, duration: Duration): Date {
 }
 
 /** The explicit non-finite duration sentinel supported by this package. */
-export const infinite: Duration = createDuration(Infinity, { allowInfinite: true });
+export const infinite: Duration = createDuration(Infinity, {
+  allowInfinite: true,
+});
 
 /** The zero-length duration constant. */
 export const instant: Duration = milliseconds(0);
 
 /** Returns `true` when the value is a duration created by this package. */
 export function isDuration(value: unknown): value is Duration {
-  return isObject(value) && hasOwnKey(value, millisecondsTag);
+  return Object.prototype.hasOwnProperty.call(value, millisecondsTag);
 }
 
 /** Compares two durations by their normalized millisecond payload. */
