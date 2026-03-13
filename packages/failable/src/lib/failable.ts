@@ -377,15 +377,25 @@ type CreateFailableInput =
 
 const RUN_GET_TAG = Symbol('RunGet');
 
-class RunGet<T, E> {
+class RunGet<
+  T,
+  E,
+  TSource = Failable<T, E>,
+> {
   readonly [RUN_GET_TAG] = true;
-  public readonly source: Failable<T, E>;
+  public readonly source: TSource;
 
-  private constructor(source: Failable<T, E>) {
+  private constructor(source: TSource) {
     this.source = source;
   }
 
-  static create<T, E>(source: Failable<T, E>): RunGet<T, E> {
+  static create<
+    T,
+    E,
+    TSource extends Failable<T, E> | PromiseLike<Failable<T, E>>,
+  >(
+    source: TSource
+  ): RunGet<T, E, TSource> {
     return new RunGet(source);
   }
 }
@@ -397,6 +407,15 @@ type RunHelpers = {
     <T>(source: Success<T>): RunGetIterator<T, never>;
     <E>(source: Failure<E>): RunGetIterator<never, E>;
     <T, E>(source: Failable<T, E>): RunGetIterator<T, E>;
+    <T>(
+      source: PromiseLike<Success<T>>
+    ): AsyncGenerator<RunGet<T, never, unknown>, T, unknown>;
+    <E>(
+      source: PromiseLike<Failure<E>>
+    ): AsyncGenerator<RunGet<never, E, unknown>, never, unknown>;
+    <T, E>(
+      source: PromiseLike<Failable<T, E>>
+    ): AsyncGenerator<RunGet<T, E, unknown>, T, unknown>;
   };
 };
 
@@ -407,7 +426,11 @@ type RunReturn =
   | Failure<unknown>
   | Failable<unknown, unknown>;
 
-type InferRunYieldError<TYield> = TYield extends RunGet<unknown, infer TError>
+type InferRunYieldError<TYield> = TYield extends RunGet<
+  unknown,
+  infer TError,
+  unknown
+>
   ? TError
   : never;
 
@@ -461,9 +484,106 @@ function* getRunIterator<T, E>(
   return (yield RunGet.create(source)) as T;
 }
 
+function getAsyncRunIterator<T>(
+  source: Success<T>
+): AsyncGenerator<RunGet<T, never, unknown>, T, unknown>;
+function getAsyncRunIterator<E>(
+  source: Failure<E>
+): AsyncGenerator<RunGet<never, E, unknown>, never, unknown>;
+function getAsyncRunIterator<T, E>(
+  source: Failable<T, E>
+): AsyncGenerator<RunGet<T, E, unknown>, T, unknown>;
+function getAsyncRunIterator<T>(
+  source: PromiseLike<Success<T>>
+): AsyncGenerator<RunGet<T, never, unknown>, T, unknown>;
+function getAsyncRunIterator<E>(
+  source: PromiseLike<Failure<E>>
+): AsyncGenerator<RunGet<never, E, unknown>, never, unknown>;
+function getAsyncRunIterator<T, E>(
+  source: PromiseLike<Failable<T, E>>
+): AsyncGenerator<RunGet<T, E, unknown>, T, unknown>;
+async function* getAsyncRunIterator<T, E>(
+  source: Failable<T, E> | PromiseLike<Failable<T, E>>
+): AsyncGenerator<RunGet<T, E, unknown>, T, unknown> {
+  return (yield RunGet.create(source)) as T;
+}
+
+function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
+  if (!isObject(value) && !isFunction(value)) {
+    return false;
+  }
+
+  const candidate = value as { readonly then?: unknown };
+  return isFunction(candidate.then);
+}
+
+function getRunSourceIterator<T>(source: Success<T>): RunGetIterator<T, never>;
+function getRunSourceIterator<E>(source: Failure<E>): RunGetIterator<never, E>;
+function getRunSourceIterator<T, E>(
+  source: Failable<T, E>
+): RunGetIterator<T, E>;
+function getRunSourceIterator<T>(
+  source: PromiseLike<Success<T>>
+): AsyncGenerator<RunGet<T, never, unknown>, T, unknown>;
+function getRunSourceIterator<E>(
+  source: PromiseLike<Failure<E>>
+): AsyncGenerator<RunGet<never, E, unknown>, never, unknown>;
+function getRunSourceIterator<T, E>(
+  source: PromiseLike<Failable<T, E>>
+): AsyncGenerator<RunGet<T, E, unknown>, T, unknown>;
+function getRunSourceIterator<T, E>(
+  source: Failable<T, E> | PromiseLike<Failable<T, E>>
+):
+  | RunGetIterator<T, E>
+  | AsyncGenerator<RunGet<T, E, unknown>, T, unknown> {
+  if (isPromiseLike<Failable<T, E>>(source)) {
+    return getAsyncRunIterator(source);
+  }
+
+  return getRunIterator(source);
+}
+
 const RUN_HELPERS: RunHelpers = Object.freeze({
-  get: getRunIterator,
+  get: getRunSourceIterator,
 });
+
+type SyncRunBuilder<
+  TYield extends RunYield = never,
+  TResult extends RunReturn = RunReturn,
+> = (helpers: RunHelpers) => Generator<TYield, TResult, unknown>;
+
+type AsyncRunBuilder<
+  TYield extends RunGet<unknown, unknown, unknown> = never,
+  TResult extends RunReturn = RunReturn,
+> = (helpers: RunHelpers) => AsyncGenerator<TYield, TResult, unknown>;
+
+function readRunGetSource(yielded: unknown): Failable<unknown, unknown> {
+  if (!(yielded instanceof RunGet)) {
+    throw new Error(RUN_INVALID_YIELD_MESSAGE);
+  }
+
+  const source = yielded.source;
+  if (!isFailable(source)) {
+    throw new Error(RUN_INVALID_YIELD_MESSAGE);
+  }
+
+  return source;
+}
+
+async function readAsyncRunGetSource(
+  yielded: unknown
+): Promise<Failable<unknown, unknown>> {
+  if (!(yielded instanceof RunGet)) {
+    throw new Error(RUN_INVALID_YIELD_MESSAGE);
+  }
+
+  const source = await yielded.source;
+  if (!isFailable(source)) {
+    throw new Error(RUN_INVALID_YIELD_MESSAGE);
+  }
+
+  return source;
+}
 
 function closeRunIterator<TYield extends RunYield, TResult extends RunReturn>(
   iterator: Generator<TYield, TResult, unknown>,
@@ -472,16 +592,7 @@ function closeRunIterator<TYield extends RunYield, TResult extends RunReturn>(
   let closing = iterator.return(result as never);
 
   while (!closing.done) {
-    const yielded = closing.value;
-    if (!(yielded instanceof RunGet)) {
-      throw new Error(RUN_INVALID_YIELD_MESSAGE);
-    }
-
-    const source = yielded.source;
-    if (!isFailable(source)) {
-      throw new Error(RUN_INVALID_YIELD_MESSAGE);
-    }
-
+    const source = readRunGetSource(closing.value);
     if (source.status === FailableStatus.Failure) {
       closing = iterator.return(result as never);
       continue;
@@ -491,26 +602,53 @@ function closeRunIterator<TYield extends RunYield, TResult extends RunReturn>(
   }
 }
 
-export function run<
-  TYield extends RunYield = never,
-  TResult extends RunReturn = RunReturn,
+async function closeAsyncRunIterator<
+  TYield extends RunGet<unknown, unknown, unknown>,
+  TResult extends RunReturn,
 >(
-  builder: (helpers: RunHelpers) => Generator<TYield, TResult, unknown>
+  iterator: AsyncGenerator<TYield, TResult, unknown>,
+  result: Failure<unknown>
+) {
+  let closing = await iterator.return(result as never);
+
+  while (!closing.done) {
+    const source = await readAsyncRunGetSource(closing.value);
+    if (source.status === FailableStatus.Failure) {
+      closing = await iterator.return(result as never);
+      continue;
+    }
+
+    closing = await iterator.next(source.data);
+  }
+}
+
+function finalizeRunResult<TYield, TResult extends RunReturn>(
+  result: TResult
 ): InferRunResult<TYield, TResult> {
-  const iterator = builder(RUN_HELPERS);
+  if (isFailable(result)) {
+    return result as InferRunResult<TYield, TResult>;
+  }
+
+  if (result === undefined) {
+    return success(undefined) as InferRunResult<TYield, TResult>;
+  }
+
+  throw new Error(RUN_INVALID_RETURN_MESSAGE);
+}
+
+function isAsyncRunIterator(
+  iterator: Generator<RunYield, RunReturn, unknown> | AsyncGenerator<unknown>
+): iterator is AsyncGenerator<RunGet<unknown, unknown, unknown>, RunReturn, unknown> {
+  return Symbol.asyncIterator in iterator;
+}
+
+function runSyncIterator<TYield extends RunYield, TResult extends RunReturn>(
+  iterator: Generator<TYield, TResult, unknown>
+): InferRunResult<TYield, TResult> {
   let iteration = iterator.next();
 
   while (!iteration.done) {
-    const yielded = iteration.value;
-    if (!(yielded instanceof RunGet)) {
-      throw new Error(RUN_INVALID_YIELD_MESSAGE);
-    }
-
-    const source = yielded.source;
-    if (!isFailable(source)) {
-      throw new Error(RUN_INVALID_YIELD_MESSAGE);
-    }
-
+    const source = readRunGetSource(iteration.value);
     if (source.status === FailableStatus.Failure) {
       closeRunIterator(iterator, source);
       return source as InferRunResult<TYield, TResult>;
@@ -519,15 +657,60 @@ export function run<
     iteration = iterator.next(source.data);
   }
 
-  if (isFailable(iteration.value)) {
-    return iteration.value as InferRunResult<TYield, TResult>;
+  return finalizeRunResult<TYield, TResult>(iteration.value);
+}
+
+async function runAsyncIterator<
+  TYield extends RunGet<unknown, unknown, unknown>,
+  TResult extends RunReturn,
+>(
+  iterator: AsyncGenerator<TYield, TResult, unknown>
+): Promise<InferRunResult<TYield, TResult>> {
+  let iteration = await iterator.next();
+
+  while (!iteration.done) {
+    const source = await readAsyncRunGetSource(iteration.value);
+    if (source.status === FailableStatus.Failure) {
+      await closeAsyncRunIterator(iterator, source);
+      return source as InferRunResult<TYield, TResult>;
+    }
+
+    iteration = await iterator.next(source.data);
   }
 
-  if (iteration.value === undefined) {
-    return success(undefined) as InferRunResult<TYield, TResult>;
+  return finalizeRunResult<TYield, TResult>(iteration.value);
+}
+
+export function run<
+  TYield extends RunGet<unknown, unknown, unknown> = never,
+  TResult extends RunReturn = RunReturn,
+>(
+  builder: (helpers: RunHelpers) => AsyncGenerator<TYield, TResult, unknown>
+): Promise<InferRunResult<TYield, TResult>>;
+export function run<
+  TYield extends RunYield = never,
+  TResult extends RunReturn = RunReturn,
+>(
+  builder: (helpers: RunHelpers) => Generator<TYield, TResult, unknown>
+): InferRunResult<TYield, TResult>;
+export function run(
+  builder:
+    | SyncRunBuilder<RunYield, RunReturn>
+    | AsyncRunBuilder<RunGet<unknown, unknown, unknown>, RunReturn>
+) {
+  const probeIterator = (
+    builder as (
+      helpers: RunHelpers
+    ) =>
+      | Generator<RunYield, RunReturn, unknown>
+      | AsyncGenerator<RunGet<unknown, unknown, unknown>, RunReturn, unknown>
+  )(RUN_HELPERS);
+
+  if (isAsyncRunIterator(probeIterator)) {
+    return runAsyncIterator(probeIterator);
   }
 
-  throw new Error(RUN_INVALID_RETURN_MESSAGE);
+  return runSyncIterator(probeIterator);
 }
 
 export function createFailable<T>(value: Success<T>): Success<T>;

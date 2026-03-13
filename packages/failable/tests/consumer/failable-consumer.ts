@@ -207,6 +207,47 @@ expectType<
   >
 >(true);
 
+const runAsyncSuccess = run(async function* ({ get }) {
+  const first = yield* get(success(123 as const));
+  const second = yield* get(Promise.resolve(success('ready' as const)));
+
+  return success([first, second] as const);
+});
+expectType<
+  Equal<typeof runAsyncSuccess, Promise<Success<readonly [123, 'ready']>>>
+>(true);
+
+const runAsyncFailure = run(async function* ({ get }) {
+  const value = yield* get(Promise.resolve(failure('async-error' as const)));
+
+  return success(value);
+});
+expectType<
+  Equal<typeof runAsyncFailure, Promise<Failure<'async-error'>>>
+>(true);
+
+const runAsyncHelperReturn = run(async function* () {
+  return helperResult();
+});
+expectType<
+  Equal<
+    typeof runAsyncHelperReturn,
+    Promise<Failable<'helper-data', 'helper-error'>>
+  >
+>(true);
+
+const runAsyncThrowOnly = run(async function* () {
+  throw new Error('boom');
+});
+expectType<Equal<typeof runAsyncThrowOnly, Promise<never>>>(true);
+
+run(function* ({ get }) {
+  // @ts-expect-error sync `run(...)` does not accept promised `get(...)` sources.
+  const value = yield* get(Promise.resolve(success(123 as const)));
+
+  return success(value);
+});
+
 // @ts-expect-error `run(...)` builders must return a `Failable`.
 run(function* () {
   return 123 as const;
@@ -236,3 +277,7 @@ void runNoYieldSuccess;
 void runInlineFailure;
 void runHelperReturn;
 void runDistributed;
+void runAsyncSuccess;
+void runAsyncFailure;
+void runAsyncHelperReturn;
+void runAsyncThrowOnly;

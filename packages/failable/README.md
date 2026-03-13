@@ -169,9 +169,9 @@ const responseResult = await createFailable(fetch(url));
 if (responseResult.isError) console.error(responseResult.error);
 ```
 
-### `run(function* ({ get }) { ... })` for sync composition
+### `run(...)` for `Failable` composition
 
-Use `run(...)` when you want to compose existing synchronous `Failable` results without nested `if` blocks. Inside the generator, use `yield* get(result)` to unwrap a success value. If any yielded result is a `Failure`, `run(...)` returns that same `Failure` instance after any `finally` cleanup runs and skips the remaining happy-path steps.
+Use `run(...)` when you want to compose existing `Failable` results without nested `if` blocks. Inside both the sync and async builder forms, use `yield* get(result)` to unwrap a success value. In async builders, `result` can be either a `Failable` or a `PromiseLike<Failable>`, but the control flow stays the same: keep using `yield* get(...)`, not `await get(...)`. If any yielded result is a `Failure`, `run(...)` returns that same `Failure` instance after any `finally` cleanup runs and skips the remaining happy-path steps.
 
 ```ts
 import { failure, run, success, type Failable } from '@pvorona/failable';
@@ -196,14 +196,47 @@ if (result.isError) {
 }
 ```
 
+Async builders use the same composition pattern:
+
+```ts
+import { failure, run, success, type Failable } from '@pvorona/failable';
+
+function divide(a: number, b: number): Failable<number, string> {
+  if (b === 0) return failure('Cannot divide by zero');
+
+  return success(a / b);
+}
+
+async function divideAsync(
+  a: number,
+  b: number,
+): Promise<Failable<number, string>> {
+  return divide(a, b);
+}
+
+const result = await run(async function* ({ get }) {
+  const first = yield* get(divide(20, 2));
+  const second = yield* get(divideAsync(first, 5));
+
+  return success(second);
+});
+
+if (result.isError) {
+  console.error(result.error);
+} else {
+  console.log(result.data); // 2
+}
+```
+
 Important `run(...)` rules:
 
 - Use `run(...)` for `Failable`-to-`Failable` composition. Use `createFailable(...)` when you need to capture sync throws, promise rejections, or rehydrate a `FailableLike`.
-- It is sync-only. If you need promise rejection capture, keep using `await createFailable(promise)`.
+- In async builders, keep using `yield* get(...)`. Do not write `await get(...)`.
+- `get(...)` accepts `Failable` sources in both modes and `PromiseLike<Failable>` sources in async builders only.
 - Use `yield* get(failable)` inside the callback. Other interaction with `get` internals is unsupported and not part of the API contract.
 - `get` exists only inside the generator callback; it is not a public export.
 - Return `success(...)`, `failure(...)`, or another `Failable`. An empty generator or bare `return` becomes `Success<void>`, but raw return values are rejected.
-- Throwing inside the generator is not converted into `Failure`; foreign exceptions are rethrown unchanged.
+- Throwing inside the generator is not converted into `Failure`, and rejected promised sources are not converted into `Failure`; foreign exceptions and rejections escape unchanged.
 
 ### Use guards for `unknown` values
 
@@ -226,13 +259,15 @@ Use `isSuccess(...)` / `isFailure(...)` when you only care about one branch. If 
 ## Important Semantics
 
 - Hydrated `Failable` values are frozen plain objects with methods. Prefer `result.isSuccess` / `result.isError`, and do not use `instanceof`.
-- `run(...)` is sync-only in v1. Use `yield* get(failable)` inside the callback and return a `Failable`, or finish without returning a value to get `Success<void>`.
+- `run(...)` supports both `function*` and `async function*` builders. In both forms, use `yield* get(...)`; async builders still do not use `await get(...)`.
 - `run(...)` short-circuits on the first yielded failure, preserves that original `Failure` instance unchanged, and still runs `finally` cleanup before returning.
+- `run(...)` composes existing `Failable` results only. It does not capture thrown values or rejected promises into `Failure`.
 - `or(...)` and `getOr(...)` are eager. The fallback expression runs before the method call.
 - `orElse(...)` and `getOrElse(...)` are lazy. The callback runs only on failure.
 - `match(onSuccess, onFailure)` is useful when both branches should converge to the same output type.
 - `isFailable(...)`, `isSuccess(...)`, and `isFailure(...)` recognize only tagged hydrated instances, not public-shape lookalikes.
 - `isFailableLike(...)` remains the validator for transport shapes, and `createFailable(failableLike)` is the supported rehydration path before calling instance methods.
+- `createFailable(...)` remains the boundary tool for capture. Use it when you need throws or promise rejections turned into `Failure`.
 - By default, `createFailable(...)` preserves raw thrown and rejected values. If something throws `'boom'`, `{ code: 'bad_request' }`, or `[error1, error2]`, that exact value becomes `.error`.
 - `getOrThrow()` throws `result.error` unchanged on failures. If you want `Error` values, opt into normalization.
 - `createFailable(async () => value)` is a footgun. The async function itself is treated as a sync return value, so the result is `Success<Promise<T>>`. If you want rejection capture, pass the promise directly: `await createFailable(somePromise)`.
@@ -301,7 +336,7 @@ const hydrated = createFailable(wire);
 - `type FailableLike<T, E>`: strict structured-clone-friendly wire shape
 - `const NormalizedErrors`: built-in token for `Error` normalization
 - `success(data)` / `failure(error)`: explicit constructors
-- `run(function* ({ get }) { ... })`: compose sync `Failable` steps with short-circuiting
+- `run(...)`: compose sync or async `Failable` steps with short-circuiting
 - `createFailable(...)`: wrap, preserve, rehydrate, or normalize results
 - `isFailable(...)`, `isSuccess(...)`, `isFailure(...)`: runtime validators for tagged hydrated values
 - `toFailableLike(...)`: convert a hydrated result into a plain transport shape

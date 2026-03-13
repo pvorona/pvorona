@@ -17,6 +17,13 @@ function divide(a: number, b: number): Failable<number, string> {
   return success(a / b);
 }
 
+async function divideAsync(
+  a: number,
+  b: number
+): Promise<Failable<number, string>> {
+  return divide(a, b);
+}
+
 describe('public surface', () => {
   it('supports the README quick-start example', () => {
     const okResult = divide(10, 2);
@@ -61,6 +68,21 @@ describe('public surface', () => {
 
     if (isFailure(result)) {
       throw new Error('Expected the README `run(...)` example to succeed');
+    }
+
+    expect(result.data).toBe(2);
+  });
+
+  it('supports async `run(...)` composition with promised sources', async () => {
+    const result = await run(async function* ({ get }) {
+      const first = yield* get(divide(20, 2));
+      const second = yield* get(divideAsync(first, 5));
+
+      return success(second);
+    });
+
+    if (isFailure(result)) {
+      throw new Error('Expected the async `run(...)` example to succeed');
     }
 
     expect(result.data).toBe(2);
