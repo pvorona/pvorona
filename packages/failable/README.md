@@ -2,7 +2,7 @@
 
 Typed success/failure results for expected failures in TypeScript.
 
-`Failable<T, E>` is a discriminated union of `Success<T>` and `Failure<E>`. In normal application code, return `success(...)` / `failure(...)`, then branch with `result.isSuccess` / `result.isError`. Keep `isSuccess(...)` / `isFailure(...)` for validating hydrated unknown values, and use `isFailableLike(...)` for plain transport shapes.
+`Failable<T, E>` is a discriminated union of `Success<T>` and `Failure<E>`. In normal application code, return `success(...)` / `failure(...)`, then branch with `result.isSuccess` / `result.isError` on that local result. Reserve `isSuccess(...)` / `isFailure(...)` for validating hydrated values that arrive as `unknown`, and use `isFailableLike(...)` for plain transport shapes.
 
 ## Install
 
@@ -259,7 +259,7 @@ Important `run(...)` rules:
 
 ### Use guards for `unknown` values
 
-Use `isFailable(...)`, `isSuccess(...)`, and `isFailure(...)` when you are validating something that might already be a hydrated `Failable` instance:
+Use `isFailable(...)`, `isSuccess(...)`, and `isFailure(...)` when you start from `unknown` and need to validate something that might already be a hydrated `Failable` instance. If you already have a local result from your own code, keep branching with `result.isSuccess` / `result.isError` instead of re-validating it with top-level guards:
 
 ```ts
 import { isFailable } from '@pvorona/failable';
