@@ -4,7 +4,6 @@ import {
   FailableStatus,
   isFailure,
   isFailableLike,
-  NormalizedErrors,
   run,
   success,
   throwIfError,
@@ -74,20 +73,35 @@ describe('public surface', () => {
     throw new Error('Expected throwIfError(...) to throw the stored error');
   });
 
-  it('supports the README normalized-errors example', () => {
-    const result = createFailable(
-      () => {
-        throw { code: 'bad_request' };
-      },
-      NormalizedErrors,
-    );
+  it('supports the README `getOrThrow()` example', () => {
+    const result = divide(10, 2);
 
-    if (!result.isError) {
-      throw new Error('Expected normalized createFailable result to fail');
+    const value = result.getOrThrow();
+
+    expect(value).toBe(5);
+  });
+
+  it('throws the stored failure unchanged with `getOrThrow()`', () => {
+    const result = divide(10, 0);
+
+    try {
+      result.getOrThrow();
+    } catch (error) {
+      expect(error).toBe('Cannot divide by zero');
+      return;
     }
 
-    expect(result.error).toBeInstanceOf(Error);
-    expect(result.error.cause).toEqual({ code: 'bad_request' });
+    throw new Error('Expected getOrThrow() to throw the stored error');
+  });
+
+  it('supports the README `createFailable(...)` boundary example', () => {
+    const result = createFailable(() => JSON.parse('not valid json'));
+
+    if (!result.isError) {
+      throw new Error('Expected createFailable(...) to capture the thrown error');
+    }
+
+    expect(result.error).toBeInstanceOf(SyntaxError);
   });
 
   it('supports the README `run(...)` example', () => {

@@ -58,6 +58,9 @@ expectType<Equal<typeof okOrElse, Success<number>>>(true);
 const okGetOrElse = ok.getOrElse(() => 456);
 expectType<Equal<typeof okGetOrElse, number>>(true);
 
+const okGetOrThrow = ok.getOrThrow();
+expectType<Equal<typeof okGetOrThrow, number>>(true);
+
 const okMatch = ok.match(
   (value) => value.toString(),
   () => 'unexpected'
@@ -75,6 +78,9 @@ expectType<Equal<typeof problemOrElse, Success<number>>>(true);
 
 const problemGetOrElse = problem.getOrElse(() => 123);
 expectType<Equal<typeof problemGetOrElse, number>>(true);
+
+const problemGetOrThrow = () => problem.getOrThrow();
+expectType<Equal<ReturnType<typeof problemGetOrThrow>, never>>(true);
 
 const problemMatch = problem.match(
   () => 'unexpected',
@@ -149,6 +155,14 @@ const readEnsuredUnionData = () => {
   return result.data;
 };
 expectType<Equal<ReturnType<typeof readEnsuredUnionData>, number>>(true);
+
+const readUnionValue = () => {
+  const result: Failable<number, string> =
+    Math.random() > 0.5 ? success(123) : failure('boom');
+
+  return result.getOrThrow();
+};
+expectType<Equal<ReturnType<typeof readUnionValue>, number>>(true);
 
 const normalizedArgUnion = success(123) as Failable<number, string>;
 // @ts-expect-error `throwIfError(...)` does not accept normalization options.
@@ -317,9 +331,11 @@ expectType<Equal<typeof runEmpty, Success<void>>>(true);
 
 void okOrElse;
 void okGetOrElse;
+void okGetOrThrow;
 void okMatch;
 void problemOrElse;
 void problemGetOrElse;
+void problemGetOrThrow;
 void problemMatch;
 void unionOrElse;
 void unionGetOrElse;
@@ -327,6 +343,7 @@ void unionMatch;
 void readOkData;
 void ensureProblem;
 void readEnsuredUnionData;
+void readUnionValue;
 void normalizedArgUnion;
 void mappedArgUnion;
 void wrappedFunction;

@@ -48,7 +48,7 @@ const err = failure({ code: 'bad_request' });
 
 ### Branch and unwrap with helpers
 
-Hydrated `Failable` values carry booleans and convenience methods, and the package also exposes a top-level control-flow helper for same-variable narrowing:
+Hydrated `Failable` values carry booleans and convenience methods. Start with ordinary branching on the result, then pick the helper that matches how you want to unwrap:
 
 ```ts
 import { failure, success } from '@pvorona/failable';
@@ -60,8 +60,7 @@ const portResult = Math.random() > 0.5
 if (portResult.isError) {
   console.error(portResult.error);
 } else {
-  const requiredPort = portResult.getOrThrow();
-  console.log(requiredPort);
+  console.log(portResult.data);
 }
 
 const port = portResult.getOr(3000);
@@ -77,6 +76,13 @@ console.log(port, ensuredPort.data);
 - `result.match(onSuccess, onFailure)`: map both branches to one output type
 - `throwIfError(result)`: throw the stored failure unchanged and keep using the same result on success
 - `result.getOrThrow()`: unwrap success as a value or throw the stored failure unchanged
+
+Use `getOrThrow()` when you want the success value itself in expression or return position:
+
+```ts
+const requiredPort = portResult.getOrThrow();
+console.log(requiredPort);
+```
 
 Use the lazy forms when the fallback is expensive or has side effects:
 
@@ -116,7 +122,7 @@ const status = portResult.match(
 );
 ```
 
-`getOrThrow()` remains the value-returning unwrap. `throwIfError(result)` is its assertion-style companion: it throws `result.error` unchanged on failure, but on success it narrows the same hydrated result so `result.data` stays available:
+When you want to keep using the same result variable, use `throwIfError(result)` instead. It throws `result.error` unchanged on failure, but on success it narrows the same hydrated result so `result.data` stays available:
 
 ```ts
 import {
@@ -146,6 +152,8 @@ console.log(portResult.data);
 
 Plain lookalike objects are not treated as hydrated `Failable` instances. If you have plain `{ status, data }` or `{ status, error }` transport data, validate it with `isFailableLike(...)` or pass it to `createFailable(...)` to rehydrate before calling instance methods.
 
+If a helper already returns `Failable`, branch on it directly or compose it with `run(...)` instead of wrapping it again with `createFailable(...)`.
+
 ```ts
 import {
   createFailable,
@@ -169,7 +177,7 @@ const configResult = createFailable(() => JSON.parse(rawConfig));
 if (configResult.isError) {
   console.error('Invalid JSON:', configResult.error);
 } else {
-  const portResult = createFailable(() => readPort(configResult.data.port));
+  const portResult = readPort(configResult.data.port);
 
   if (portResult.isError) {
     console.error(portResult.error.code);
