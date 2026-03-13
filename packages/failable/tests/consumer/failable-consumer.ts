@@ -2,6 +2,7 @@ import {
   createFailable,
   failure,
   FailableStatus,
+  isFailable,
   isFailableLike,
   isFailure,
   isSuccess,
@@ -63,10 +64,6 @@ const okMatch = ok.match(
 );
 expectType<Equal<typeof okMatch, string>>(true);
 
-if (!isSuccess(ok)) {
-  throw new Error('Expected success result');
-}
-
 const status: FailableStatus = ok.status;
 void status;
 void FailableStatus.Success;
@@ -85,11 +82,34 @@ const problemMatch = problem.match(
 );
 expectType<Equal<typeof problemMatch, string>>(true);
 
-if (!isFailure(problem)) {
-  throw new Error('Expected failure result');
+const union: Failable<number, string> = Math.random() > 0.5 ? ok : problem;
+
+if (union.isError) {
+  expectType<Equal<typeof union.error, string>>(true);
+} else {
+  expectType<Equal<typeof union.data, number>>(true);
 }
 
-const union: Failable<number, string> = Math.random() > 0.5 ? ok : problem;
+const maybeHydrated:
+  | Success<number>
+  | Failure<string>
+  | { readonly nope: true } = Math.random() > 0.5
+  ? ok
+  : Math.random() > 0.5
+  ? problem
+  : { nope: true };
+
+if (isFailable(maybeHydrated) && maybeHydrated.isError) {
+  expectType<Equal<typeof maybeHydrated.error, string>>(true);
+}
+
+if (isSuccess(maybeHydrated)) {
+  expectType<Equal<typeof maybeHydrated.data, number>>(true);
+}
+
+if (isFailure(maybeHydrated)) {
+  expectType<Equal<typeof maybeHydrated.error, string>>(true);
+}
 
 const unionOrElse = union.orElse(() => ({ a: 1 }));
 expectType<

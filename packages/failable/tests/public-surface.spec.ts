@@ -26,21 +26,31 @@ async function divideAsync(
 }
 
 describe('public surface', () => {
-  it('supports the README quick-start example', () => {
+  it('supports the README quick-start branching example', () => {
     const okResult = divide(10, 2);
     const errorResult = divide(10, 0);
 
-    if (isFailure(okResult)) {
+    if (okResult.isError) {
       throw new Error('Expected divide(10, 2) to succeed');
     }
 
     expect(okResult.data).toBe(5);
 
-    if (!isFailure(errorResult)) {
+    if (!errorResult.isError) {
       throw new Error('Expected divide(10, 0) to fail');
     }
 
     expect(errorResult.error).toBe('Cannot divide by zero');
+  });
+
+  it('supports guard-based validation for hydrated unknown values', () => {
+    const candidate: unknown = divide(10, 0);
+
+    if (!isFailure(candidate)) {
+      throw new Error('Expected the unknown candidate to be a hydrated failure');
+    }
+
+    expect(candidate.error).toBe('Cannot divide by zero');
   });
 
   it('supports the README `throwIfError(...)` example', () => {
@@ -72,7 +82,7 @@ describe('public surface', () => {
       NormalizedErrors,
     );
 
-    if (!isFailure(result)) {
+    if (!result.isError) {
       throw new Error('Expected normalized createFailable result to fail');
     }
 
@@ -88,7 +98,7 @@ describe('public surface', () => {
       return success(second);
     });
 
-    if (isFailure(result)) {
+    if (result.isError) {
       throw new Error('Expected the README `run(...)` example to succeed');
     }
 
@@ -103,7 +113,7 @@ describe('public surface', () => {
       return success(second);
     });
 
-    if (isFailure(result)) {
+    if (result.isError) {
       throw new Error('Expected the async `run(...)` example to succeed');
     }
 
@@ -121,7 +131,7 @@ describe('public surface', () => {
 
     const hydrated = createFailable(wire);
 
-    if (isFailure(hydrated)) {
+    if (hydrated.isError) {
       throw new Error('Expected structured-clone rehydration to succeed');
     }
 
