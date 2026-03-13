@@ -190,7 +190,7 @@ if (responseResult.isError) console.error(responseResult.error);
 
 ### `run(...)` for `Failable` composition
 
-Use `run(...)` when you want to compose existing `Failable` results without nested `if` blocks. Inside both the sync and async builder forms, use `yield* get(result)` to unwrap a success value. In async builders, `result` can be either a `Failable` or a `PromiseLike<Failable>`, but the control flow stays the same: keep using `yield* get(...)`, not `await get(...)`. If any yielded result is a `Failure`, `run(...)` returns that same `Failure` instance after any `finally` cleanup runs and skips the remaining happy-path steps.
+Use `run(...)` when you want to compose existing `Failable` results without nested `if` blocks. Inside both the sync and async builder forms, use `yield* get(result)` to unwrap a success value. In async builders, `result` can be either a `Failable` or a `PromiseLike<Failable>`, but the control flow stays the same: keep using `yield* get(...)`, not `await get(...)`. If any yielded result is a `Failure`, `run(...)` returns that same `Failure` instance after entering any `finally` cleanup and skips the remaining happy-path steps. Cleanup keeps unwinding while cleanup `yield* get(...)` steps succeed. Cleanup `Failure`s preserve the original `Failure` and continue into outer `finally` blocks, while promised cleanup rejections still escape unchanged. If a promised source rejects in the main path, async `run(...)` still rejects with that same value unchanged after managed `yield* get(...)` cleanup unwinds. Managed cleanup `Failure`s and managed cleanup promise rejections do not replace that original rejection. Direct `throw`s inside `finally` remain foreign exceptions and still escape unchanged.
 
 ```ts
 import { failure, run, success, type Failable } from '@pvorona/failable';
@@ -255,7 +255,7 @@ Important `run(...)` rules:
 - Use `yield* get(failable)` inside the callback. Other interaction with `get` internals is unsupported and not part of the API contract.
 - `get` exists only inside the generator callback; it is not a public export.
 - Return `success(...)`, `failure(...)`, or another `Failable`. An empty generator or bare `return` becomes `Success<void>`, but raw return values are rejected.
-- Throwing inside the generator is not converted into `Failure`, and rejected promised sources are not converted into `Failure`; foreign exceptions and rejections escape unchanged.
+- Throwing inside the generator is not converted into `Failure`, and rejected promised sources are not converted into `Failure`; foreign exceptions and rejections escape unchanged. In async builders, promised source rejections still unwind `finally` cleanup before they escape.
 
 ### Use guards for `unknown` values
 
@@ -279,7 +279,8 @@ Use `isSuccess(...)` / `isFailure(...)` when you only care about one branch. If 
 
 - Hydrated `Failable` values are frozen plain objects with methods. Prefer `result.isSuccess` / `result.isError`, and do not use `instanceof`.
 - `run(...)` supports both `function*` and `async function*` builders. In both forms, use `yield* get(...)`; async builders still do not use `await get(...)`.
-- `run(...)` short-circuits on the first yielded failure, preserves that original `Failure` instance unchanged, and still runs `finally` cleanup before returning.
+- `run(...)` short-circuits on the first yielded failure, preserves that original `Failure` instance unchanged, and enters `finally` cleanup before returning. Cleanup keeps unwinding while cleanup `yield* get(...)` steps succeed. Cleanup `Failure`s preserve the original `Failure` and continue into outer `finally` blocks, while promised cleanup rejections still escape unchanged.
+- In async builders, promised `get(...)` source rejections still escape unchanged after managed `yield* get(...)` cleanup unwinds. Managed cleanup `Failure`s and managed cleanup promise rejections do not replace that original rejection. Direct `throw`s inside `finally` remain foreign exceptions and still escape unchanged.
 - `run(...)` composes existing `Failable` results only. It does not capture thrown values or rejected promises into `Failure`.
 - `or(...)` and `getOr(...)` are eager. The fallback expression runs before the method call.
 - `orElse(...)` and `getOrElse(...)` are lazy. The callback runs only on failure.

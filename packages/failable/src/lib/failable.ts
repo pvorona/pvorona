@@ -610,6 +610,31 @@ async function readAsyncRunGetSource(
   return source;
 }
 
+type AsyncRunGetSourceRead =
+  | { readonly kind: 'source'; readonly source: Failable<unknown, unknown> }
+  | { readonly kind: 'rejection'; readonly rejection: unknown };
+
+async function readAsyncRunGetSourceWithRejection(
+  yielded: unknown
+): Promise<AsyncRunGetSourceRead> {
+  if (!(yielded instanceof RunGet)) {
+    throw new Error(RUN_INVALID_YIELD_MESSAGE);
+  }
+
+  let source: unknown;
+  try {
+    source = await yielded.source;
+  } catch (rejection) {
+    return { kind: 'rejection', rejection };
+  }
+
+  if (!isFailable(source)) {
+    throw new Error(RUN_INVALID_YIELD_MESSAGE);
+  }
+
+  return { kind: 'source', source };
+}
+
 function closeRunIterator<TYield extends RunYield, TResult extends RunReturn>(
   iterator: Generator<TYield, TResult, unknown>,
   result: Failure<unknown>
@@ -632,7 +657,7 @@ async function closeAsyncRunIterator<
   TResult extends RunReturn,
 >(
   iterator: AsyncGenerator<TYield, TResult, unknown>,
-  result: Failure<unknown>
+  result: Failure<unknown> | undefined
 ) {
   let closing = await iterator.return(result as never);
 
@@ -640,6 +665,31 @@ async function closeAsyncRunIterator<
     const source = await readAsyncRunGetSource(closing.value);
     if (source.status === FailableStatus.Failure) {
       closing = await iterator.return(result as never);
+      continue;
+    }
+
+    closing = await iterator.next(source.data);
+  }
+}
+
+async function closeAsyncRunIteratorOnRejection<
+  TYield extends RunGet<unknown, unknown, unknown>,
+  TResult extends RunReturn,
+>(
+  iterator: AsyncGenerator<TYield, TResult, unknown>
+) {
+  let closing = await iterator.return(undefined as never);
+
+  while (!closing.done) {
+    const sourceRead = await readAsyncRunGetSourceWithRejection(closing.value);
+    if (sourceRead.kind === 'rejection') {
+      closing = await iterator.return(undefined as never);
+      continue;
+    }
+
+    const source = sourceRead.source;
+    if (source.status === FailableStatus.Failure) {
+      closing = await iterator.return(undefined as never);
       continue;
     }
 
@@ -694,7 +744,14 @@ async function runAsyncIterator<
   let iteration = await iterator.next();
 
   while (!iteration.done) {
-    const source = await readAsyncRunGetSource(iteration.value);
+    const sourceRead = await readAsyncRunGetSourceWithRejection(iteration.value);
+    if (sourceRead.kind === 'rejection') {
+      // Promise rejections remain foreign values, but `finally` cleanup should still unwind.
+      await closeAsyncRunIteratorOnRejection(iterator);
+      throw sourceRead.rejection;
+    }
+
+    const source = sourceRead.source;
     if (source.status === FailableStatus.Failure) {
       await closeAsyncRunIterator(iterator, source);
       return source as InferRunResult<TYield, TResult>;
