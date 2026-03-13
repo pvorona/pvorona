@@ -1330,6 +1330,28 @@ describe('run()', () => {
       expect(cleanedUp).toBe(false);
     });
 
+    it('continues unwinding outer finally blocks when cleanup yields Failure during failure unwinding', async () => {
+      const original = failure('cleanup-base-failure' as const);
+      let outerCleanedUp = false;
+
+      const result = await run(async function* ({ get }) {
+        try {
+          try {
+            yield* get(Promise.resolve(original));
+
+            return success('unreachable' as const);
+          } finally {
+            yield* get(failure('cleanup-failure' as const));
+          }
+        } finally {
+          outerCleanedUp = true;
+        }
+      });
+
+      expect(result).toBe(original);
+      expect(outerCleanedUp).toBe(true);
+    });
+
     it('rejects promised source rejections unchanged in the main path', async () => {
       const rejection = { code: 'main-rejection' } as const;
 
@@ -1340,6 +1362,126 @@ describe('run()', () => {
           return success('unreachable' as const);
         })
       ).rejects.toBe(rejection);
+    });
+
+    it('runs finally blocks before rejecting promised source rejections in the main path', async () => {
+      const rejection = { code: 'main-rejection' } as const;
+      let cleanedUp = false;
+
+      await expect(
+        run(async function* ({ get }) {
+          try {
+            yield* get(createRejectingThenable<Failable<never, never>>(rejection));
+
+            return success('unreachable' as const);
+          } finally {
+            cleanedUp = true;
+          }
+        })
+      ).rejects.toBe(rejection);
+      expect(cleanedUp).toBe(true);
+    });
+
+    it('drains async `yield* get(...)` cleanup before rejecting promised source rejections in the main path', async () => {
+      const rejection = { code: 'main-rejection' } as const;
+      let cleanedUp = false;
+
+      await expect(
+        run(async function* ({ get }) {
+          try {
+            yield* get(createRejectingThenable<Failable<never, never>>(rejection));
+
+            return success('unreachable' as const);
+          } finally {
+            yield* get(Promise.resolve(success('cleanup-step' as const)));
+            cleanedUp = true;
+          }
+        })
+      ).rejects.toBe(rejection);
+      expect(cleanedUp).toBe(true);
+    });
+
+    it('preserves the original promised source rejection when cleanup also rejects', async () => {
+      const rejection = { code: 'main-rejection' } as const;
+      const cleanupRejection = { code: 'cleanup-rejection' } as const;
+
+      await expect(
+        run(async function* ({ get }) {
+          try {
+            yield* get(createRejectingThenable<Failable<never, never>>(rejection));
+
+            return success('unreachable' as const);
+          } finally {
+            yield* get(
+              createRejectingThenable<Failable<never, never>>(cleanupRejection)
+            );
+          }
+        })
+      ).rejects.toBe(rejection);
+    });
+
+    it('lets direct cleanup throws replace main-path promised source rejections', async () => {
+      const rejection = { code: 'main-rejection' } as const;
+      const cleanupError = { code: 'cleanup-throw' } as const;
+
+      await expect(
+        run(async function* ({ get }) {
+          try {
+            yield* get(createRejectingThenable<Failable<never, never>>(rejection));
+
+            return success('unreachable' as const);
+          } finally {
+            throw cleanupError;
+          }
+        })
+      ).rejects.toBe(cleanupError);
+    });
+
+    it('preserves the original main-path promised rejection when cleanup yields Failure', async () => {
+      const rejection = { code: 'main-rejection' } as const;
+      let outerCleanedUp = false;
+
+      await expect(
+        run(async function* ({ get }) {
+          try {
+            try {
+              yield* get(createRejectingThenable<Failable<never, never>>(rejection));
+
+              return success('unreachable' as const);
+            } finally {
+              yield* get(failure('cleanup-failure' as const));
+            }
+          } finally {
+            outerCleanedUp = true;
+          }
+        })
+      ).rejects.toBe(rejection);
+      expect(outerCleanedUp).toBe(true);
+    });
+
+    it('continues unwinding outer finally blocks when cleanup rejects during main-path rejection unwinding', async () => {
+      const rejection = { code: 'main-rejection' } as const;
+      const cleanupRejection = { code: 'cleanup-rejection' } as const;
+      let outerCleanedUp = false;
+
+      await expect(
+        run(async function* ({ get }) {
+          try {
+            try {
+              yield* get(createRejectingThenable<Failable<never, never>>(rejection));
+
+              return success('unreachable' as const);
+            } finally {
+              yield* get(
+                createRejectingThenable<Failable<never, never>>(cleanupRejection)
+              );
+            }
+          } finally {
+            outerCleanedUp = true;
+          }
+        })
+      ).rejects.toBe(rejection);
+      expect(outerCleanedUp).toBe(true);
     });
 
     it('rejects promised source rejections unchanged during cleanup', async () => {
@@ -1357,6 +1499,29 @@ describe('run()', () => {
           }
         })
       ).rejects.toBe(rejection);
+    });
+
+    it('stops unwinding outer finally blocks when cleanup rejects during failure unwinding', async () => {
+      const original = failure('cleanup-base-failure' as const);
+      const rejection = { code: 'cleanup-rejection' } as const;
+      let outerCleanedUp = false;
+
+      await expect(
+        run(async function* ({ get }) {
+          try {
+            try {
+              yield* get(Promise.resolve(original));
+
+              return success('unreachable' as const);
+            } finally {
+              yield* get(createRejectingThenable<Failable<never, never>>(rejection));
+            }
+          } finally {
+            outerCleanedUp = true;
+          }
+        })
+      ).rejects.toBe(rejection);
+      expect(outerCleanedUp).toBe(false);
     });
 
     it('returns explicit builder failures', () => {
