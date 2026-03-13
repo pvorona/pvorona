@@ -375,6 +375,161 @@ type CreateFailableInput =
   | (() => unknown)
   | PromiseLike<unknown>;
 
+const RUN_GET_TAG = Symbol('RunGet');
+
+class RunGet<T, E> {
+  readonly [RUN_GET_TAG] = true;
+  public readonly source: Failable<T, E>;
+
+  private constructor(source: Failable<T, E>) {
+    this.source = source;
+  }
+
+  static create<T, E>(source: Failable<T, E>): RunGet<T, E> {
+    return new RunGet(source);
+  }
+}
+
+type RunGetIterator<T, E> = Generator<RunGet<T, E>, T, unknown>;
+
+type RunHelpers = {
+  readonly get: {
+    <T>(source: Success<T>): RunGetIterator<T, never>;
+    <E>(source: Failure<E>): RunGetIterator<never, E>;
+    <T, E>(source: Failable<T, E>): RunGetIterator<T, E>;
+  };
+};
+
+type RunYield = RunGet<unknown, unknown>;
+type RunReturn =
+  | void
+  | Success<unknown>
+  | Failure<unknown>
+  | Failable<unknown, unknown>;
+
+type InferRunYieldError<TYield> = TYield extends RunGet<unknown, infer TError>
+  ? TError
+  : never;
+
+type InferRunReturnData<TResult> = TResult extends void
+  ? void
+  : TResult extends Success<infer TData>
+  ? TData
+  : TResult extends Failure<unknown>
+  ? never
+  : TResult extends Failable<infer TData, unknown>
+  ? TData
+  : never;
+
+type InferRunReturnError<TResult> = TResult extends void
+  ? never
+  : TResult extends Success<unknown>
+  ? never
+  : TResult extends Failure<infer TError>
+  ? TError
+  : TResult extends Failable<unknown, infer TError>
+  ? TError
+  : never;
+
+type InferRunError<TYield, TResult> =
+  | InferRunYieldError<TYield>
+  | InferRunReturnError<TResult>;
+
+type InferRunResult<TYield, TResult> = [TResult] extends [never]
+  ? [InferRunYieldError<TYield>] extends [never]
+    ? never
+    : Failure<InferRunYieldError<TYield>>
+  : [InferRunReturnData<TResult>] extends [never]
+  ? Failure<InferRunError<TYield, TResult>>
+  : [InferRunError<TYield, TResult>] extends [never]
+  ? Success<InferRunReturnData<TResult>>
+  : Failable<InferRunReturnData<TResult>, InferRunError<TYield, TResult>>;
+
+const RUN_INVALID_YIELD_MESSAGE =
+  '`run()` generators must yield only values produced by `get(...)`. Use `yield* get(...)` in normal code.';
+const RUN_INVALID_RETURN_MESSAGE =
+  '`run()` generators must return a `Failable` or finish without returning a value.';
+
+function getRunIterator<T>(source: Success<T>): RunGetIterator<T, never>;
+function getRunIterator<E>(source: Failure<E>): RunGetIterator<never, E>;
+function getRunIterator<T, E>(
+  source: Failable<T, E>
+): RunGetIterator<T, E>;
+function* getRunIterator<T, E>(
+  source: Failable<T, E>
+): RunGetIterator<T, E> {
+  return (yield RunGet.create(source)) as T;
+}
+
+const RUN_HELPERS: RunHelpers = Object.freeze({
+  get: getRunIterator,
+});
+
+function closeRunIterator<TYield extends RunYield, TResult extends RunReturn>(
+  iterator: Generator<TYield, TResult, unknown>,
+  result: Failure<unknown>
+) {
+  let closing = iterator.return(result as never);
+
+  while (!closing.done) {
+    const yielded = closing.value;
+    if (!(yielded instanceof RunGet)) {
+      throw new Error(RUN_INVALID_YIELD_MESSAGE);
+    }
+
+    const source = yielded.source;
+    if (!isFailable(source)) {
+      throw new Error(RUN_INVALID_YIELD_MESSAGE);
+    }
+
+    if (source.status === FailableStatus.Failure) {
+      closing = iterator.return(result as never);
+      continue;
+    }
+
+    closing = iterator.next(source.data);
+  }
+}
+
+export function run<
+  TYield extends RunYield = never,
+  TResult extends RunReturn = RunReturn,
+>(
+  builder: (helpers: RunHelpers) => Generator<TYield, TResult, unknown>
+): InferRunResult<TYield, TResult> {
+  const iterator = builder(RUN_HELPERS);
+  let iteration = iterator.next();
+
+  while (!iteration.done) {
+    const yielded = iteration.value;
+    if (!(yielded instanceof RunGet)) {
+      throw new Error(RUN_INVALID_YIELD_MESSAGE);
+    }
+
+    const source = yielded.source;
+    if (!isFailable(source)) {
+      throw new Error(RUN_INVALID_YIELD_MESSAGE);
+    }
+
+    if (source.status === FailableStatus.Failure) {
+      closeRunIterator(iterator, source);
+      return source as InferRunResult<TYield, TResult>;
+    }
+
+    iteration = iterator.next(source.data);
+  }
+
+  if (isFailable(iteration.value)) {
+    return iteration.value as InferRunResult<TYield, TResult>;
+  }
+
+  if (iteration.value === undefined) {
+    return success(undefined) as InferRunResult<TYield, TResult>;
+  }
+
+  throw new Error(RUN_INVALID_RETURN_MESSAGE);
+}
+
 export function createFailable<T>(value: Success<T>): Success<T>;
 export function createFailable<E>(value: Failure<E>): Failure<E>;
 export function createFailable<T, E>(value: Failable<T, E>): Failable<T, E>;

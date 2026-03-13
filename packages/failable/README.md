@@ -117,7 +117,7 @@ const status = portResult.match(
 
 ### `createFailable(...)` for throwy or rejecting code
 
-`createFailable(...)` is the convenience entrypoint when you want to capture sync throws, promise rejections, or reuse an existing result shape:
+`createFailable(...)` is the convenience entrypoint when you want to capture sync throws, promise rejections, or reuse an existing result shape. Unlike `run(...)`, it is for exception/rejection boundaries rather than `Failable`-to-`Failable` composition:
 
 - `createFailable(failable)` returns the same tagged hydrated instance
 - `createFailable(failableLike)` rehydrates a strict wire shape into a real `Success` / `Failure`
@@ -169,6 +169,42 @@ const responseResult = await createFailable(fetch(url));
 if (responseResult.isError) console.error(responseResult.error);
 ```
 
+### `run(function* ({ get }) { ... })` for sync composition
+
+Use `run(...)` when you want to compose existing synchronous `Failable` results without nested `if` blocks. Inside the generator, use `yield* get(result)` to unwrap a success value. If any yielded result is a `Failure`, `run(...)` returns that same `Failure` instance after any `finally` cleanup runs and skips the remaining happy-path steps.
+
+```ts
+import { failure, run, success, type Failable } from '@pvorona/failable';
+
+function divide(a: number, b: number): Failable<number, string> {
+  if (b === 0) return failure('Cannot divide by zero');
+
+  return success(a / b);
+}
+
+const result = run(function* ({ get }) {
+  const first = yield* get(divide(20, 2));
+  const second = yield* get(divide(first, 5));
+
+  return success(second);
+});
+
+if (result.isError) {
+  console.error(result.error);
+} else {
+  console.log(result.data); // 2
+}
+```
+
+Important `run(...)` rules:
+
+- Use `run(...)` for `Failable`-to-`Failable` composition. Use `createFailable(...)` when you need to capture sync throws, promise rejections, or rehydrate a `FailableLike`.
+- It is sync-only. If you need promise rejection capture, keep using `await createFailable(promise)`.
+- Use `yield* get(failable)` inside the callback. Other interaction with `get` internals is unsupported and not part of the API contract.
+- `get` exists only inside the generator callback; it is not a public export.
+- Return `success(...)`, `failure(...)`, or another `Failable`. An empty generator or bare `return` becomes `Success<void>`, but raw return values are rejected.
+- Throwing inside the generator is not converted into `Failure`; foreign exceptions are rethrown unchanged.
+
 ### Use guards for `unknown` values
 
 Use `isFailable(...)`, `isSuccess(...)`, and `isFailure(...)` when you are validating something that might already be a hydrated `Failable` instance:
@@ -190,6 +226,8 @@ Use `isSuccess(...)` / `isFailure(...)` when you only care about one branch. If 
 ## Important Semantics
 
 - Hydrated `Failable` values are frozen plain objects with methods. Prefer `result.isSuccess` / `result.isError`, and do not use `instanceof`.
+- `run(...)` is sync-only in v1. Use `yield* get(failable)` inside the callback and return a `Failable`, or finish without returning a value to get `Success<void>`.
+- `run(...)` short-circuits on the first yielded failure, preserves that original `Failure` instance unchanged, and still runs `finally` cleanup before returning.
 - `or(...)` and `getOr(...)` are eager. The fallback expression runs before the method call.
 - `orElse(...)` and `getOrElse(...)` are lazy. The callback runs only on failure.
 - `match(onSuccess, onFailure)` is useful when both branches should converge to the same output type.
@@ -263,6 +301,7 @@ const hydrated = createFailable(wire);
 - `type FailableLike<T, E>`: strict structured-clone-friendly wire shape
 - `const NormalizedErrors`: built-in token for `Error` normalization
 - `success(data)` / `failure(error)`: explicit constructors
+- `run(function* ({ get }) { ... })`: compose sync `Failable` steps with short-circuiting
 - `createFailable(...)`: wrap, preserve, rehydrate, or normalize results
 - `isFailable(...)`, `isSuccess(...)`, `isFailure(...)`: runtime validators for tagged hydrated values
 - `toFailableLike(...)`: convert a hydrated result into a plain transport shape

@@ -5,6 +5,7 @@ import {
   isFailure,
   isFailableLike,
   NormalizedErrors,
+  run,
   success,
   toFailableLike,
   type Failable,
@@ -48,6 +49,21 @@ describe('public surface', () => {
 
     expect(result.error).toBeInstanceOf(Error);
     expect(result.error.cause).toEqual({ code: 'bad_request' });
+  });
+
+  it('supports the README `run(...)` example', () => {
+    const result = run(function* ({ get }) {
+      const first = yield* get(divide(20, 2));
+      const second = yield* get(divide(first, 5));
+
+      return success(second);
+    });
+
+    if (isFailure(result)) {
+      throw new Error('Expected the README `run(...)` example to succeed');
+    }
+
+    expect(result.data).toBe(2);
   });
 
   it('supports the README structured-clone transport example', () => {

@@ -9,6 +9,7 @@ import {
   isFailure,
   isSuccess,
   NormalizedErrors,
+  run,
   success,
   toFailableLike,
   type Failable,
@@ -791,6 +792,420 @@ describe('match()', () => {
       );
 
       expectTypeOf(result).toEqualTypeOf<string>();
+    });
+  });
+});
+
+describe('run()', () => {
+  describe('type inference spike', () => {
+    function getHelperResult(): Failable<'helper-data', 'helper-error'> {
+      return success('helper-data' as const);
+    }
+
+    it('infers yielded success data', () => {
+      const buildResult = () =>
+        run(function* ({ get }) {
+          const value = yield* get(success(123 as number));
+
+          expectTypeOf(value).toEqualTypeOf<number>();
+
+          return success(value);
+        });
+
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Success<number>
+      >();
+      void buildResult;
+    });
+
+    it('includes inline failure sources in the error type', () => {
+      const buildResult = () =>
+        run(function* ({ get }) {
+          const value = yield* get(failure('inline-source-error' as const));
+
+          return success(value);
+        });
+
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Failure<'inline-source-error'>
+      >();
+      void buildResult;
+    });
+
+    it('does not add yielded errors when the generator only returns success', () => {
+      const buildResult = () =>
+        run(function* () {
+          return success(42 as const);
+        });
+
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Success<42>
+      >();
+      void buildResult;
+    });
+
+    it('preserves helper-produced Failable return types', () => {
+      const buildResult = () =>
+        run(function* () {
+          return getHelperResult();
+        });
+
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Failable<'helper-data', 'helper-error'>
+      >();
+      void buildResult;
+    });
+
+    it('distributes over yielded wrapper unions and returned Success or Failure', () => {
+      const shouldUseString = true as boolean;
+
+      const buildResult = () =>
+        run(function* ({ get }) {
+          const wrapper = shouldUseString
+            ? get(
+                success('wrapped-string' as const) as Failable<
+                  'wrapped-string',
+                  'wrapped-string-error'
+                >
+              )
+            : get(
+                success(123 as const) as Failable<
+                  123,
+                  'wrapped-number-error'
+                >
+              );
+          const value = yield* wrapper;
+
+          expectTypeOf(value).toEqualTypeOf<'wrapped-string' | 123>();
+
+          return shouldUseString
+            ? success(value)
+            : failure('builder-error' as const);
+        });
+
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Failable<
+          'wrapped-string' | 123,
+          'wrapped-string-error' | 'wrapped-number-error' | 'builder-error'
+        >
+      >();
+      void buildResult;
+    });
+
+    it('unions yielded source errors with explicit builder failures', () => {
+      const firstSource = success('first-value' as const) as Failable<
+        'first-value',
+        'first-source-error'
+      >;
+      const secondSource = success('second-value' as const) as Failable<
+        'second-value',
+        'second-source-error'
+      >;
+
+      const buildResult = () =>
+        run(function* ({ get }) {
+          const first = yield* get(firstSource);
+          const second = yield* get(secondSource);
+
+          void first;
+          void second;
+
+          return failure('builder-error' as const);
+        });
+
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Failure<
+          'first-source-error' | 'second-source-error' | 'builder-error'
+        >
+      >();
+      void buildResult;
+    });
+
+    it('rejects raw return values at type level', () => {
+      const buildRawReturn = () => {
+        // @ts-expect-error `run(...)` builders must return a `Failable`.
+        return run(function* () {
+          return 123 as const;
+        });
+      };
+
+      void buildRawReturn;
+    });
+
+    it('treats empty generators as Success<void>', () => {
+      const buildResult = () =>
+        run(function* () {
+          return;
+        });
+
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Success<void>
+      >();
+      void buildResult;
+    });
+
+    it('infers never when the builder only throws', () => {
+      const buildResult = () =>
+        run(function* () {
+          throw new Error('boom');
+        });
+
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<never>();
+      void buildResult;
+    });
+
+    it('preserves yielded failure types when later code only throws', () => {
+      const source = success(123 as const) as Failable<123, 'source-error'>;
+
+      const buildResult = () =>
+        run(function* ({ get }) {
+          const value = yield* get(source);
+
+          void value;
+          throw new Error('boom');
+        });
+
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Failure<'source-error'>
+      >();
+      void buildResult;
+    });
+  });
+
+  describe('runtime', () => {
+    it('returns Success when all yielded sources succeed', () => {
+      const result = run(function* ({ get }) {
+        const left = yield* get(success(20 as const));
+        const right = yield* get(success(22 as const));
+
+        return success(left + right);
+      });
+
+      expect(result).toStrictEqual(success(42));
+    });
+
+    it('returns Success<void> for empty generators', () => {
+      const result = run(function* () {
+        return;
+      });
+
+      expect(result).toStrictEqual(success(undefined));
+    });
+
+    it('returns explicit success when no sources are yielded', () => {
+      const result = run(function* () {
+        return success(42 as const);
+      });
+
+      expect(result).toStrictEqual(success(42));
+    });
+
+    it('returns inline Failure values from `yield* get(failure(...))`', () => {
+      const result = run(function* ({ get }) {
+        const value = yield* get(failure('inline-failure' as const));
+
+        return success(value);
+      });
+
+      expect(result).toStrictEqual(failure('inline-failure' as const));
+    });
+
+    it('returns the original Failure instance unchanged', () => {
+      const original = failure('original-failure' as const);
+      const result = run(function* ({ get }) {
+        const value = yield* get(original);
+
+        return success(value);
+      });
+
+      expect(result).toBe(original);
+    });
+
+    it('stops executing after the first Failure', () => {
+      const original = failure('short-circuit-failure' as const);
+      let reachedLaterStep = false;
+
+      const result = run(function* ({ get }) {
+        yield* get(original);
+        reachedLaterStep = true;
+
+        return success('unreachable' as const);
+      });
+
+      expect(result).toBe(original);
+      expect(reachedLaterStep).toBe(false);
+    });
+
+    it('runs finally blocks before returning the first yielded Failure', () => {
+      const original = failure('cleanup-failure' as const);
+      let cleanedUp = false;
+
+      const result = run(function* ({ get }) {
+        try {
+          yield* get(original);
+
+          return success('unreachable' as const);
+        } finally {
+          cleanedUp = true;
+        }
+      });
+
+      expect(result).toBe(original);
+      expect(cleanedUp).toBe(true);
+    });
+
+    it('drains `yield* get(...)` cleanup in finally blocks before returning the first Failure', () => {
+      const original = failure('cleanup-yield-failure' as const);
+      let cleanedUp = false;
+
+      const result = run(function* ({ get }) {
+        try {
+          yield* get(original);
+
+          return success('unreachable' as const);
+        } finally {
+          yield* get(success('cleanup-step' as const));
+          cleanedUp = true;
+        }
+      });
+
+      expect(result).toBe(original);
+      expect(cleanedUp).toBe(true);
+    });
+
+    it('ignores success data yielded during finally cleanup while unwinding a failure', () => {
+      const original = failure('cleanup-failure' as const);
+      let step1 = false;
+      let step2 = false;
+
+      const result = run(function* ({ get }) {
+        try {
+          yield* get(original);
+
+          return success('unreachable' as const);
+        } finally {
+          yield* get(success('ignored' as const));
+          step1 = true;
+          yield* get(success('also-ignored' as const));
+          step2 = true;
+        }
+      });
+
+      expect(result).toBe(original);
+      expect(step1).toBe(true);
+      expect(step2).toBe(true);
+    });
+
+    it('returns the explicit failure even if a finally block yields a different failure', () => {
+      const original = failure('original-failure' as const);
+      let cleanedUp = false;
+
+      const result = run(function* ({ get }) {
+        try {
+          yield* get(original);
+
+          return success('unreachable' as const);
+        } finally {
+          yield* get(failure('cleanup-err' as const));
+          cleanedUp = true;
+        }
+      });
+
+      expect(result).toBe(original);
+      expect(cleanedUp).toBe(false);
+    });
+
+    it('returns explicit builder failures', () => {
+      const result = run(function* () {
+        return failure('builder-failure' as const);
+      });
+
+      expect(result).toStrictEqual(failure('builder-failure' as const));
+    });
+
+    it('preserves helper-returned Failable results', () => {
+      const original = success('helper-data' as const) as Failable<
+        'helper-data',
+        'helper-error'
+      >;
+      const getHelperResult = (): Failable<'helper-data', 'helper-error'> =>
+        original;
+
+      const result = run(function* () {
+        return getHelperResult();
+      });
+
+      expect(result).toBe(original);
+    });
+
+    it('rethrows foreign values unchanged', () => {
+      const foreignValue = { code: 'foreign-throw' } as const;
+
+      try {
+        run(function* ({ get }) {
+          yield* get(success('safe-step' as const));
+          throw foreignValue;
+        });
+      } catch (error) {
+        expect(error).toBe(foreignValue);
+        return;
+      }
+
+      throw new Error('Expected `run(...)` to rethrow the foreign value');
+    });
+
+    it('rejects yielded values that are not produced by `get(...)`', () => {
+      try {
+        run((function* () {
+          yield success(123 as const);
+
+          return success(123 as const);
+        }) as never);
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toBe(
+          '`run()` generators must yield only values produced by `get(...)`. Use `yield* get(...)` in normal code.'
+        );
+        return;
+      }
+
+      throw new Error('Expected `run(...)` to reject invalid yielded values');
+    });
+
+    it('rejects `yield* get(...)` sources that are not `Failable` values', () => {
+      try {
+        run(function* ({ get }) {
+          const value = yield* get(123 as never);
+
+          return success(value);
+        });
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toBe(
+          '`run()` generators must yield only values produced by `get(...)`. Use `yield* get(...)` in normal code.'
+        );
+        return;
+      }
+
+      throw new Error(
+        'Expected `run(...)` to reject invalid `get(...)` sources'
+      );
+    });
+
+    it('rejects raw runtime return values', () => {
+      try {
+        run((function* () {
+          return 123 as const;
+        }) as never);
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toBe(
+          '`run()` generators must return a `Failable` or finish without returning a value.'
+        );
+        return;
+      }
+
+      throw new Error('Expected `run(...)` to reject raw return values');
     });
   });
 });

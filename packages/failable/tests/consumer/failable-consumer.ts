@@ -6,6 +6,7 @@ import {
   isFailure,
   isSuccess,
   NormalizedErrors,
+  run,
   success,
   toFailableLike,
   type Failable,
@@ -39,6 +40,10 @@ expectType<Equal<'SuccessTag' extends keyof ConsumerModule ? true : false, false
 expectType<Equal<'FailureTag' extends keyof ConsumerModule ? true : false, false>>(
   true
 );
+expectType<Equal<'RunGet' extends keyof ConsumerModule ? true : false, false>>(
+  true
+);
+expectType<Equal<'get' extends keyof ConsumerModule ? true : false, false>>(true);
 
 const ok = success(123);
 
@@ -146,6 +151,72 @@ const normalizedCustomFailure = createFailable(
 );
 expectType<Equal<typeof normalizedCustomFailure, Failure<Error>>>(true);
 
+const helperResult = (): Failable<'helper-data', 'helper-error'> =>
+  success('helper-data' as const);
+
+const runSuccess = run(function* ({ get }) {
+  const value = yield* get(success(123 as const));
+
+  return success(value);
+});
+expectType<Equal<typeof runSuccess, Success<123>>>(true);
+
+const runNoYieldSuccess = run(function* () {
+  return success(42 as const);
+});
+expectType<Equal<typeof runNoYieldSuccess, Success<42>>>(true);
+
+const runInlineFailure = run(function* ({ get }) {
+  const value = yield* get(failure('inline-error' as const));
+
+  return success(value);
+});
+expectType<Equal<typeof runInlineFailure, Failure<'inline-error'>>>(true);
+
+const runHelperReturn = run(function* () {
+  return helperResult();
+});
+expectType<
+  Equal<typeof runHelperReturn, Failable<'helper-data', 'helper-error'>>
+>(true);
+
+const shouldUseString = true as boolean;
+
+const runDistributed = run(function* ({ get }) {
+  const wrapper = shouldUseString
+    ? get(
+        success('wrapped-string' as const) as Failable<
+          'wrapped-string',
+          'wrapped-string-error'
+        >
+      )
+    : get(
+        success(123 as const) as Failable<123, 'wrapped-number-error'>
+      );
+  const value = yield* wrapper;
+
+  return shouldUseString ? success(value) : failure('builder-error' as const);
+});
+expectType<
+  Equal<
+    typeof runDistributed,
+    Failable<
+      'wrapped-string' | 123,
+      'wrapped-string-error' | 'wrapped-number-error' | 'builder-error'
+    >
+  >
+>(true);
+
+// @ts-expect-error `run(...)` builders must return a `Failable`.
+run(function* () {
+  return 123 as const;
+});
+
+const runEmpty = run(function* () {
+  return;
+});
+expectType<Equal<typeof runEmpty, Success<void>>>(true);
+
 void okOrElse;
 void okGetOrElse;
 void okMatch;
@@ -159,3 +230,9 @@ void wrappedFunction;
 void wrappedPromise;
 void normalizedExplicitFailure;
 void normalizedCustomFailure;
+void runSuccess;
+void runEmpty;
+void runNoYieldSuccess;
+void runInlineFailure;
+void runHelperReturn;
+void runDistributed;
