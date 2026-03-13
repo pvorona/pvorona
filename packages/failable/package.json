@@ -34,7 +34,7 @@
     "typecheck-public-api": "tsc --project tests/consumer/tsconfig.json --noEmit",
     "check-package-surface": "node ./scripts/check-package-surface.mjs",
     "check-public-surface": "npm run test-public-api && npm run typecheck-public-api && npm run check-package-surface",
-    "prepublishOnly": "npm run check-package-surface"
+    "prepublishOnly": "npm exec nx run @pvorona/failable:check-public-surface"
   },
   "publishConfig": {
     "access": "public"
