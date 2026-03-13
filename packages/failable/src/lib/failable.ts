@@ -37,8 +37,12 @@ type Match<T, E> = <U>(
 ) => U;
 
 export type Failable<T, E> =
-  | (Success<T> & { readonly match: Match<T, E> })
-  | (Failure<E> & { readonly match: Match<T, E> });
+  ((Success<T> & {
+    readonly match: Match<T, E>;
+  }) |
+    (Failure<E> & {
+      readonly match: Match<T, E>;
+    }));
 
 /**
  * Structured-clone-friendly representation of {@link Failable}.
@@ -223,9 +227,16 @@ const BASE_FAILURE = (() => {
  * - {@link Success}: `{ status: 'success', isSuccess: true, data: T, error: null }`
  * - {@link Failure}: `{ status: 'failure', isError: true, error: E, data: null }`
  *
+ * Function-first exports:
+ * - `success(data)` / `failure(error)` create hydrated results.
+ * - `throwIfError(result)` throws on failure and narrows the same result on success.
+ * - `createFailable(...)` captures throws, rejections, and wire shapes.
+ * - `run(...)` composes existing `Failable` values.
+ *
  * Design goals:
  * - Prefer explicit, typed results over exceptions.
- * - Provide tiny ergonomics (`or`, `getOr`, `getOrThrow`) with minimal allocation.
+ * - Provide tiny ergonomics (`or`, `getOr`, `getOrThrow`) plus a minimal top-level
+ *   `throwIfError(result)` helper.
  * - Support transport across structured-clone boundaries via {@link FailableLike}.
  *
  * Runtime model / invariants:
@@ -254,6 +265,8 @@ const BASE_FAILURE = (() => {
  * - `or(...)` and `getOr(...)` are eager (fallback is evaluated before the call). Use branching for
  *   lazy fallbacks.
  * - Without normalization options, whatever you throw/reject becomes `.error` unchanged.
+ * - `throwIfError(result)` also throws `.error` unchanged. Normalize earlier with
+ *   `createFailable(..., NormalizedErrors)` or a custom `normalizeError` if you need `Error` values.
  * - `createFailable(() => somePromise)` does NOT await; pass the promise directly: `createFailable(somePromise)`.
  *
  * @example
@@ -300,6 +313,18 @@ export function failure<E = void>(error: E): Failure<E> {
   const node: Mutable<InternalFailure<E>> = Object.create(BASE_FAILURE);
   node.error = error;
   return Object.freeze(node);
+}
+
+/**
+ * Throw `result.error` unchanged on failure, or narrow the same result to {@link Success} on return.
+ *
+ * Use this when you want control-flow narrowing without replacing the original variable.
+ * If you need `Error`-shaped failures, normalize earlier with `createFailable(...)`.
+ */
+export function throwIfError<T, E>(
+  result: Failable<T, E>
+): asserts result is Success<T> {
+  if (result.status === FailableStatus.Failure) throw result.error;
 }
 
 export function toFailableLike<T>(value: Success<T>): FailableLikeSuccess<T>;

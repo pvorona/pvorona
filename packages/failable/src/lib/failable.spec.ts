@@ -11,6 +11,7 @@ import {
   NormalizedErrors,
   run,
   success,
+  throwIfError,
   toFailableLike,
   type Failable,
   type FailableLike,
@@ -725,6 +726,47 @@ describe('getOrThrow()', () => {
         ValueType
       >();
     });
+  });
+});
+
+describe('throwIfError()', () => {
+  it('returns without throwing for success input', () => {
+    expect(throwIfError(success(123 as const))).toBeUndefined();
+  });
+
+  it('throws the stored error unchanged for failure input', () => {
+    const error = {
+      code: faker.string.uuid(),
+      retryable: faker.datatype.boolean(),
+    };
+
+    try {
+      throwIfError(failure(error));
+    } catch (thrown) {
+      expect(thrown).toBe(error);
+      return;
+    }
+
+    throw new Error('Expected throwIfError() to throw the stored error');
+  });
+
+  it('narrows the same union variable after the helper returns', () => {
+    type ValueType = 123;
+    type ErrorType = 'boom';
+
+    const readData = () => {
+      const result: Failable<ValueType, ErrorType> =
+        Math.random() > 0.5
+          ? success(123 as ValueType)
+          : failure('boom' as ErrorType);
+
+      throwIfError(result);
+
+      return result.data;
+    };
+
+    void readData;
+    expectTypeOf<ReturnType<typeof readData>>().toEqualTypeOf<ValueType>();
   });
 });
 

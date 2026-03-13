@@ -8,6 +8,7 @@ import {
   NormalizedErrors,
   run,
   success,
+  throwIfError,
   toFailableLike,
   type Failable,
   type FailableLike,
@@ -44,6 +45,9 @@ expectType<Equal<'RunGet' extends keyof ConsumerModule ? true : false, false>>(
   true
 );
 expectType<Equal<'get' extends keyof ConsumerModule ? true : false, false>>(true);
+expectType<Equal<'throwIfError' extends keyof ConsumerModule ? true : false, true>>(
+  true
+);
 
 const ok = success(123);
 
@@ -100,6 +104,39 @@ const unionMatch = union.match(
   (error) => error
 );
 expectType<Equal<typeof unionMatch, string>>(true);
+
+const readOkData = () => {
+  throwIfError(ok);
+
+  return ok.data;
+};
+expectType<Equal<ReturnType<typeof readOkData>, number>>(true);
+
+const ensureProblem = () => {
+  throwIfError(problem);
+};
+expectType<Equal<ReturnType<typeof ensureProblem>, void>>(true);
+
+const readEnsuredUnionData = () => {
+  const result: Failable<number, string> =
+    Math.random() > 0.5 ? success(123) : failure('boom');
+
+  throwIfError(result);
+
+  const ensuredSuccess: Success<number> = result;
+  void ensuredSuccess;
+
+  return result.data;
+};
+expectType<Equal<ReturnType<typeof readEnsuredUnionData>, number>>(true);
+
+const normalizedArgUnion = success(123) as Failable<number, string>;
+// @ts-expect-error `throwIfError(...)` does not accept normalization options.
+throwIfError(normalizedArgUnion, NormalizedErrors);
+
+const mappedArgUnion = success(123) as Failable<number, { readonly code: 'boom' }>;
+// @ts-expect-error `throwIfError(...)` does not accept mapper callbacks.
+throwIfError(mappedArgUnion, () => new Error('boom'));
 
 const successWire = toFailableLike(ok);
 
@@ -267,6 +304,11 @@ void problemMatch;
 void unionOrElse;
 void unionGetOrElse;
 void unionMatch;
+void readOkData;
+void ensureProblem;
+void readEnsuredUnionData;
+void normalizedArgUnion;
+void mappedArgUnion;
 void wrappedFunction;
 void wrappedPromise;
 void normalizedExplicitFailure;

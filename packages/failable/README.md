@@ -46,9 +46,9 @@ const ok = success({ id: '1' });
 const err = failure({ code: 'bad_request' });
 ```
 
-### Branch and unwrap with instance methods
+### Branch and unwrap with helpers
 
-Hydrated `Failable` values carry booleans and convenience methods, so everyday code can stay local and direct:
+Hydrated `Failable` values carry booleans and convenience methods, and the package also exposes a top-level control-flow helper for same-variable narrowing:
 
 ```ts
 import { failure, success } from '@pvorona/failable';
@@ -75,7 +75,8 @@ console.log(port, ensuredPort.data);
 - `result.or(fallback)`: eagerly end up with `Success<T>`
 - `result.orElse(() => fallback)`: lazily recover to `Success<T>` only on failure
 - `result.match(onSuccess, onFailure)`: map both branches to one output type
-- `result.getOrThrow()`: unwrap success or throw the failure value
+- `throwIfError(result)`: throw the stored failure unchanged and keep using the same result on success
+- `result.getOrThrow()`: unwrap success as a value or throw the stored failure unchanged
 
 Use the lazy forms when the fallback is expensive or has side effects:
 
@@ -113,6 +114,24 @@ const status = portResult.match(
   (port) => `Listening on ${port}`,
   (error) => `Cannot start server: ${error}`
 );
+```
+
+`getOrThrow()` remains the value-returning unwrap. `throwIfError(result)` is its assertion-style companion: it throws `result.error` unchanged on failure, but on success it narrows the same hydrated result so `result.data` stays available:
+
+```ts
+import {
+  failure,
+  success,
+  throwIfError,
+  type Failable,
+} from '@pvorona/failable';
+
+const portResult: Failable<number, string> = Math.random() > 0.5
+  ? success(3000)
+  : failure('Missing port');
+
+throwIfError(portResult);
+console.log(portResult.data);
 ```
 
 ### `createFailable(...)` for throwy or rejecting code
@@ -265,11 +284,13 @@ Use `isSuccess(...)` / `isFailure(...)` when you only care about one branch. If 
 - `or(...)` and `getOr(...)` are eager. The fallback expression runs before the method call.
 - `orElse(...)` and `getOrElse(...)` are lazy. The callback runs only on failure.
 - `match(onSuccess, onFailure)` is useful when both branches should converge to the same output type.
+- `throwIfError(result)` throws `result.error` unchanged on failures and narrows the same hydrated result to `Success<T>` on return.
+- `throwIfError(result)` is deliberately minimal. It does not normalize or map errors; if you want `Error` values, normalize earlier with `createFailable(..., NormalizedErrors)` or a custom `normalizeError`.
 - `isFailable(...)`, `isSuccess(...)`, and `isFailure(...)` recognize only tagged hydrated instances, not public-shape lookalikes.
 - `isFailableLike(...)` remains the validator for transport shapes, and `createFailable(failableLike)` is the supported rehydration path before calling instance methods.
 - `createFailable(...)` remains the boundary tool for capture. Use it when you need throws or promise rejections turned into `Failure`.
 - By default, `createFailable(...)` preserves raw thrown and rejected values. If something throws `'boom'`, `{ code: 'bad_request' }`, or `[error1, error2]`, that exact value becomes `.error`.
-- `getOrThrow()` throws `result.error` unchanged on failures. If you want `Error` values, opt into normalization.
+- `getOrThrow()` returns the success value and throws `result.error` unchanged on failures. Use `throwIfError(result)` when you want control-flow narrowing instead of a returned value.
 - `createFailable(async () => value)` is a footgun. The async function itself is treated as a sync return value, so the result is `Success<Promise<T>>`. If you want rejection capture, pass the promise directly: `await createFailable(somePromise)`.
 
 ## Normalizing Errors
@@ -336,6 +357,7 @@ const hydrated = createFailable(wire);
 - `type FailableLike<T, E>`: strict structured-clone-friendly wire shape
 - `const NormalizedErrors`: built-in token for `Error` normalization
 - `success(data)` / `failure(error)`: explicit constructors
+- `throwIfError(result)`: throw the stored failure unchanged and narrow the same result on success
 - `run(...)`: compose sync or async `Failable` steps with short-circuiting
 - `createFailable(...)`: wrap, preserve, rehydrate, or normalize results
 - `isFailable(...)`, `isSuccess(...)`, `isFailure(...)`: runtime validators for tagged hydrated values

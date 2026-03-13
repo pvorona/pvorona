@@ -7,6 +7,7 @@ import {
   NormalizedErrors,
   run,
   success,
+  throwIfError,
   toFailableLike,
   type Failable,
 } from '@pvorona/failable';
@@ -40,6 +41,27 @@ describe('public surface', () => {
     }
 
     expect(errorResult.error).toBe('Cannot divide by zero');
+  });
+
+  it('supports the README `throwIfError(...)` example', () => {
+    const result = divide(10, 2);
+
+    throwIfError(result);
+
+    expect(result.data).toBe(5);
+  });
+
+  it('throws the stored failure unchanged with `throwIfError(...)`', () => {
+    const result = divide(10, 0);
+
+    try {
+      throwIfError(result);
+    } catch (error) {
+      expect(error).toBe('Cannot divide by zero');
+      return;
+    }
+
+    throw new Error('Expected throwIfError(...) to throw the stored error');
   });
 
   it('supports the README normalized-errors example', () => {
