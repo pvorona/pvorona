@@ -51,4 +51,28 @@ test('isString', () => {
   } else {
     expectTypeOf(a4).toEqualTypeOf<[number, number]>();
   }
+
+  const explicitGenericString = 'value' as string | number;
+  if (
+    isString<string | number, string | number>(explicitGenericString)
+  ) {
+    expectTypeOf(explicitGenericString).toEqualTypeOf<string>();
+  } else {
+    expectTypeOf(explicitGenericString).toEqualTypeOf<number>();
+  }
+
+  const a5 = 'value' as unknown;
+  if (isString(a5)) {
+    expectTypeOf(a5).toEqualTypeOf<string>();
+  } else {
+    expectTypeOf(a5).toEqualTypeOf<unknown>();
+  }
+
+  // `any` is intentional here to verify the boundary-input contract.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const a6 = 'value' as any;
+  if (isString(a6)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expectTypeOf(a6).toEqualTypeOf<any>();
+  }
 });

@@ -17,7 +17,11 @@ export function ensureNotNullOrUndefined<
   message: AssertionFailure = () =>
     `Expected ${String(value)} not to be null or undefined`,
 ) {
-  assert(!isNullOrUndefined<T, V>(value), message, ensureNotNullOrUndefined);
+  assert(
+    !isNullOrUndefined<T, V>(value),
+    message,
+    ensureNotNullOrUndefined,
+  );
 
   return value;
 }

@@ -28,4 +28,28 @@ test('isSymbol', () => {
   } else {
     expectTypeOf(value).toEqualTypeOf<string>();
   }
+
+  const explicitGenericSymbol = Symbol('value') as string | symbol;
+  if (
+    isSymbol<string | symbol, string | symbol>(explicitGenericSymbol)
+  ) {
+    expectTypeOf(explicitGenericSymbol).toEqualTypeOf<symbol>();
+  } else {
+    expectTypeOf(explicitGenericSymbol).toEqualTypeOf<string>();
+  }
+
+  const unknownValue = Symbol('value') as unknown;
+  if (isSymbol(unknownValue)) {
+    expectTypeOf(unknownValue).toEqualTypeOf<symbol>();
+  } else {
+    expectTypeOf(unknownValue).toEqualTypeOf<unknown>();
+  }
+
+  // `any` is intentional here to verify the boundary-input contract.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const anyValue = Symbol('value') as any;
+  if (isSymbol(anyValue)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expectTypeOf(anyValue).toEqualTypeOf<any>();
+  }
 });

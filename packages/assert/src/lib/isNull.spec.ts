@@ -52,4 +52,24 @@ test('isNull', () => {
   } else {
     expectTypeOf(a4).toEqualTypeOf<[number, number]>();
   }
+
+  const explicitGenericNull = null as string | null;
+  if (isNull<string | null, string | null>(explicitGenericNull)) {
+    expectTypeOf(explicitGenericNull).toEqualTypeOf<null>();
+  } else {
+    expectTypeOf(explicitGenericNull).toEqualTypeOf<string>();
+  }
+
+  const a5 = (Math.random() > 0.5 ? null : 'value') as unknown;
+  if (isNull(a5)) {
+    expectTypeOf(a5).toEqualTypeOf<null>();
+  }
+
+  // `any` is intentional here to verify the boundary-input contract.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const a6 = null as any;
+  if (isNull(a6)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expectTypeOf(a6).toEqualTypeOf<any>();
+  }
 });

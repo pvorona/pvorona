@@ -54,4 +54,28 @@ test('isUndefined', () => {
   } else {
     expectTypeOf(a4).toEqualTypeOf<[number, number]>();
   }
+
+  const explicitGenericUndefined = undefined as string | undefined;
+  if (
+    isUndefined<string | undefined, string | undefined>(
+      explicitGenericUndefined,
+    )
+  ) {
+    expectTypeOf(explicitGenericUndefined).toEqualTypeOf<undefined>();
+  } else {
+    expectTypeOf(explicitGenericUndefined).toEqualTypeOf<string>();
+  }
+
+  const a5 = (Math.random() > 0.5 ? undefined : 'value') as unknown;
+  if (isUndefined(a5)) {
+    expectTypeOf(a5).toEqualTypeOf<undefined>();
+  }
+
+  // `any` is intentional here to verify the boundary-input contract.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const a6 = undefined as any;
+  if (isUndefined(a6)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expectTypeOf(a6).toEqualTypeOf<any>();
+  }
 });

@@ -20,7 +20,7 @@ npm i @pvorona/assert
 - Use it to narrow existing unions such as `string | number`, `T | undefined`, or `T | null | undefined`.
 - Use it when you want small reusable checks like `hasOwnPropertyValue(...)`, `isPromiseLike(...)`, or `ensureArray(...)`.
 
-Most helpers are mainly for narrowing values that already include the member you want to keep. They are not meant to act like loose `unknown -> whatever` casts. `isError(...)` is the deliberate exception for caught errors and other boundary inputs typed as `unknown` or `any`.
+Most helpers are mainly for narrowing values that already include the member you want to keep. They are not meant to act like loose `unknown -> whatever` casts. Some public guards are intentionally boundary-friendly for values typed as `unknown` or `any`, including `isArray(...)`, `isError(...)`, `isFunction(...)`, `isNumber(...)`, `isObject(...)`, `isString(...)`, `isNull(...)`, `isUndefined(...)`, `isNullOrUndefined(...)`, and `isSymbol(...)`. For these helpers, `unknown` narrows on success and `any` remains `any`.
 
 `defined` means `not undefined`. It does not mean `not nullish`, so use `ensureNotNull(...)` or `ensureNotNullOrUndefined(...)` when those match the actual input shape better.
 
@@ -186,6 +186,7 @@ function messageFromUnknown(value: unknown): string {
 - `isError(...)` uses same-realm `value instanceof globalThis.Error` at runtime. Plain objects with `name` and `message` fields return `false`, and errors created in another realm also return `false`.
 - `isError(...)` accepts `unknown` and `any` as boundary inputs. `unknown` narrows to `Error`; `any` remains `any`.
 - `isError(...)` still follows the restrictive compile-time style for typed inputs: plain `Error`, error subtypes, and unions made only of error subtypes are rejected.
+- `isNumber(...)`, `isString(...)`, `isNull(...)`, `isUndefined(...)`, `isNullOrUndefined(...)`, and `isSymbol(...)` now follow the same boundary-friendly style as helpers like `isArray(...)`, `isError(...)`, `isFunction(...)`, and `isObject(...)`: they accept `unknown` and `any`, `unknown` narrows to the checked member on success, and `any` remains `any`. For other typed inputs they keep the existing restrictive compile-time contract.
 - `ensureNever(...)` is for exhaustive checks. It throws plain `Error`, not `AssertionError`, and `silent = true` skips throwing.
 - `assert(...)` preserves string messages exactly for both `string` and `() => string` failures.
 - Omitting `functionToSkipStackFrames` makes `assert(...)` omit its own frame from the captured stack trace by default.

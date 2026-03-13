@@ -63,4 +63,29 @@ test('isNullOrUndefined', () => {
   } else {
     expectTypeOf(a5).toEqualTypeOf<[number, number]>();
   }
+
+  const explicitGenericNullish = undefined as string | null | undefined;
+  if (
+    isNullOrUndefined<
+      string | null | undefined,
+      string | null | undefined
+    >(explicitGenericNullish)
+  ) {
+    expectTypeOf(explicitGenericNullish).toEqualTypeOf<null | undefined>();
+  } else {
+    expectTypeOf(explicitGenericNullish).toEqualTypeOf<string>();
+  }
+
+  const a6 = (Math.random() > 0.5 ? undefined : 'value') as unknown;
+  if (isNullOrUndefined(a6)) {
+    expectTypeOf(a6).toEqualTypeOf<null | undefined>();
+  }
+
+  // `any` is intentional here to verify the boundary-input contract.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const a7 = undefined as any;
+  if (isNullOrUndefined(a7)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expectTypeOf(a7).toEqualTypeOf<any>();
+  }
 });

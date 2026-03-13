@@ -1,5 +1,18 @@
 import { isNumber } from './isNumber.js';
 
+type Equal<Left, Right> =
+  (<T>() => T extends Left ? 1 : 2) extends
+  (<T>() => T extends Right ? 1 : 2)
+    ? (<T>() => T extends Right ? 1 : 2) extends
+        (<T>() => T extends Left ? 1 : 2)
+      ? true
+      : false
+    : false;
+
+function expectType<Condition extends true>(condition: Condition): void {
+  void condition;
+}
+
 test('isNumber', () => {
   // @ts-expect-error "Must not be number only type"
   isNumber(1);
@@ -48,6 +61,30 @@ test('isNumber', () => {
     expectTypeOf(a4).toEqualTypeOf<number>();
   } else {
     expectTypeOf(a4).toEqualTypeOf<[number, number]>();
+  }
+
+  const explicitGenericNumber = 1 as string | number;
+  if (
+    isNumber<string | number, string | number>(explicitGenericNumber)
+  ) {
+    expectTypeOf(explicitGenericNumber).toEqualTypeOf<number>();
+  } else {
+    expectTypeOf(explicitGenericNumber).toEqualTypeOf<string>();
+  }
+
+  const a5 = 1 as unknown;
+  if (isNumber(a5)) {
+    expectType<Equal<typeof a5, number>>(true);
+  } else {
+    expectType<Equal<typeof a5, unknown>>(true);
+  }
+
+  // `any` is intentional here to verify the boundary-input contract.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const a6 = 1 as any;
+  if (isNumber(a6)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expectType<Equal<typeof a6, any>>(true);
   }
 
   expect(isNumber(Number.NaN as string | number)).toBe(true);

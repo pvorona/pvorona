@@ -6,7 +6,7 @@ export function ensureNever(
   failureOrNotThrow: AssertionFailure | true = () =>
     `Expected ${String(value)} to be never`,
 ): never {
-  if (failureOrNotThrow) {
+  if (failureOrNotThrow === true) {
     return value;
   }
 
