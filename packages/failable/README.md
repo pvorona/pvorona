@@ -71,8 +71,8 @@ console.log(port, ensuredPort.data);
 - `result.isSuccess` / `result.isError`: branch on a hydrated result
 - `result.getOr(fallback)`: eagerly get the success value or a fallback
 - `result.getOrElse(() => fallback)`: lazily compute a fallback value only on failure
-- `result.or(fallback)`: eagerly end up with `Success<T>`
-- `result.orElse(() => fallback)`: lazily recover to `Success<T>` only on failure
+- `result.or(fallback)`: eagerly recover to a `Success` result
+- `result.orElse(() => fallback)`: lazily recover to a `Success` result only on failure
 - `result.match(onSuccess, onFailure)`: map both branches to one output type
 - `throwIfError(result)`: throw the stored failure unchanged and keep using the same result on success
 - `result.getOrThrow()`: unwrap success as a value or throw the stored failure unchanged
@@ -322,7 +322,8 @@ if (result.isError) {
 }
 ```
 
-The same option also normalizes existing `failure(...)` values and rehydrated `FailableLike` failures.
+The same preset also normalizes existing `failure(...)` values and rehydrated `FailableLike`
+failures, while still passing through existing `Error` instances unchanged.
 
 Built-in normalization behaves like this:
 
@@ -331,6 +332,9 @@ Built-in normalization behaves like this:
 - other values become `Error`
 - the original raw value is preserved in `error.cause`
 
+Custom normalization is different: `normalizeError` runs for every failure value, including
+existing `Error` instances, so you can wrap or replace them.
+
 For custom normalization:
 
 ```ts
@@ -338,9 +342,7 @@ import { createFailable } from '@pvorona/failable';
 
 const result = createFailable(doThing, {
   normalizeError(error) {
-    return error instanceof Error
-      ? error
-      : new Error('Operation failed', { cause: error });
+    return new Error('Operation failed', { cause: error });
   },
 });
 ```

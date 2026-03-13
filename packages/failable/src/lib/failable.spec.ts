@@ -1704,6 +1704,23 @@ describe('createFailable()', () => {
         expect(result).toBe(original);
       });
 
+      it('uses a custom normalizeError function for existing Error failures', () => {
+        const originalError = new Error(faker.string.uuid());
+        const normalizedError = new Error('normalized', {
+          cause: originalError,
+        });
+        const normalizeError = vi.fn(() => normalizedError);
+        const original = failure(originalError);
+        const result = createFailable(original, { normalizeError });
+
+        expectTypeOf(result).toEqualTypeOf<Failure<Error>>();
+        ensureFailure(result);
+        expect(normalizeError).toHaveBeenCalledTimes(1);
+        expect(normalizeError).toHaveBeenCalledWith(originalError);
+        expect(result).not.toBe(original);
+        expect(result.error).toBe(normalizedError);
+      });
+
       it('returns a new Failure instance when normalization changes the error', () => {
         const original = failure(faker.string.uuid());
         const result = createFailable(original, NormalizedErrors);

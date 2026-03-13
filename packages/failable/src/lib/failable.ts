@@ -256,8 +256,10 @@ const BASE_FAILURE = (() => {
  *   `Failable` / `FailableLike`.
  * - `createFailable(promise)` captures rejection values into `Failure` and preserves/rehydrates resolved
  *   `Failable` / `FailableLike`.
- * - `createFailable(input, NormalizedErrors)` normalizes non-`Error` failures into `Error` shapes.
- * - `createFailable(input, { normalizeError })` uses custom failure normalization when needed.
+ * - `createFailable(input, NormalizedErrors)` normalizes failures into `Error` shapes while preserving
+ *   existing `Error` instances unchanged.
+ * - `createFailable(input, { normalizeError })` runs custom failure normalization for every failure,
+ *   including existing `Error` instances.
  *
  * Gotchas:
  * - `isFailableLike` is intentionally strict: only `{ status, data }` or `{ status, error }`
@@ -920,7 +922,13 @@ function normalizeFailableResult<T, E>(
   const normalizeError = resolveNormalizeError(normalizeOption);
   if (normalizeError === null) return result;
   if (result.status === FailableStatus.Success) return result;
-  if (result.error instanceof Error) return result;
+  if (
+    result.error instanceof Error &&
+    normalizeOption !== undefined &&
+    isNormalizedErrorsPreset(normalizeOption)
+  ) {
+    return result;
+  }
 
   return failure(normalizeError(result.error));
 }
