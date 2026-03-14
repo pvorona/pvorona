@@ -33,6 +33,11 @@ function expectType<Condition extends true>(condition: Condition): void {
   void condition;
 }
 
+type HasIterator<T> = typeof Symbol.iterator extends keyof T ? true : false;
+type HasAsyncIterator<T> = typeof Symbol.asyncIterator extends keyof T
+  ? true
+  : false;
+
 type ConsumerModule = typeof import('@pvorona/failable');
 type ExpectedRuntimeExportName =
   | 'FailableStatus'
@@ -85,6 +90,12 @@ const explicitUndefinedOk = success(undefined);
 
 expectType<Equal<typeof voidOk, Success<void>>>(true);
 expectType<Equal<typeof explicitUndefinedOk, Success<undefined>>>(true);
+expectType<Equal<HasIterator<Success<number>>, true>>(true);
+expectType<Equal<HasAsyncIterator<Success<number>>, false>>(true);
+expectType<Equal<HasIterator<Failure<string>>, true>>(true);
+expectType<Equal<HasAsyncIterator<Failure<string>>, false>>(true);
+expectType<Equal<HasIterator<Failable<number, string>>, true>>(true);
+expectType<Equal<HasAsyncIterator<Failable<number, string>>, false>>(true);
 // @ts-expect-error `success<T>()` still requires a value when `T` is explicit.
 success<number>();
 
@@ -299,6 +310,13 @@ const runSuccess = run(function* ({ get }) {
 });
 expectType<Equal<typeof runSuccess, Success<123>>>(true);
 
+const runDirectSuccess = run(function* () {
+  const value = yield* success(123 as const);
+
+  return success(value);
+});
+expectType<Equal<typeof runDirectSuccess, Success<123>>>(true);
+
 const runNoYieldSuccess = run(function* () {
   return success(42 as const);
 });
@@ -316,6 +334,13 @@ const runInlineFailure = run(function* ({ get }) {
 });
 expectType<Equal<typeof runInlineFailure, Failure<'inline-error'>>>(true);
 
+const runDirectFailure = run(function* () {
+  const value = yield* failure('inline-error' as const);
+
+  return success(value);
+});
+expectType<Equal<typeof runDirectFailure, Failure<'inline-error'>>>(true);
+
 const runNeverSuccessWithYieldedError = run(function* ({ get }) {
   const value = yield* get(
     success(123 as const) as Failable<123, 'source-error'>
@@ -327,6 +352,13 @@ const runNeverSuccessWithYieldedError = run(function* ({ get }) {
 expectType<
   Equal<typeof runNeverSuccessWithYieldedError, Failable<never, 'source-error'>>
 >(true);
+
+const runDirectFailable = run(function* () {
+  const value = yield* (success(123 as const) as Failable<123, 'source-error'>);
+
+  return success(value);
+});
+expectType<Equal<typeof runDirectFailable, Failable<123, 'source-error'>>>(true);
 
 const runNeverSuccessWithGuaranteedFailureInYieldSet = run(function* ({ get }) {
   const maybeValue = yield* get(
@@ -389,6 +421,23 @@ expectType<
   Equal<typeof runAsyncSuccess, Promise<Success<readonly [123, 'ready']>>>
 >(true);
 
+const runAsyncDirectHydrated = run(async function* ({ get }) {
+  const directValue = yield* success(123 as const);
+  const directFailable = yield* (success('ready' as const) as Failable<
+    'ready',
+    'source-error'
+  >);
+  const promisedValue = yield* get(Promise.resolve(success(true as const)));
+
+  return success([directValue, directFailable, promisedValue] as const);
+});
+expectType<
+  Equal<
+    typeof runAsyncDirectHydrated,
+    Promise<Failable<readonly [123, 'ready', true], 'source-error'>>
+  >
+>(true);
+
 const runAsyncNeverSuccess = run(async function* () {
   return typedNeverSuccess;
 });
@@ -401,6 +450,15 @@ const runAsyncFailure = run(async function* ({ get }) {
 });
 expectType<
   Equal<typeof runAsyncFailure, Promise<Failure<'async-error'>>>
+>(true);
+
+const runAsyncDirectFailure = run(async function* () {
+  const value = yield* failure('async-direct-error' as const);
+
+  return success(value);
+});
+expectType<
+  Equal<typeof runAsyncDirectFailure, Promise<Failure<'async-direct-error'>>>
 >(true);
 
 const runAsyncHelperReturn = run(async function* () {
@@ -421,6 +479,13 @@ expectType<Equal<typeof runAsyncThrowOnly, Promise<never>>>(true);
 run(function* ({ get }) {
   // @ts-expect-error sync `run(...)` does not accept promised `get(...)` sources.
   const value = yield* get(Promise.resolve(success(123 as const)));
+
+  return success(value);
+});
+
+run(async function* () {
+  // @ts-expect-error direct `yield*` does not accept promised `Failable` sources.
+  const value = yield* Promise.resolve(success(123 as const));
 
   return success(value);
 });
@@ -458,16 +523,21 @@ void normalizedExplicitFailure;
 void normalizedCustomFailure;
 void normalizedRejectedValue;
 void runSuccess;
+void runDirectSuccess;
 void runEmpty;
 void runNoYieldSuccess;
 void runNeverSuccess;
 void runInlineFailure;
+void runDirectFailure;
 void runNeverSuccessWithYieldedError;
+void runDirectFailable;
 void runNeverSuccessWithGuaranteedFailureInYieldSet;
 void runHelperReturn;
 void runDistributed;
 void runAsyncSuccess;
+void runAsyncDirectHydrated;
 void runAsyncNeverSuccess;
 void runAsyncFailure;
+void runAsyncDirectFailure;
 void runAsyncHelperReturn;
 void runAsyncThrowOnly;

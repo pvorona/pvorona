@@ -172,11 +172,11 @@ function ensureSufficientFunds(
 function planTransferWithRun(
   request: TransferRequest
 ): Failable<TransferPlan, TransferPlanningError> {
-  return run(function* ({ get }) {
-    const source = yield* get(readSourceAccount(request.fromAccountId));
-    const destination = yield* get(readDestinationAccount(request.toAccountId));
-    yield* get(ensureDifferentAccounts(source, destination));
-    yield* get(ensureSufficientFunds(source, request.amountCents));
+  return run(function* () {
+    const source = yield* readSourceAccount(request.fromAccountId);
+    const destination = yield* readDestinationAccount(request.toAccountId);
+    yield* ensureDifferentAccounts(source, destination);
+    yield* ensureSufficientFunds(source, request.amountCents);
 
     return success({ ...request, feeCents: 25 });
   });
@@ -209,10 +209,10 @@ async function planTransferWithRunAsync(request: {
   >
 > {
   return await run(async function* ({ get }) {
-    const source = yield* get(readSourceAccount(request.fromAccountId));
-    const destination = yield* get(readDestinationAccount(request.toAccountId));
-    yield* get(ensureDifferentAccounts(source, destination));
-    yield* get(ensureSufficientFunds(source, request.amountCents));
+    const source = yield* readSourceAccount(request.fromAccountId);
+    const destination = yield* readDestinationAccount(request.toAccountId);
+    yield* ensureDifferentAccounts(source, destination);
+    yield* ensureSufficientFunds(source, request.amountCents);
     yield* get(ensureWithinDailyLimit(source.id, request.amountCents));
 
     return success({ ...request, feeCents: 25 });

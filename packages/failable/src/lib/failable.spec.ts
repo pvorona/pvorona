@@ -963,10 +963,40 @@ describe('run()', () => {
       void buildResult;
     });
 
+    it('infers direct `yield*` data from hydrated Success values', () => {
+      const buildResult = () =>
+        run(function* () {
+          const value = yield* success(123 as const);
+
+          expectTypeOf(value).toEqualTypeOf<123>();
+
+          return success(value);
+        });
+
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Success<123>
+      >();
+      void buildResult;
+    });
+
     it('keeps inline failure sources as Failure when success is unreachable', () => {
       const buildResult = () =>
         run(function* ({ get }) {
           const value = yield* get(failure('inline-source-error' as const));
+
+          return success(value);
+        });
+
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Failure<'inline-source-error'>
+      >();
+      void buildResult;
+    });
+
+    it('keeps direct hydrated Failure sources as Failure when success is unreachable', () => {
+      const buildResult = () =>
+        run(function* () {
+          const value = yield* failure('inline-source-error' as const);
 
           return success(value);
         });
@@ -1107,6 +1137,24 @@ describe('run()', () => {
       void buildResult;
     });
 
+    it('preserves direct hydrated `Failable` yield types in sync builders', () => {
+      const source = success(123 as const) as Failable<123, 'source-error'>;
+
+      const buildResult = () =>
+        run(function* () {
+          const value = yield* source;
+
+          expectTypeOf(value).toEqualTypeOf<123>();
+
+          return success(value);
+        });
+
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Failable<123, 'source-error'>
+      >();
+      void buildResult;
+    });
+
     it('stays conservative when a guaranteed failure is anywhere in the yield set', () => {
       const source = success(123 as const) as Failable<123, 'source-error'>;
 
@@ -1160,6 +1208,38 @@ describe('run()', () => {
 
       expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
         Promise<Success<readonly [123, 'async-value']>>
+      >();
+      void buildResult;
+    });
+
+    it('supports direct hydrated `yield*` alongside promised `yield* get(...)` in async builders', () => {
+      const source = success('direct-value' as const) as Failable<
+        'direct-value',
+        'direct-source-error'
+      >;
+
+      const buildResult = () =>
+        run(async function* ({ get }) {
+          const syncValue = yield* success(123 as const);
+          const directValue = yield* source;
+          const asyncValue = yield* get(
+            Promise.resolve(success('async-value' as const))
+          );
+
+          expectTypeOf(syncValue).toEqualTypeOf<123>();
+          expectTypeOf(directValue).toEqualTypeOf<'direct-value'>();
+          expectTypeOf(asyncValue).toEqualTypeOf<'async-value'>();
+
+          return success([syncValue, directValue, asyncValue] as const);
+        });
+
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Promise<
+          Failable<
+            readonly [123, 'direct-value', 'async-value'],
+            'direct-source-error'
+          >
+        >
       >();
       void buildResult;
     });
@@ -1292,6 +1372,27 @@ describe('run()', () => {
       expect(result).toStrictEqual(success(42));
     });
 
+    it('supports direct `yield*` on hydrated Success values', () => {
+      const result = run(function* () {
+        const left = yield* success(20 as const);
+        const right = yield* success(22 as const);
+
+        return success(left + right);
+      });
+
+      expect(result).toStrictEqual(success(42));
+    });
+
+    it('keeps hydrated `Failable` values sync-iterable only for `run(...)` delegation', () => {
+      const ok = success(123 as const);
+      const problem = failure('boom' as const);
+
+      expect(Symbol.iterator in ok).toBe(true);
+      expect(Symbol.asyncIterator in ok).toBe(false);
+      expect(Symbol.iterator in problem).toBe(true);
+      expect(Symbol.asyncIterator in problem).toBe(false);
+    });
+
     it('supports mixed sync and async `yield* get(...)` steps in async builders', async () => {
       const result = await run(async function* ({ get }) {
         const left = yield* get(success(20 as const));
@@ -1301,6 +1402,49 @@ describe('run()', () => {
       });
 
       expect(result).toStrictEqual(success(42));
+    });
+
+    it('supports direct hydrated `yield*` in async builders while keeping promised sources on `yield* get(...)`', async () => {
+      const source = success('ready' as const) as Failable<'ready', 'source-error'>;
+
+      const result = await run(async function* ({ get }) {
+        const left = yield* success(20 as const);
+        const directValue = yield* source;
+        const right = yield* get(Promise.resolve(success(22 as const)));
+
+        return success([left, directValue, right] as const);
+      });
+
+      expect(result).toStrictEqual(success([20, 'ready', 22] as const));
+    });
+
+    it('returns inline Failure values from direct `yield* failure(...)` in async builders', async () => {
+      const result = await run(async function* () {
+        const value = yield* failure('async-inline-failure' as const);
+
+        return success(value);
+      });
+
+      expect(result).toStrictEqual(failure('async-inline-failure' as const));
+    });
+
+    it('runs direct `yield* result` cleanup in async finally blocks before returning the first Failure', async () => {
+      const original = failure('async-direct-cleanup-failure' as const);
+      let cleanedUp = false;
+
+      const result = await run(async function* () {
+        try {
+          yield* original;
+
+          return success('unreachable' as const);
+        } finally {
+          yield* success('cleanup-step' as const);
+          cleanedUp = true;
+        }
+      });
+
+      expect(result).toBe(original);
+      expect(cleanedUp).toBe(true);
     });
 
     it('supports custom PromiseLike success sources in async builders', async () => {
@@ -1340,6 +1484,28 @@ describe('run()', () => {
       });
 
       expect(result).toStrictEqual(failure('inline-failure' as const));
+    });
+
+    it('returns inline Failure values from direct `yield* failure(...)`', () => {
+      const result = run(function* () {
+        const value = yield* failure('inline-failure' as const);
+
+        return success(value);
+      });
+
+      expect(result).toStrictEqual(failure('inline-failure' as const));
+    });
+
+    it('supports direct `yield*` on hydrated `Failable` values', () => {
+      const source = success(42 as const) as Failable<42, 'source-error'>;
+
+      const result = run(function* () {
+        const value = yield* source;
+
+        return success(value);
+      });
+
+      expect(result).toStrictEqual(success(42 as const));
     });
 
     it('returns the original Failure instance unchanged', () => {
@@ -1427,6 +1593,25 @@ describe('run()', () => {
           return success('unreachable' as const);
         } finally {
           yield* get(success('cleanup-step' as const));
+          cleanedUp = true;
+        }
+      });
+
+      expect(result).toBe(original);
+      expect(cleanedUp).toBe(true);
+    });
+
+    it('drains direct `yield* result` cleanup in finally blocks before returning the first Failure', () => {
+      const original = failure('cleanup-direct-yield-failure' as const);
+      let cleanedUp = false;
+
+      const result = run(function* () {
+        try {
+          yield* original;
+
+          return success('unreachable' as const);
+        } finally {
+          yield* success('cleanup-step' as const);
           cleanedUp = true;
         }
       });
@@ -1710,7 +1895,7 @@ describe('run()', () => {
       throw new Error('Expected `run(...)` to rethrow the foreign value');
     });
 
-    it('rejects async yielded values that are not produced by `get(...)`', async () => {
+    it('rejects raw async `yield value` even when the value is a hydrated `Failable`', async () => {
       try {
         await run((async function* () {
           yield success(123 as const);
@@ -1720,7 +1905,7 @@ describe('run()', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(Error);
         expect((error as Error).message).toBe(
-          '`run()` generators must yield only values produced by `get(...)`. Use `yield* get(...)` in normal code.'
+          '`run()` generators must yield only values produced by `yield* result` for hydrated `Failable` values or `yield* get(source)`. Raw `yield value` is invalid.'
         );
         return;
       }
@@ -1728,7 +1913,7 @@ describe('run()', () => {
       throw new Error('Expected async `run(...)` to reject invalid yielded values');
     });
 
-    it('rejects yielded values that are not produced by `get(...)`', () => {
+    it('rejects raw `yield value` even when the value is a hydrated `Failable`', () => {
       try {
         run((function* () {
           yield success(123 as const);
@@ -1738,7 +1923,7 @@ describe('run()', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(Error);
         expect((error as Error).message).toBe(
-          '`run()` generators must yield only values produced by `get(...)`. Use `yield* get(...)` in normal code.'
+          '`run()` generators must yield only values produced by `yield* result` for hydrated `Failable` values or `yield* get(source)`. Raw `yield value` is invalid.'
         );
         return;
       }
@@ -1756,7 +1941,7 @@ describe('run()', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(Error);
         expect((error as Error).message).toBe(
-          '`run()` generators must yield only values produced by `get(...)`. Use `yield* get(...)` in normal code.'
+          '`run()` generators must yield only values produced by `yield* result` for hydrated `Failable` values or `yield* get(source)`. Raw `yield value` is invalid.'
         );
         return;
       }
@@ -1776,7 +1961,7 @@ describe('run()', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(Error);
         expect((error as Error).message).toBe(
-          '`run()` generators must yield only values produced by `get(...)`. Use `yield* get(...)` in normal code.'
+          '`run()` generators must yield only values produced by `yield* result` for hydrated `Failable` values or `yield* get(source)`. Raw `yield value` is invalid.'
         );
         return;
       }

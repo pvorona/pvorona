@@ -38,6 +38,13 @@ type Match<T, E> = <U>(
   onFailure: (error: E) => U
 ) => U;
 
+/**
+ * Hydrated `Failable` values are sync-iterable only so `run(...)` can intercept
+ * `yield* result` through its existing step protocol.
+ *
+ * Outside `run(...)`, treat them as result objects rather than as a
+ * general-purpose collection API.
+ */
 export type Failable<T, E> =
   ((Success<T> & {
     readonly match: Match<T, E>;
@@ -117,6 +124,7 @@ export type Success<T> = {
   readonly isFailure: false;
   readonly data: T;
   readonly error: null;
+  readonly [Symbol.iterator]: () => RunGetIterator<T, never, Success<T>>;
   readonly or: <U>(value: U) => Success<T>;
   readonly orElse: <U>(getValue: () => U) => Success<T>;
   readonly getOr: <U>(value: U) => T;
@@ -131,6 +139,7 @@ export type Failure<E> = {
   readonly isFailure: true;
   readonly error: E;
   readonly data: null;
+  readonly [Symbol.iterator]: () => RunGetIterator<never, E, Failure<E>>;
   readonly or: <U>(value: U) => Success<U>;
   readonly orElse: <U>(getValue: () => U) => Success<U>;
   readonly getOr: <U>(value: U) => U;
@@ -149,12 +158,17 @@ type InternalFailure<E> = Failure<E> & {
   readonly [FAILURE_TAG]: true;
 };
 
+function iterateRunSource(this: Failable<unknown, unknown>) {
+  return getRunIterator(this);
+}
+
 const BASE_FAILABLE = {
   [FAILABLE_TAG]: true,
   isSuccess: false,
   isFailure: false,
   data: null,
   error: null,
+  [Symbol.iterator]: iterateRunSource,
   or: notImplemented,
   orElse: notImplemented,
   getOr: notImplemented,
@@ -236,7 +250,10 @@ const BASE_FAILURE = (() => {
  * - `success()` / `success(data)` / `failure()` / `failure(error)` create hydrated results.
  * - `throwIfError(result)` throws on failure and narrows the same result on success.
  * - `failable(...)` captures synchronous throws, async rejections, and wire shapes.
- * - `run(...)` composes existing `Failable` values.
+ * - `run(...)` composes existing `Failable` values with `yield* result` for hydrated
+ *   values and `yield* get(source)` when the helper is still needed.
+ * - hydrated `Failable` values stay sync-iterable only so `run(...)` can observe
+ *   `yield* result`; they are not meant to be a general-purpose collection API.
  *
  * Quick chooser:
  * - `failable(() => value)`: capture synchronous throws from throwy code.
@@ -583,7 +600,7 @@ type InferRunResult<TYield, TResult> = [TResult] extends [never]
     >;
 
 const RUN_INVALID_YIELD_MESSAGE =
-  '`run()` generators must yield only values produced by `get(...)`. Use `yield* get(...)` in normal code.';
+  '`run()` generators must yield only values produced by `yield* result` for hydrated `Failable` values or `yield* get(source)`. Raw `yield value` is invalid.';
 const RUN_INVALID_RETURN_MESSAGE =
   '`run()` generators must return a `Failable` or finish without returning a value.';
 
@@ -872,6 +889,19 @@ export function run<
 >(
   builder: (helpers: RunHelpers) => Generator<TYield, TResult, unknown>
 ): InferRunResult<TYield, TResult>;
+/**
+ * Compose steps that already return `Failable`.
+ *
+ * Inside `run(...)` builders:
+ * - use `yield* result` when `result` is already a hydrated `Failable`
+ * - use `yield* get(source)` when the helper is still needed, especially for promised sources
+ *
+ * Hydrated `Failable` values are sync-iterable only so `yield* result` can flow
+ * through the same internal step protocol, even in async builders. Outside
+ * `run(...)`, treat them as result objects rather than as a collection API.
+ *
+ * `run(...)` does not convert direct throws or rejected promises into `Failure`.
+ */
 export function run(
   builder:
     | SyncRunBuilder<RunYield, RunReturn>

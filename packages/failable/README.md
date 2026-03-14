@@ -170,6 +170,16 @@ Use `run(...)` when each step already returns `Failable` and you want to write
 the success path once. If any yielded step fails, `run(...)` returns that same
 failure unchanged.
 
+Inside a `run(...)` builder, there are two valid delegation forms:
+
+- `yield* result` when `result` is already a hydrated `Failable`
+- `yield* get(source)` when the helper is still needed, especially for promised
+  sources
+
+Hydrated `Failable` values are sync-iterable only so `run(...)` can intercept
+`yield* result`. Outside `run(...)`, treat them as result objects rather than as
+a general-purpose collection API.
+
 Without `run(...)`, composing steps means checking each result before
 continuing:
 
@@ -223,10 +233,10 @@ import { run, success, type Failable } from '@pvorona/failable';
 function loadConfig(
   env: Record<string, string | undefined>,
 ): Failable<{ host: string; port: number }, ConfigError> {
-  return run(function* ({ get }) {
-    const host = yield* get(readEnv('HOST', env));
-    const rawPort = yield* get(readEnv('PORT', env));
-    const port = yield* get(parsePort(rawPort));
+  return run(function* () {
+    const host = yield* readEnv('HOST', env);
+    const rawPort = yield* readEnv('PORT', env);
+    const port = yield* parsePort(rawPort);
 
     return success({ host, port });
   });
@@ -234,7 +244,11 @@ function loadConfig(
 ```
 
 - if a yielded step fails, `run(...)` returns that original failure unchanged
-- in async builders, keep using `yield* get(...)`; do not write `await get(...)`
+- use `yield* result` for already-materialized `Failable` values
+- keep using `yield* get(...)` for promised sources and other cases where the
+  helper is still needed; do not write `await get(...)`
+- the direct `yield* result` form works only because hydrated `Failable` values
+  are sync-iterable for `run(...)`; it is not a collection API outside that flow
 - `run(...)` does not capture thrown values or rejected promises into `Failure`;
   wrap throwing boundaries with `failable(...)` before they enter `run(...)`
 
