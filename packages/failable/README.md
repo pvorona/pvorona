@@ -189,10 +189,11 @@ async function postToLedger(
 
   const created = await createFailable(request);
 
-  return created.match(
-    (data) => success(data),
-    () => failure({ code: 'ledger_unavailable' }),
-  );
+  if (created.isError) {
+    return failure({ code: 'ledger_unavailable' });
+  }
+
+  return success(created.data);
 }
 
 async function submitTransfer(
