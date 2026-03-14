@@ -3,13 +3,29 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
+import { isDeepStrictEqual, promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 const packageRoot = fileURLToPath(new URL('..', import.meta.url));
+const EXPECTED_PACKAGE_EXPORTS = {
+  './package.json': './package.json',
+  '.': {
+    types: './dist/index.d.ts',
+    import: './dist/index.js',
+    default: './dist/index.js',
+  },
+};
 
 function normalizePackagePath(path) {
   return path.startsWith('./') ? path.slice(2) : path;
+}
+
+function isPackageExportsObject(exportsValue) {
+  if (!exportsValue || typeof exportsValue !== 'object' || Array.isArray(exportsValue)) {
+    throw new TypeError('Expected `package.json.exports` to be an object.');
+  }
+
+  return true;
 }
 
 function collectExportTargets(exportsValue) {
@@ -31,7 +47,26 @@ function collectExportTargets(exportsValue) {
 async function main() {
   const packageJsonPath = join(packageRoot, 'package.json');
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
-  const exportedPaths = [...new Set(collectExportTargets(packageJson.exports))].sort();
+  isPackageExportsObject(packageJson.exports);
+
+  if (!isDeepStrictEqual(packageJson.exports, EXPECTED_PACKAGE_EXPORTS)) {
+    process.stderr.write(
+      [
+        'Expected `package.json.exports` to exactly equal:',
+        JSON.stringify(EXPECTED_PACKAGE_EXPORTS, null, 2),
+        'Received:',
+        JSON.stringify(packageJson.exports, null, 2),
+      ]
+        .join('\n')
+        .concat('\n'),
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const exportedPaths = [
+    ...new Set(collectExportTargets(EXPECTED_PACKAGE_EXPORTS)),
+  ].sort();
 
   const { stdout } = await execFileAsync(
     'npm',

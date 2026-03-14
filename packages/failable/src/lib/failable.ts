@@ -460,26 +460,38 @@ class RunGet<
   }
 }
 
-type RunGetIterator<T, E> = Generator<RunGet<T, E>, T, unknown>;
+type RunGetIterator<
+  T,
+  E,
+  TSource extends Failable<T, E> = Failable<T, E>,
+> = Generator<RunGet<T, E, TSource>, T, unknown>;
+
+type AsyncRunGetIterator<
+  T,
+  E,
+  TSource extends
+    | Failable<T, E>
+    | PromiseLike<Failable<T, E>> = Failable<T, E> | PromiseLike<Failable<T, E>>,
+> = AsyncGenerator<RunGet<T, E, TSource>, T, unknown>;
 
 type RunHelpers = {
   readonly get: {
-    <T>(source: Success<T>): RunGetIterator<T, never>;
-    <E>(source: Failure<E>): RunGetIterator<never, E>;
-    <T, E>(source: Failable<T, E>): RunGetIterator<T, E>;
+    <T>(source: Success<T>): RunGetIterator<T, never, Success<T>>;
+    <E>(source: Failure<E>): RunGetIterator<never, E, Failure<E>>;
+    <T, E>(source: Failable<T, E>): RunGetIterator<T, E, Failable<T, E>>;
     <T>(
       source: PromiseLike<Success<T>>
-    ): AsyncGenerator<RunGet<T, never, unknown>, T, unknown>;
+    ): AsyncRunGetIterator<T, never, PromiseLike<Success<T>>>;
     <E>(
       source: PromiseLike<Failure<E>>
-    ): AsyncGenerator<RunGet<never, E, unknown>, never, unknown>;
+    ): AsyncRunGetIterator<never, E, PromiseLike<Failure<E>>>;
     <T, E>(
       source: PromiseLike<Failable<T, E>>
-    ): AsyncGenerator<RunGet<T, E, unknown>, T, unknown>;
+    ): AsyncRunGetIterator<T, E, PromiseLike<Failable<T, E>>>;
   };
 };
 
-type RunYield = RunGet<unknown, unknown>;
+type RunYield = RunGet<unknown, unknown, unknown>;
 type RunReturn =
   | void
   | Success<unknown>
@@ -494,77 +506,115 @@ type InferRunYieldError<TYield> = TYield extends RunGet<
   ? TError
   : never;
 
-type InferRunReturnData<TResult> = TResult extends void
-  ? void
-  : TResult extends Success<infer TData>
-  ? TData
-  : TResult extends Failure<unknown>
-  ? never
-  : TResult extends Failable<infer TData, unknown>
-  ? TData
+type InferRunGuaranteedFailureError<TYield> = TYield extends RunGet<
+  unknown,
+  infer TError,
+  infer TSource
+>
+  ? [TSource] extends [Failure<TError> | PromiseLike<Failure<TError>>]
+    ? TError
+    : never
   : never;
 
-type InferRunReturnError<TResult> = TResult extends void
-  ? never
-  : TResult extends Success<unknown>
-  ? never
-  : TResult extends Failure<infer TError>
-  ? TError
-  : TResult extends Failable<unknown, infer TError>
-  ? TError
-  : never;
+type RunReturnSuccessLike<TData = unknown> = {
+  readonly status: typeof FailableStatus.Success;
+  readonly data: TData;
+  readonly error: null;
+};
 
-type InferRunError<TYield, TResult> =
-  | InferRunYieldError<TYield>
-  | InferRunReturnError<TResult>;
+type RunReturnFailureLike<TError = unknown> = {
+  readonly status: typeof FailableStatus.Failure;
+  readonly data: null;
+  readonly error: TError;
+};
+
+type MergeRunErrors<TYield, TError> = InferRunYieldError<TYield> | TError;
+
+type InferRunSuccessResult<TYield, TData> = [InferRunYieldError<TYield>] extends [
+  never,
+]
+  ? Success<TData>
+  : Failable<TData, InferRunYieldError<TYield>>;
+
+type InferRunNeverSuccessResult<TYield> = [InferRunYieldError<TYield>] extends [
+  never,
+]
+  ? Success<never>
+  : [InferRunGuaranteedFailureError<TYield>] extends [never]
+  ? Failable<never, InferRunYieldError<TYield>>
+  : Failure<InferRunYieldError<TYield>>;
+
+type InferRunUnionReturnData<TResult> =
+  | ([Extract<TResult, void>] extends [never] ? never : void)
+  | (Extract<TResult, RunReturnSuccessLike> extends { readonly data: infer TData }
+      ? TData
+      : never);
+
+type InferRunUnionReturnError<TResult> =
+  Extract<TResult, RunReturnFailureLike> extends { readonly error: infer TError }
+    ? TError
+    : never;
 
 type InferRunResult<TYield, TResult> = [TResult] extends [never]
   ? [InferRunYieldError<TYield>] extends [never]
     ? never
     : Failure<InferRunYieldError<TYield>>
-  : [InferRunReturnData<TResult>] extends [never]
-  ? Failure<InferRunError<TYield, TResult>>
-  : [InferRunError<TYield, TResult>] extends [never]
-  ? Success<InferRunReturnData<TResult>>
-  : Failable<InferRunReturnData<TResult>, InferRunError<TYield, TResult>>;
+  : [TResult] extends [void]
+  ? InferRunSuccessResult<TYield, void>
+  : [TResult] extends [RunReturnSuccessLike<infer TData>]
+  ? [TData] extends [never]
+    ? InferRunNeverSuccessResult<TYield>
+    : InferRunSuccessResult<TYield, TData>
+  : [TResult] extends [RunReturnFailureLike<infer TError>]
+  ? Failure<MergeRunErrors<TYield, TError>>
+  : [MergeRunErrors<TYield, InferRunUnionReturnError<TResult>>] extends [never]
+  ? Success<InferRunUnionReturnData<TResult>>
+  : Failable<
+      InferRunUnionReturnData<TResult>,
+      MergeRunErrors<TYield, InferRunUnionReturnError<TResult>>
+    >;
 
 const RUN_INVALID_YIELD_MESSAGE =
   '`run()` generators must yield only values produced by `get(...)`. Use `yield* get(...)` in normal code.';
 const RUN_INVALID_RETURN_MESSAGE =
   '`run()` generators must return a `Failable` or finish without returning a value.';
 
-function getRunIterator<T>(source: Success<T>): RunGetIterator<T, never>;
-function getRunIterator<E>(source: Failure<E>): RunGetIterator<never, E>;
+function getRunIterator<T>(
+  source: Success<T>
+): RunGetIterator<T, never, Success<T>>;
+function getRunIterator<E>(
+  source: Failure<E>
+): RunGetIterator<never, E, Failure<E>>;
 function getRunIterator<T, E>(
   source: Failable<T, E>
-): RunGetIterator<T, E>;
+): RunGetIterator<T, E, Failable<T, E>>;
 function* getRunIterator<T, E>(
   source: Failable<T, E>
-): RunGetIterator<T, E> {
+): RunGetIterator<T, E, Failable<T, E>> {
   return (yield RunGet.create(source)) as T;
 }
 
 function getAsyncRunIterator<T>(
   source: Success<T>
-): AsyncGenerator<RunGet<T, never, unknown>, T, unknown>;
+): AsyncRunGetIterator<T, never, Success<T>>;
 function getAsyncRunIterator<E>(
   source: Failure<E>
-): AsyncGenerator<RunGet<never, E, unknown>, never, unknown>;
+): AsyncRunGetIterator<never, E, Failure<E>>;
 function getAsyncRunIterator<T, E>(
   source: Failable<T, E>
-): AsyncGenerator<RunGet<T, E, unknown>, T, unknown>;
+): AsyncRunGetIterator<T, E, Failable<T, E>>;
 function getAsyncRunIterator<T>(
   source: PromiseLike<Success<T>>
-): AsyncGenerator<RunGet<T, never, unknown>, T, unknown>;
+): AsyncRunGetIterator<T, never, PromiseLike<Success<T>>>;
 function getAsyncRunIterator<E>(
   source: PromiseLike<Failure<E>>
-): AsyncGenerator<RunGet<never, E, unknown>, never, unknown>;
+): AsyncRunGetIterator<never, E, PromiseLike<Failure<E>>>;
 function getAsyncRunIterator<T, E>(
   source: PromiseLike<Failable<T, E>>
-): AsyncGenerator<RunGet<T, E, unknown>, T, unknown>;
+): AsyncRunGetIterator<T, E, PromiseLike<Failable<T, E>>>;
 async function* getAsyncRunIterator<T, E>(
   source: Failable<T, E> | PromiseLike<Failable<T, E>>
-): AsyncGenerator<RunGet<T, E, unknown>, T, unknown> {
+): AsyncRunGetIterator<T, E, Failable<T, E> | PromiseLike<Failable<T, E>>> {
   return (yield RunGet.create(source)) as T;
 }
 
@@ -577,25 +627,29 @@ function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
   return isFunction(candidate.then);
 }
 
-function getRunSourceIterator<T>(source: Success<T>): RunGetIterator<T, never>;
-function getRunSourceIterator<E>(source: Failure<E>): RunGetIterator<never, E>;
+function getRunSourceIterator<T>(
+  source: Success<T>
+): RunGetIterator<T, never, Success<T>>;
+function getRunSourceIterator<E>(
+  source: Failure<E>
+): RunGetIterator<never, E, Failure<E>>;
 function getRunSourceIterator<T, E>(
   source: Failable<T, E>
-): RunGetIterator<T, E>;
+): RunGetIterator<T, E, Failable<T, E>>;
 function getRunSourceIterator<T>(
   source: PromiseLike<Success<T>>
-): AsyncGenerator<RunGet<T, never, unknown>, T, unknown>;
+): AsyncRunGetIterator<T, never, PromiseLike<Success<T>>>;
 function getRunSourceIterator<E>(
   source: PromiseLike<Failure<E>>
-): AsyncGenerator<RunGet<never, E, unknown>, never, unknown>;
+): AsyncRunGetIterator<never, E, PromiseLike<Failure<E>>>;
 function getRunSourceIterator<T, E>(
   source: PromiseLike<Failable<T, E>>
-): AsyncGenerator<RunGet<T, E, unknown>, T, unknown>;
+): AsyncRunGetIterator<T, E, PromiseLike<Failable<T, E>>>;
 function getRunSourceIterator<T, E>(
   source: Failable<T, E> | PromiseLike<Failable<T, E>>
 ):
-  | RunGetIterator<T, E>
-  | AsyncGenerator<RunGet<T, E, unknown>, T, unknown> {
+  | RunGetIterator<T, E, Failable<T, E>>
+  | AsyncRunGetIterator<T, E, PromiseLike<Failable<T, E>>> {
   if (isPromiseLike<Failable<T, E>>(source)) {
     return getAsyncRunIterator(source);
   }
@@ -814,7 +868,7 @@ export function run(
   builder:
     | SyncRunBuilder<RunYield, RunReturn>
     | AsyncRunBuilder<RunGet<unknown, unknown, unknown>, RunReturn>
-) {
+): unknown {
   const probeIterator = (
     builder as (
       helpers: RunHelpers
@@ -1046,10 +1100,56 @@ function isCreateFailableNormalizeErrorOptions(
   return isFunction(value.normalizeError);
 }
 
+function isPlainObjectErrorValue(
+  value: unknown
+): value is Record<string | number | symbol, unknown> {
+  if (!isObject(value)) return false;
+  if (Array.isArray(value)) return false;
+
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function getSerializedPlainObjectErrorMessage(
+  value: Record<string | number | symbol, unknown>
+): string | null {
+  try {
+    const serialized = JSON.stringify(value);
+    if (typeof serialized === 'string') return serialized;
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function getPlainObjectErrorMessage(
+  value: Record<string | number | symbol, unknown>
+): string {
+  if (Object.getPrototypeOf(value) === null) {
+    const serializedMessage = getSerializedPlainObjectErrorMessage(value);
+    if (serializedMessage !== null) return serializedMessage;
+
+    return Object.prototype.toString.call(value);
+  }
+
+  const message = String(value);
+  if (message !== '[object Object]') return message;
+
+  const serializedMessage = getSerializedPlainObjectErrorMessage(value);
+  if (serializedMessage === null) return message;
+
+  return serializedMessage;
+}
+
 function normalizeUnknownError(error: unknown): Error {
   if (error instanceof Error) return error;
   if (Array.isArray(error)) {
     return new AggregateError(error, 'Multiple errors', { cause: error });
+  }
+
+  if (isPlainObjectErrorValue(error)) {
+    return new Error(getPlainObjectErrorMessage(error), { cause: error });
   }
 
   return new Error(String(error), { cause: error });

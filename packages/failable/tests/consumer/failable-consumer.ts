@@ -11,6 +11,7 @@ import {
   success,
   throwIfError,
   toFailableLike,
+  type CreateFailableNormalizeErrorOptions,
   type Failable,
   type FailableLike,
   type FailableLikeFailure,
@@ -33,6 +34,26 @@ function expectType<Condition extends true>(condition: Condition): void {
 }
 
 type ConsumerModule = typeof import('@pvorona/failable');
+type ExpectedRuntimeExportName =
+  | 'FailableStatus'
+  | 'NormalizedErrors'
+  | 'createFailable'
+  | 'failure'
+  | 'isFailable'
+  | 'isFailableLike'
+  | 'isFailure'
+  | 'isSuccess'
+  | 'run'
+  | 'success'
+  | 'throwIfError'
+  | 'toFailableLike';
+
+expectType<Equal<Exclude<keyof ConsumerModule, ExpectedRuntimeExportName>, never>>(
+  true
+);
+expectType<Equal<Exclude<ExpectedRuntimeExportName, keyof ConsumerModule>, never>>(
+  true
+);
 expectType<Equal<'FailableTag' extends keyof ConsumerModule ? true : false, false>>(
   true
 );
@@ -46,6 +67,14 @@ expectType<Equal<'RunGet' extends keyof ConsumerModule ? true : false, false>>(
   true
 );
 expectType<Equal<'get' extends keyof ConsumerModule ? true : false, false>>(true);
+expectType<
+  Equal<
+    'CreateFailableNormalizeErrorOptions' extends keyof ConsumerModule
+      ? true
+      : false,
+    false
+  >
+>(true);
 expectType<Equal<'throwIfError' extends keyof ConsumerModule ? true : false, true>>(
   true
 );
@@ -70,6 +99,14 @@ expectType<Equal<typeof okMatch, string>>(true);
 const status: FailableStatus = ok.status;
 void status;
 void FailableStatus.Success;
+
+const normalizeOptions = {
+  normalizeError(error: unknown) {
+    return error instanceof Error
+      ? error
+      : new Error('normalized', { cause: error });
+  },
+} satisfies CreateFailableNormalizeErrorOptions;
 
 const problem = failure('boom');
 
@@ -218,18 +255,19 @@ const normalizedCustomFailure = createFailable(
   () => {
     throw { code: 'boom' };
   },
-  {
-    normalizeError(error: unknown) {
-      return error instanceof Error
-        ? error
-        : new Error('normalized', { cause: error });
-    },
-  }
+  normalizeOptions
 );
 expectType<Equal<typeof normalizedCustomFailure, Failure<Error>>>(true);
 
+const normalizedRejectedValue = createFailable(
+  Promise.reject('boom' as const),
+  normalizeOptions
+);
+expectType<Equal<typeof normalizedRejectedValue, Promise<Failure<Error>>>>(true);
+
 const helperResult = (): Failable<'helper-data', 'helper-error'> =>
   success('helper-data' as const);
+const typedNeverSuccess: Success<never> = success(undefined as never);
 
 const runSuccess = run(function* ({ get }) {
   const value = yield* get(success(123 as const));
@@ -243,12 +281,46 @@ const runNoYieldSuccess = run(function* () {
 });
 expectType<Equal<typeof runNoYieldSuccess, Success<42>>>(true);
 
+const runNeverSuccess = run(function* () {
+  return typedNeverSuccess;
+});
+expectType<Equal<typeof runNeverSuccess, Success<never>>>(true);
+
 const runInlineFailure = run(function* ({ get }) {
   const value = yield* get(failure('inline-error' as const));
 
   return success(value);
 });
 expectType<Equal<typeof runInlineFailure, Failure<'inline-error'>>>(true);
+
+const runNeverSuccessWithYieldedError = run(function* ({ get }) {
+  const value = yield* get(
+    success(123 as const) as Failable<123, 'source-error'>
+  );
+
+  void value;
+  return typedNeverSuccess;
+});
+expectType<
+  Equal<typeof runNeverSuccessWithYieldedError, Failable<never, 'source-error'>>
+>(true);
+
+const runNeverSuccessWithGuaranteedFailureInYieldSet = run(function* ({ get }) {
+  const maybeValue = yield* get(
+    success(123 as const) as Failable<123, 'source-error'>
+  );
+  const guaranteedValue = yield* get(failure('inline-error' as const));
+
+  void maybeValue;
+  void guaranteedValue;
+  return typedNeverSuccess;
+});
+expectType<
+  Equal<
+    typeof runNeverSuccessWithGuaranteedFailureInYieldSet,
+    Failure<'source-error' | 'inline-error'>
+  >
+>(true);
 
 const runHelperReturn = run(function* () {
   return helperResult();
@@ -293,6 +365,11 @@ const runAsyncSuccess = run(async function* ({ get }) {
 expectType<
   Equal<typeof runAsyncSuccess, Promise<Success<readonly [123, 'ready']>>>
 >(true);
+
+const runAsyncNeverSuccess = run(async function* () {
+  return typedNeverSuccess;
+});
+expectType<Equal<typeof runAsyncNeverSuccess, Promise<Success<never>>>>(true);
 
 const runAsyncFailure = run(async function* ({ get }) {
   const value = yield* get(Promise.resolve(failure('async-error' as const)));
@@ -356,13 +433,18 @@ void wrappedFunction;
 void wrappedPromise;
 void normalizedExplicitFailure;
 void normalizedCustomFailure;
+void normalizedRejectedValue;
 void runSuccess;
 void runEmpty;
 void runNoYieldSuccess;
+void runNeverSuccess;
 void runInlineFailure;
+void runNeverSuccessWithYieldedError;
+void runNeverSuccessWithGuaranteedFailureInYieldSet;
 void runHelperReturn;
 void runDistributed;
 void runAsyncSuccess;
+void runAsyncNeverSuccess;
 void runAsyncFailure;
 void runAsyncHelperReturn;
 void runAsyncThrowOnly;

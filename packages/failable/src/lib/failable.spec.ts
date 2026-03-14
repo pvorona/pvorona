@@ -122,6 +122,19 @@ function createRejectingThenable<T>(error: unknown): PromiseLike<T> {
   };
 }
 
+function createNullPrototypeObject<T extends Record<string, unknown>>(
+  value: T
+): T {
+  return Object.assign(
+    Object.create(null) as Record<string, unknown>,
+    value
+  ) as T;
+}
+
+function throwDirectly(error: unknown): never {
+  throw error;
+}
+
 describe('success()', () => {
   const value = 123 as const;
   const result = success(value);
@@ -878,6 +891,10 @@ describe('run()', () => {
       return success('helper-data' as const);
     }
 
+    function getExplicitNeverSuccess(): Success<never> {
+      return success(undefined as never);
+    }
+
     it('infers yielded success data', () => {
       const buildResult = () =>
         run(function* ({ get }) {
@@ -894,7 +911,7 @@ describe('run()', () => {
       void buildResult;
     });
 
-    it('includes inline failure sources in the error type', () => {
+    it('keeps inline failure sources as Failure when success is unreachable', () => {
       const buildResult = () =>
         run(function* ({ get }) {
           const value = yield* get(failure('inline-source-error' as const));
@@ -916,6 +933,30 @@ describe('run()', () => {
 
       expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
         Success<42>
+      >();
+      void buildResult;
+    });
+
+    it('preserves explicit Success<never> returns in sync builders', () => {
+      const buildResult = () =>
+        run(function* () {
+          return getExplicitNeverSuccess();
+        });
+
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Success<never>
+      >();
+      void buildResult;
+    });
+
+    it('preserves explicit Success<never> returns in async builders', () => {
+      const buildResult = () =>
+        run(async function* () {
+          return getExplicitNeverSuccess();
+        });
+
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Promise<Success<never>>
       >();
       void buildResult;
     });
@@ -993,6 +1034,60 @@ describe('run()', () => {
         Failure<
           'first-source-error' | 'second-source-error' | 'builder-error'
         >
+      >();
+      void buildResult;
+    });
+
+    it('keeps yielded maybe-failure types when later returning explicit Success<never>', () => {
+      const source = success(123 as const) as Failable<123, 'source-error'>;
+
+      const buildResult = () =>
+        run(function* ({ get }) {
+          const value = yield* get(source);
+
+          void value;
+          return getExplicitNeverSuccess();
+        });
+
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Failable<never, 'source-error'>
+      >();
+      void buildResult;
+    });
+
+    it('stays conservative when a guaranteed failure is anywhere in the yield set', () => {
+      const source = success(123 as const) as Failable<123, 'source-error'>;
+
+      const buildResult = () =>
+        run(function* ({ get }) {
+          const maybeValue = yield* get(source);
+          const guaranteedValue = yield* get(
+            failure('inline-source-error' as const)
+          );
+
+          void maybeValue;
+          void guaranteedValue;
+          return getExplicitNeverSuccess();
+        });
+
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Failure<'source-error' | 'inline-source-error'>
+      >();
+      void buildResult;
+    });
+
+    it('keeps promised inline failure sources as Failure in async builders', () => {
+      const buildResult = () =>
+        run(async function* ({ get }) {
+          const value = yield* get(
+            Promise.resolve(failure('async-inline-source-error' as const))
+          );
+
+          return success(value);
+        });
+
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Promise<Failure<'async-inline-source-error'>>
       >();
       void buildResult;
     });
@@ -1431,7 +1526,7 @@ describe('run()', () => {
 
             return success('unreachable' as const);
           } finally {
-            throw cleanupError;
+            throwDirectly(cleanupError);
           }
         })
       ).rejects.toBe(cleanupError);
@@ -1731,6 +1826,37 @@ describe('createFailable()', () => {
         expect(result.error).toMatchObject({ cause: original.error });
       });
 
+      it('serializes plain-object Failure inputs with NormalizedErrors', () => {
+        const error = { code: 'bad_request' } as const;
+        const result = createFailable(failure(error), NormalizedErrors);
+
+        expectTypeOf(result).toEqualTypeOf<Failure<Error>>();
+        expect(result.error).toBeInstanceOf(Error);
+        expect(result.error.message).toBe(JSON.stringify(error));
+        expect(result.error).toMatchObject({ cause: error });
+      });
+
+      it('serializes null-prototype Failure inputs with NormalizedErrors', () => {
+        const error = createNullPrototypeObject({ code: 'bad_request' as const });
+        const result = createFailable(failure(error), NormalizedErrors);
+
+        expectTypeOf(result).toEqualTypeOf<Failure<Error>>();
+        expect(result.error).toBeInstanceOf(Error);
+        expect(result.error.message).toBe(JSON.stringify({ code: 'bad_request' }));
+        expect(result.error).toMatchObject({ cause: error });
+      });
+
+      it('falls back to the current stringification path when plain-object serialization fails', () => {
+        const error = {} as { self?: unknown };
+        error.self = error;
+        const result = createFailable(failure(error), NormalizedErrors);
+
+        expectTypeOf(result).toEqualTypeOf<Failure<Error>>();
+        expect(result.error).toBeInstanceOf(Error);
+        expect(result.error.message).toBe(String(error));
+        expect(result.error).toMatchObject({ cause: error });
+      });
+
       it('converts array failures to AggregateError', () => {
         const error = [faker.string.uuid(), faker.string.uuid()];
         const result = createFailable(failure(error), NormalizedErrors);
@@ -1994,8 +2120,8 @@ describe('createFailable()', () => {
         }
       );
 
-      it('normalizes thrown non-Error values with NormalizedErrors', () => {
-        const error = faker.string.uuid();
+      it('serializes thrown plain objects with NormalizedErrors', () => {
+        const error = { code: 'bad_request' } as const;
         const result = createFailable(
           () => {
             throw error;
@@ -2004,8 +2130,8 @@ describe('createFailable()', () => {
         );
 
         expectTypeOf(result).toEqualTypeOf<Failure<Error>>();
-        ensureFailure(result);
         expect(result.error).toBeInstanceOf(Error);
+        expect(result.error.message).toBe(JSON.stringify(error));
         expect(result.error).toMatchObject({ cause: error });
       });
 
@@ -2046,12 +2172,28 @@ describe('createFailable()', () => {
 
   describe('promise input', () => {
     describe('Success result', () => {
+      it('wraps resolved thenable values in Success', async () => {
+        const value = faker.number.float();
+
+        await expect(
+          createFailable(createResolvingThenable(value))
+        ).resolves.toStrictEqual(success(value));
+      });
+
       it('preserves Success values resolved from promises', async () => {
         const original = success(faker.number.float());
 
         await expect(
           createFailable(Promise.resolve(original))
         ).resolves.toBe(original);
+      });
+
+      it('preserves Success values resolved from thenables', async () => {
+        const original = success(faker.number.float());
+        const result = createFailable(createResolvingThenable(original));
+
+        expectTypeOf(result).toEqualTypeOf<Promise<Success<number>>>();
+        await expect(result).resolves.toBe(original);
       });
 
       it('rehydrates FailableLikeSuccess values resolved from promises', async () => {
@@ -2064,6 +2206,18 @@ describe('createFailable()', () => {
         await expect(createFailable(Promise.resolve(input))).resolves.toStrictEqual(
           success(data)
         );
+      });
+
+      it('rehydrates FailableLikeSuccess values resolved from thenables', async () => {
+        const data = faker.number.float();
+        const input = {
+          status: FailableStatus.Success,
+          data,
+        } as const satisfies FailableLikeSuccess<typeof data>;
+        const result = createFailable(createResolvingThenable(input));
+
+        expectTypeOf(result).toEqualTypeOf<Promise<Success<number>>>();
+        await expect(result).resolves.toStrictEqual(success(data));
       });
 
       it('wraps resolved promise values in Success', async () => {
@@ -2092,6 +2246,19 @@ describe('createFailable()', () => {
     });
 
     describe('Failure result', () => {
+      it('captures rejected thenable values as Failure', async () => {
+        const error = {
+          code: faker.string.uuid(),
+          retryable: faker.datatype.boolean(),
+        };
+        const result = await createFailable(
+          createRejectingThenable<number>(error)
+        );
+
+        ensureFailure(result);
+        expect(result.error).toBe(error);
+      });
+
       it('preserves Failure values resolved from promises', async () => {
         const original = failure(new Error(faker.string.uuid()));
 
@@ -2162,11 +2329,20 @@ describe('createFailable()', () => {
         }
       );
 
-      it('normalizes rejected non-Error values with NormalizedErrors', async () => {
-        const error = {
-          code: faker.string.uuid(),
-          retryable: faker.datatype.boolean(),
-        };
+      it('serializes rejected plain objects with NormalizedErrors', async () => {
+        const error = { code: 'bad_request' } as const;
+        const result = createFailable(Promise.reject(error), NormalizedErrors);
+
+        expectTypeOf(result).toEqualTypeOf<Promise<Failure<Error>>>();
+
+        const resolved = await result;
+        expect(resolved.error).toBeInstanceOf(Error);
+        expect(resolved.error.message).toBe(JSON.stringify(error));
+        expect(resolved.error).toMatchObject({ cause: error });
+      });
+
+      it('keeps rejected null-prototype plain objects in the failure channel with NormalizedErrors', async () => {
+        const error = createNullPrototypeObject({ code: 'bad_request' as const });
         const result = createFailable(Promise.reject(error), NormalizedErrors);
 
         expectTypeOf(result).toEqualTypeOf<Promise<Failure<Error>>>();
@@ -2174,6 +2350,25 @@ describe('createFailable()', () => {
         const resolved = await result;
         ensureFailure(resolved);
         expect(resolved.error).toBeInstanceOf(Error);
+        expect(resolved.error.message).toBe(
+          JSON.stringify({ code: 'bad_request' })
+        );
+        expect(resolved.error).toMatchObject({ cause: error });
+      });
+
+      it('serializes rejected plain-object thenables with NormalizedErrors', async () => {
+        const error = { code: 'bad_request' } as const;
+        const result = createFailable(
+          createRejectingThenable<number>(error),
+          NormalizedErrors
+        );
+
+        expectTypeOf(result).toEqualTypeOf<Promise<Failable<number, Error>>>();
+
+        const resolved = await result;
+        ensureFailure(resolved);
+        expect(resolved.error).toBeInstanceOf(Error);
+        expect(resolved.error.message).toBe(JSON.stringify(error));
         expect(resolved.error).toMatchObject({ cause: error });
       });
 
@@ -2193,6 +2388,30 @@ describe('createFailable()', () => {
         const resolved = await result;
         ensureFailure(resolved);
         expect(resolved.error).toBeInstanceOf(Error);
+        expect(resolved.error).toMatchObject({
+          cause: error,
+          message: 'normalized',
+        });
+      });
+
+      it('uses a custom normalizeError function for rejected thenables', async () => {
+        const error = {
+          code: faker.string.uuid(),
+          retryable: faker.datatype.boolean(),
+        };
+        const normalizeError = vi.fn(
+          (rawError: unknown) => new Error('normalized', { cause: rawError })
+        );
+        const result = createFailable(createRejectingThenable<number>(error), {
+          normalizeError,
+        });
+
+        expectTypeOf(result).toEqualTypeOf<Promise<Failable<number, Error>>>();
+
+        const resolved = await result;
+        ensureFailure(resolved);
+        expect(normalizeError).toHaveBeenCalledTimes(1);
+        expect(normalizeError).toHaveBeenCalledWith(error);
         expect(resolved.error).toMatchObject({
           cause: error,
           message: 'normalized',
