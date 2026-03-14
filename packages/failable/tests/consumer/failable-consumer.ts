@@ -1,5 +1,5 @@
 import {
-  createFailable,
+  failable,
   failure,
   FailableStatus,
   isFailable,
@@ -11,7 +11,7 @@ import {
   success,
   throwIfError,
   toFailableLike,
-  type CreateFailableNormalizeErrorOptions,
+  type FailableNormalizeErrorOptions,
   type Failable,
   type FailableLike,
   type FailableLikeFailure,
@@ -37,7 +37,7 @@ type ConsumerModule = typeof import('@pvorona/failable');
 type ExpectedRuntimeExportName =
   | 'FailableStatus'
   | 'NormalizedErrors'
-  | 'createFailable'
+  | 'failable'
   | 'failure'
   | 'isFailable'
   | 'isFailableLike'
@@ -69,7 +69,7 @@ expectType<Equal<'RunGet' extends keyof ConsumerModule ? true : false, false>>(
 expectType<Equal<'get' extends keyof ConsumerModule ? true : false, false>>(true);
 expectType<
   Equal<
-    'CreateFailableNormalizeErrorOptions' extends keyof ConsumerModule
+    'FailableNormalizeErrorOptions' extends keyof ConsumerModule
       ? true
       : false,
     false
@@ -106,7 +106,7 @@ const normalizeOptions = {
       ? error
       : new Error('normalized', { cause: error });
   },
-} satisfies CreateFailableNormalizeErrorOptions;
+} satisfies FailableNormalizeErrorOptions;
 
 const problem = failure('boom');
 
@@ -231,27 +231,27 @@ expectType<Equal<typeof failureWire, FailableLikeFailure<string>>>(true);
 const failureWireAsConsumerType: FailableLike<number, string> = failureWire;
 void failureWireAsConsumerType;
 
-const wrappedFunction = createFailable(() => 123);
+const wrappedFunction = failable(() => 123);
 expectType<Equal<typeof wrappedFunction, Failable<number, unknown>>>(true);
 
-// @ts-expect-error `createFailable(() => ...)` accepts sync callbacks only.
-createFailable(async () => 123);
+// @ts-expect-error `failable(() => ...)` accepts sync callbacks only.
+failable(async () => 123);
 
-// @ts-expect-error `createFailable(() => ...)` accepts sync callbacks only.
-createFailable(() => Promise.resolve(123));
+// @ts-expect-error `failable(() => ...)` accepts sync callbacks only.
+failable(() => Promise.resolve(123));
 
-const wrappedPromise = createFailable(Promise.resolve(123));
+const wrappedPromise = failable(Promise.resolve(123));
 expectType<
   Equal<typeof wrappedPromise, Promise<Failable<number, unknown>>>
 >(true);
 
-const normalizedExplicitFailure = createFailable(
+const normalizedExplicitFailure = failable(
   failure(['first', 'second']),
   NormalizedErrors
 );
 expectType<Equal<typeof normalizedExplicitFailure, Failure<Error>>>(true);
 
-const normalizedCustomFailure = createFailable(
+const normalizedCustomFailure = failable(
   () => {
     throw { code: 'boom' };
   },
@@ -259,7 +259,7 @@ const normalizedCustomFailure = createFailable(
 );
 expectType<Equal<typeof normalizedCustomFailure, Failure<Error>>>(true);
 
-const normalizedRejectedValue = createFailable(
+const normalizedRejectedValue = failable(
   Promise.reject('boom' as const),
   normalizeOptions
 );

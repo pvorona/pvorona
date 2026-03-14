@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import { createFailable, failure, isFailableLike, success, toFailableLike } from './failable.js';
+import { failable, failure, isFailableLike, success, toFailableLike } from './failable.js';
 
 function structuredCloneViaMessageChannel<T>(value: T): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -26,34 +26,34 @@ function structuredCloneViaMessageChannel<T>(value: T): Promise<T> {
 describe('structured-clone transport', () => {
   it('clones FailableLikeSuccess and can be rehydrated', async () => {
     const data = faker.number.float();
-    const failable = success(data);
-    const failableLike = toFailableLike(failable);
+    const result = success(data);
+    const failableLike = toFailableLike(result);
     const cloned = await structuredCloneViaMessageChannel(failableLike);
 
     expect({ ...cloned }).toStrictEqual(failableLike);
     expect(isFailableLike(cloned)).toBe(true);
-    expect(createFailable(cloned)).toStrictEqual(failable);
+    expect(failable(cloned)).toStrictEqual(result);
   });
 
   it('clones FailableLikeFailure and can be rehydrated', async () => {
     const error = faker.string.uuid();
-    const failable = failure(error);
-    const failableLike = toFailableLike(failable);
+    const result = failure(error);
+    const failableLike = toFailableLike(result);
     const cloned = await structuredCloneViaMessageChannel(failableLike);
 
     expect({ ...cloned }).toStrictEqual(failableLike);
     expect(isFailableLike(cloned)).toBe(true);
-    expect(createFailable(cloned)).toStrictEqual(failure(error));
+    expect(failable(cloned)).toStrictEqual(failure(error));
   });
 
   it('clones array-backed FailableLikeFailure and preserves the raw error', async () => {
     const error = [faker.string.uuid(), faker.number.int()];
-    const failable = failure(error);
-    const failableLike = toFailableLike(failable);
+    const result = failure(error);
+    const failableLike = toFailableLike(result);
     const cloned = await structuredCloneViaMessageChannel(failableLike);
 
     expect({ ...cloned }).toStrictEqual(failableLike);
     expect(isFailableLike(cloned)).toBe(true);
-    expect(createFailable(cloned)).toStrictEqual(failure(error));
+    expect(failable(cloned)).toStrictEqual(failure(error));
   });
 });

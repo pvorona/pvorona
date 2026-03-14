@@ -1,7 +1,7 @@
 export {
   FailableStatus,
   NormalizedErrors,
-  createFailable,
+  failable,
   failure,
   isFailable,
   isFailableLike,
@@ -14,7 +14,7 @@ export {
 } from './lib/failable.js';
 
 export type {
-  CreateFailableNormalizeErrorOptions,
+  FailableNormalizeErrorOptions,
   Failable,
   FailableLike,
   FailableLikeFailure,

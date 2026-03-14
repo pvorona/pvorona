@@ -1,7 +1,7 @@
 import { faker } from '@faker-js/faker';
 import { expectTypeOf } from 'expect-type';
 import {
-  createFailable,
+  failable,
   failure,
   FailableStatus,
   isFailable,
@@ -1768,19 +1768,19 @@ describe('run()', () => {
   });
 });
 
-describe('createFailable()', () => {
+describe('failable()', () => {
   describe('Failable input', () => {
     describe('Success input', () => {
       it('returns Success inputs as-is', () => {
         const original = success(faker.number.float());
 
-        expect(createFailable(original)).toBe(original);
+        expect(failable(original)).toBe(original);
       });
 
       it('leaves Success inputs unchanged when normalization is enabled', () => {
         const original = success(faker.number.float());
 
-        expect(createFailable(original, NormalizedErrors)).toBe(original);
+        expect(failable(original, NormalizedErrors)).toBe(original);
       });
     });
 
@@ -1788,12 +1788,12 @@ describe('createFailable()', () => {
       it('returns Failure inputs as-is', () => {
         const original = failure(faker.string.uuid());
 
-        expect(createFailable(original)).toBe(original);
+        expect(failable(original)).toBe(original);
       });
 
       it('passes through existing Error failures unchanged with NormalizedErrors', () => {
         const original = failure(new Error(faker.string.uuid()));
-        const result = createFailable(original, NormalizedErrors);
+        const result = failable(original, NormalizedErrors);
 
         expectTypeOf(result).toEqualTypeOf<Failure<Error>>();
         expect(result).toBe(original);
@@ -1806,7 +1806,7 @@ describe('createFailable()', () => {
         });
         const normalizeError = vi.fn(() => normalizedError);
         const original = failure(originalError);
-        const result = createFailable(original, { normalizeError });
+        const result = failable(original, { normalizeError });
 
         expectTypeOf(result).toEqualTypeOf<Failure<Error>>();
         ensureFailure(result);
@@ -1818,7 +1818,7 @@ describe('createFailable()', () => {
 
       it('returns a new Failure instance when normalization changes the error', () => {
         const original = failure(faker.string.uuid());
-        const result = createFailable(original, NormalizedErrors);
+        const result = failable(original, NormalizedErrors);
 
         ensureFailure(result);
         expect(result).not.toBe(original);
@@ -1828,7 +1828,7 @@ describe('createFailable()', () => {
 
       it('serializes plain-object Failure inputs with NormalizedErrors', () => {
         const error = { code: 'bad_request' } as const;
-        const result = createFailable(failure(error), NormalizedErrors);
+        const result = failable(failure(error), NormalizedErrors);
 
         expectTypeOf(result).toEqualTypeOf<Failure<Error>>();
         expect(result.error).toBeInstanceOf(Error);
@@ -1838,7 +1838,7 @@ describe('createFailable()', () => {
 
       it('serializes null-prototype Failure inputs with NormalizedErrors', () => {
         const error = createNullPrototypeObject({ code: 'bad_request' as const });
-        const result = createFailable(failure(error), NormalizedErrors);
+        const result = failable(failure(error), NormalizedErrors);
 
         expectTypeOf(result).toEqualTypeOf<Failure<Error>>();
         expect(result.error).toBeInstanceOf(Error);
@@ -1849,7 +1849,7 @@ describe('createFailable()', () => {
       it('falls back to the current stringification path when plain-object serialization fails', () => {
         const error = {} as { self?: unknown };
         error.self = error;
-        const result = createFailable(failure(error), NormalizedErrors);
+        const result = failable(failure(error), NormalizedErrors);
 
         expectTypeOf(result).toEqualTypeOf<Failure<Error>>();
         expect(result.error).toBeInstanceOf(Error);
@@ -1859,7 +1859,7 @@ describe('createFailable()', () => {
 
       it('converts array failures to AggregateError', () => {
         const error = [faker.string.uuid(), faker.string.uuid()];
-        const result = createFailable(failure(error), NormalizedErrors);
+        const result = failable(failure(error), NormalizedErrors);
 
         ensureFailure(result);
         expect(result.error).toBeInstanceOf(AggregateError);
@@ -1877,14 +1877,14 @@ describe('createFailable()', () => {
           data,
         } as const satisfies FailableLikeSuccess<typeof data>;
 
-        expect(createFailable(input)).toStrictEqual(success(data));
+        expect(failable(input)).toStrictEqual(success(data));
       });
 
       it('round-trips FailableLikeSuccess inputs with undefined data', () => {
         const input = toFailableLike(success(undefined));
 
         expect(isFailableLike(input)).toBe(true);
-        expect(createFailable(input)).toStrictEqual(success(undefined));
+        expect(failable(input)).toStrictEqual(success(undefined));
       });
 
       it('rehydrates FailableLike<T, E> union inputs when they hold success data', () => {
@@ -1895,7 +1895,7 @@ describe('createFailable()', () => {
           status: FailableStatus.Success,
           data: 123 as DataType,
         } as FailableLike<DataType, ErrorType>;
-        const result = createFailable(input);
+        const result = failable(input);
 
         expect(result).toStrictEqual(success(123 as DataType));
         expectTypeOf(result).toEqualTypeOf<Failable<DataType, ErrorType>>();
@@ -1910,14 +1910,14 @@ describe('createFailable()', () => {
           error,
         } as const satisfies FailableLikeFailure<typeof error>;
 
-        expect(createFailable(input)).toStrictEqual(failure(error));
+        expect(failable(input)).toStrictEqual(failure(error));
       });
 
       it('round-trips FailableLikeFailure inputs with undefined error', () => {
         const input = toFailableLike(failure(undefined));
 
         expect(isFailableLike(input)).toBe(true);
-        expect(createFailable(input)).toStrictEqual(failure(undefined));
+        expect(failable(input)).toStrictEqual(failure(undefined));
       });
 
       it('rehydrates FailableLike<T, E> union inputs when they hold failure errors', () => {
@@ -1928,7 +1928,7 @@ describe('createFailable()', () => {
           status: FailableStatus.Failure,
           error: 'boom' as ErrorType,
         } as FailableLike<DataType, ErrorType>;
-        const result = createFailable(input);
+        const result = failable(input);
 
         expect(result).toStrictEqual(failure('boom' as ErrorType));
         expectTypeOf(result).toEqualTypeOf<Failable<DataType, ErrorType>>();
@@ -1940,7 +1940,7 @@ describe('createFailable()', () => {
           status: FailableStatus.Failure,
           error,
         } as const satisfies FailableLikeFailure<typeof error>;
-        const result = createFailable(input, NormalizedErrors);
+        const result = failable(input, NormalizedErrors);
 
         expectTypeOf(result).toEqualTypeOf<Failure<Error>>();
         ensureFailure(result);
@@ -1955,7 +1955,7 @@ describe('createFailable()', () => {
       it('preserves Success values returned from functions', () => {
         const original = success(faker.number.float());
 
-        expect(createFailable(() => original)).toBe(original);
+        expect(failable(() => original)).toBe(original);
       });
 
       it('rehydrates FailableLikeSuccess values returned from functions', () => {
@@ -1965,18 +1965,18 @@ describe('createFailable()', () => {
           data,
         } as const satisfies FailableLikeSuccess<typeof data>;
 
-        expect(createFailable(() => input)).toStrictEqual(success(data));
+        expect(failable(() => input)).toStrictEqual(success(data));
       });
 
       it('wraps plain function return values in Success', () => {
         const value = faker.number.float();
 
-        expect(createFailable(() => value)).toStrictEqual(success(value));
+        expect(failable(() => value)).toStrictEqual(success(value));
       });
 
       it('treats plain success lookalikes returned from functions as plain data', () => {
         const lookalike = createSuccessLookalike(faker.number.float());
-        const result = createFailable(() => lookalike);
+        const result = failable(() => lookalike);
 
         ensureSuccess(result);
         expect(result.data).toBe(lookalike);
@@ -1984,7 +1984,7 @@ describe('createFailable()', () => {
 
       it('treats plain failure lookalikes returned from functions as plain data', () => {
         const lookalike = createFailureLookalike(faker.string.uuid());
-        const result = createFailable(() => lookalike);
+        const result = failable(() => lookalike);
 
         ensureSuccess(result);
         expect(result.data).toBe(lookalike);
@@ -1992,19 +1992,19 @@ describe('createFailable()', () => {
 
       it('returns Failure<Error> when an async function is passed by any-cast', () => {
         const value = faker.number.float();
-        const result = createFailable((async () => value) as unknown as () => number);
+        const result = failable((async () => value) as unknown as () => number);
 
         ensureFailure(result);
         expect(result.error).toBeInstanceOf(Error);
         const error = result.error as Error;
         expect(error.message).toBe(
-          '`createFailable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await createFailable(promise)`.'
+          '`failable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await failable(promise)`.'
         );
       });
 
       it('returns Failure<Error> when a callback returns a promise by any-cast', () => {
         const value = faker.number.float();
-        const result = createFailable(
+        const result = failable(
           (() => Promise.resolve(value)) as unknown as () => number
         );
 
@@ -2012,7 +2012,7 @@ describe('createFailable()', () => {
         expect(result.error).toBeInstanceOf(Error);
         const error = result.error as Error;
         expect(error.message).toBe(
-          '`createFailable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await createFailable(promise)`.'
+          '`failable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await failable(promise)`.'
         );
       });
 
@@ -2026,7 +2026,7 @@ describe('createFailable()', () => {
         process.on('unhandledRejection', onUnhandledRejection);
 
         try {
-          const result = createFailable(
+          const result = failable(
             (() => Promise.reject(rejection)) as unknown as () => number
           );
 
@@ -2043,7 +2043,7 @@ describe('createFailable()', () => {
         const normalizeError = vi.fn(
           (error: unknown) => new Error('normalized', { cause: error })
         );
-        const result = createFailable(
+        const result = failable(
           (() => Promise.resolve(faker.number.float())) as unknown as () => number,
           { normalizeError }
         );
@@ -2051,7 +2051,7 @@ describe('createFailable()', () => {
         ensureFailure(result);
         expect(normalizeError).not.toHaveBeenCalled();
         expect(result.error.message).toBe(
-          '`createFailable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await createFailable(promise)`.'
+          '`failable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await failable(promise)`.'
         );
       });
     });
@@ -2060,12 +2060,12 @@ describe('createFailable()', () => {
       it('preserves Failure values returned from functions', () => {
         const original = failure(new Error(faker.string.uuid()));
 
-        expect(createFailable(() => original)).toBe(original);
+        expect(failable(() => original)).toBe(original);
       });
 
       it('normalizes existing Failure values returned from functions when normalization is enabled', () => {
         const original = failure(faker.string.uuid());
-        const result = createFailable(() => original, NormalizedErrors);
+        const result = failable(() => original, NormalizedErrors);
 
         expectTypeOf(result).toEqualTypeOf<Failure<Error>>();
         ensureFailure(result);
@@ -2081,7 +2081,7 @@ describe('createFailable()', () => {
           error,
         } as const satisfies FailableLikeFailure<typeof error>;
 
-        expect(createFailable(() => input)).toStrictEqual(failure(error));
+        expect(failable(() => input)).toStrictEqual(failure(error));
       });
 
       it('normalizes FailableLikeFailure values returned from functions when normalization is enabled', () => {
@@ -2090,7 +2090,7 @@ describe('createFailable()', () => {
           status: FailableStatus.Failure,
           error,
         } as const satisfies FailableLikeFailure<typeof error>;
-        const result = createFailable(() => input, NormalizedErrors);
+        const result = failable(() => input, NormalizedErrors);
 
         expectTypeOf(result).toEqualTypeOf<Failure<Error>>();
         ensureFailure(result);
@@ -2100,7 +2100,7 @@ describe('createFailable()', () => {
 
       it('captures thrown values as Failure', () => {
         const error = new Error(faker.string.uuid());
-        const result = createFailable(() => {
+        const result = failable(() => {
           throw error;
         });
 
@@ -2111,7 +2111,7 @@ describe('createFailable()', () => {
       it.each(RAW_ERROR_CASES)(
         'preserves raw thrown non-Error values ($label)',
         ({ error }) => {
-          const result = createFailable(() => {
+          const result = failable(() => {
             throw error;
           });
 
@@ -2122,7 +2122,7 @@ describe('createFailable()', () => {
 
       it('serializes thrown plain objects with NormalizedErrors', () => {
         const error = { code: 'bad_request' } as const;
-        const result = createFailable(
+        const result = failable(
           () => {
             throw error;
           },
@@ -2140,7 +2140,7 @@ describe('createFailable()', () => {
           code: faker.string.uuid(),
           retryable: faker.datatype.boolean(),
         };
-        const result = createFailable(
+        const result = failable(
           () => {
             throw error;
           },
@@ -2163,7 +2163,7 @@ describe('createFailable()', () => {
 
     describe('type inference', () => {
       it('defaults function wrapper failures to unknown', () => {
-        const result = createFailable(() => 123 as const);
+        const result = failable(() => 123 as const);
 
         expectTypeOf(result).toEqualTypeOf<Failable<123, unknown>>();
       });
@@ -2175,22 +2175,20 @@ describe('createFailable()', () => {
       it('wraps resolved thenable values in Success', async () => {
         const value = faker.number.float();
 
-        await expect(
-          createFailable(createResolvingThenable(value))
-        ).resolves.toStrictEqual(success(value));
+        await expect(failable(createResolvingThenable(value))).resolves.toStrictEqual(
+          success(value)
+        );
       });
 
       it('preserves Success values resolved from promises', async () => {
         const original = success(faker.number.float());
 
-        await expect(
-          createFailable(Promise.resolve(original))
-        ).resolves.toBe(original);
+        await expect(failable(Promise.resolve(original))).resolves.toBe(original);
       });
 
       it('preserves Success values resolved from thenables', async () => {
         const original = success(faker.number.float());
-        const result = createFailable(createResolvingThenable(original));
+        const result = failable(createResolvingThenable(original));
 
         expectTypeOf(result).toEqualTypeOf<Promise<Success<number>>>();
         await expect(result).resolves.toBe(original);
@@ -2203,7 +2201,7 @@ describe('createFailable()', () => {
           data,
         } as const satisfies FailableLikeSuccess<typeof data>;
 
-        await expect(createFailable(Promise.resolve(input))).resolves.toStrictEqual(
+        await expect(failable(Promise.resolve(input))).resolves.toStrictEqual(
           success(data)
         );
       });
@@ -2214,7 +2212,7 @@ describe('createFailable()', () => {
           status: FailableStatus.Success,
           data,
         } as const satisfies FailableLikeSuccess<typeof data>;
-        const result = createFailable(createResolvingThenable(input));
+        const result = failable(createResolvingThenable(input));
 
         expectTypeOf(result).toEqualTypeOf<Promise<Success<number>>>();
         await expect(result).resolves.toStrictEqual(success(data));
@@ -2223,14 +2221,14 @@ describe('createFailable()', () => {
       it('wraps resolved promise values in Success', async () => {
         const value = faker.number.float();
 
-        await expect(
-          createFailable(Promise.resolve(value))
-        ).resolves.toStrictEqual(success(value));
+        await expect(failable(Promise.resolve(value))).resolves.toStrictEqual(
+          success(value)
+        );
       });
 
       it('treats plain success lookalikes resolved from promises as plain data', async () => {
         const lookalike = createSuccessLookalike(faker.number.float());
-        const result = await createFailable(Promise.resolve(lookalike));
+        const result = await failable(Promise.resolve(lookalike));
 
         ensureSuccess(result);
         expect(result.data).toBe(lookalike);
@@ -2238,7 +2236,7 @@ describe('createFailable()', () => {
 
       it('treats plain failure lookalikes resolved from promises as plain data', async () => {
         const lookalike = createFailureLookalike(faker.string.uuid());
-        const result = await createFailable(Promise.resolve(lookalike));
+        const result = await failable(Promise.resolve(lookalike));
 
         ensureSuccess(result);
         expect(result.data).toBe(lookalike);
@@ -2251,7 +2249,7 @@ describe('createFailable()', () => {
           code: faker.string.uuid(),
           retryable: faker.datatype.boolean(),
         };
-        const result = await createFailable(
+        const result = await failable(
           createRejectingThenable<number>(error)
         );
 
@@ -2262,14 +2260,12 @@ describe('createFailable()', () => {
       it('preserves Failure values resolved from promises', async () => {
         const original = failure(new Error(faker.string.uuid()));
 
-        await expect(
-          createFailable(Promise.resolve(original))
-        ).resolves.toBe(original);
+        await expect(failable(Promise.resolve(original))).resolves.toBe(original);
       });
 
       it('normalizes existing Failure values resolved from promises when normalization is enabled', async () => {
         const original = failure(faker.string.uuid());
-        const result = createFailable(
+        const result = failable(
           Promise.resolve(original),
           NormalizedErrors
         );
@@ -2290,7 +2286,7 @@ describe('createFailable()', () => {
           error,
         } as const satisfies FailableLikeFailure<typeof error>;
 
-        await expect(createFailable(Promise.resolve(input))).resolves.toStrictEqual(
+        await expect(failable(Promise.resolve(input))).resolves.toStrictEqual(
           failure(error)
         );
       });
@@ -2301,7 +2297,7 @@ describe('createFailable()', () => {
           status: FailableStatus.Failure,
           error,
         } as const satisfies FailableLikeFailure<typeof error>;
-        const result = createFailable(Promise.resolve(input), NormalizedErrors);
+        const result = failable(Promise.resolve(input), NormalizedErrors);
 
         expectTypeOf(result).toEqualTypeOf<Promise<Failure<Error>>>();
 
@@ -2313,7 +2309,7 @@ describe('createFailable()', () => {
 
       it('captures rejected values as Failure', async () => {
         const error = new Error(faker.string.uuid());
-        const result = await createFailable(Promise.reject(error));
+        const result = await failable(Promise.reject(error));
 
         ensureFailure(result);
         expect(result.error).toBe(error);
@@ -2322,7 +2318,7 @@ describe('createFailable()', () => {
       it.each(RAW_ERROR_CASES)(
         'preserves raw rejected non-Error values ($label)',
         async ({ error }) => {
-          const result = await createFailable(Promise.reject(error));
+          const result = await failable(Promise.reject(error));
 
           ensureFailure(result);
           expect(result.error).toBe(error);
@@ -2331,7 +2327,7 @@ describe('createFailable()', () => {
 
       it('serializes rejected plain objects with NormalizedErrors', async () => {
         const error = { code: 'bad_request' } as const;
-        const result = createFailable(Promise.reject(error), NormalizedErrors);
+        const result = failable(Promise.reject(error), NormalizedErrors);
 
         expectTypeOf(result).toEqualTypeOf<Promise<Failure<Error>>>();
 
@@ -2343,7 +2339,7 @@ describe('createFailable()', () => {
 
       it('keeps rejected null-prototype plain objects in the failure channel with NormalizedErrors', async () => {
         const error = createNullPrototypeObject({ code: 'bad_request' as const });
-        const result = createFailable(Promise.reject(error), NormalizedErrors);
+        const result = failable(Promise.reject(error), NormalizedErrors);
 
         expectTypeOf(result).toEqualTypeOf<Promise<Failure<Error>>>();
 
@@ -2358,7 +2354,7 @@ describe('createFailable()', () => {
 
       it('serializes rejected plain-object thenables with NormalizedErrors', async () => {
         const error = { code: 'bad_request' } as const;
-        const result = createFailable(
+        const result = failable(
           createRejectingThenable<number>(error),
           NormalizedErrors
         );
@@ -2377,7 +2373,7 @@ describe('createFailable()', () => {
           code: faker.string.uuid(),
           retryable: faker.datatype.boolean(),
         };
-        const result = createFailable(Promise.reject(error), {
+        const result = failable(Promise.reject(error), {
           normalizeError(rawError) {
             return new Error('normalized', { cause: rawError });
           },
@@ -2402,7 +2398,7 @@ describe('createFailable()', () => {
         const normalizeError = vi.fn(
           (rawError: unknown) => new Error('normalized', { cause: rawError })
         );
-        const result = createFailable(createRejectingThenable<number>(error), {
+        const result = failable(createRejectingThenable<number>(error), {
           normalizeError,
         });
 
@@ -2421,7 +2417,7 @@ describe('createFailable()', () => {
 
     describe('type inference', () => {
       it('defaults promise wrapper failures to unknown', () => {
-        const result = createFailable(Promise.resolve(123 as const));
+        const result = failable(Promise.resolve(123 as const));
 
         expectTypeOf(result).toEqualTypeOf<Promise<Failable<123, unknown>>>();
       });
@@ -2436,7 +2432,7 @@ describe('createFailable()', () => {
             { status: FailableStatus.Failure, error: 'boom' as ErrorType },
           ]
         );
-        const result = createFailable(Promise.resolve(input));
+        const result = failable(Promise.resolve(input));
 
         expectTypeOf(result).toEqualTypeOf<
           Promise<Failable<DataType, ErrorType>>

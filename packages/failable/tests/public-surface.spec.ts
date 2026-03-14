@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import {
-  createFailable,
+  failable,
   failure,
   FailableStatus,
   isFailure,
@@ -16,7 +16,7 @@ import {
 const EXPECTED_RUNTIME_EXPORTS = [
   'FailableStatus',
   'NormalizedErrors',
-  'createFailable',
+  'failable',
   'failure',
   'isFailable',
   'isFailableLike',
@@ -98,7 +98,7 @@ async function postToLedger(
     return { transferId: 'tr_123' } as const;
   })();
 
-  return await createFailable(request, {
+  return await failable(request, {
     normalizeError(error) {
       return new Error('Ledger unavailable', { cause: error });
     },
@@ -378,7 +378,7 @@ describe('public surface', () => {
     throw new Error('Expected getOrThrow() to throw the stored error');
   });
 
-  it('supports the README `createFailable(...)` boundary example', async () => {
+  it('supports the README `failable(...)` boundary example', async () => {
     const okResult = await submitTransfer({
       fromAccountId: 'checking',
       toAccountId: 'savings',
@@ -411,7 +411,7 @@ describe('public surface', () => {
 
   it('supports `NormalizedErrors` for plain-object throws without `[object Object]` messages', () => {
     const rawError = { code: 'bad_request' } as const;
-    const result = createFailable(
+    const result = failable(
       () => {
         throw rawError;
       },
@@ -429,7 +429,7 @@ describe('public surface', () => {
 
   it('supports `NormalizedErrors` for null-prototype plain-object throws without escaping', () => {
     const rawError = createNullPrototypeObject({ code: 'bad_request' as const });
-    const result = createFailable(
+    const result = failable(
       () => {
         throw rawError;
       },
@@ -447,9 +447,9 @@ describe('public surface', () => {
     expect(result.error).toMatchObject({ cause: rawError });
   });
 
-  it('supports the README `createFailable(...)` chooser: callback for sync throws, promise for async capture', async () => {
-    const syncResult = createFailable(() => JSON.parse('not valid json'));
-    const asyncResult = await createFailable(Promise.resolve(5));
+  it('supports the README `failable(...)` chooser: callback for sync throws, promise for async capture', async () => {
+    const syncResult = failable(() => JSON.parse('not valid json'));
+    const asyncResult = await failable(Promise.resolve(5));
 
     if (!syncResult.isError) {
       throw new Error('Expected the sync callback example to capture a thrown error');
@@ -461,6 +461,24 @@ describe('public surface', () => {
 
     expect(syncResult.error).toBeInstanceOf(SyntaxError);
     expect(asyncResult.data).toBe(5);
+  });
+
+  it('exposes the exact sync-callback misuse guidance for `failable(() => promise)`', () => {
+    const result = failable(
+      (() => Promise.resolve(5)) as unknown as () => number
+    );
+
+    if (!result.isError) {
+      throw new Error('Expected `failable(() => promise)` to return a Failure');
+    }
+
+    if (!(result.error instanceof Error)) {
+      throw new Error('Expected `failable(() => promise)` to capture an Error');
+    }
+
+    expect(result.error.message).toBe(
+      '`failable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await failable(promise)`.'
+    );
   });
 
   it('supports the README `run(...)` example', () => {
@@ -685,7 +703,7 @@ describe('public surface', () => {
     });
     expect(isFailableLike(wire)).toBe(true);
 
-    const hydrated = createFailable(wire);
+    const hydrated = failable(wire);
 
     if (hydrated.isError) {
       throw new Error('Expected structured-clone rehydration to succeed');

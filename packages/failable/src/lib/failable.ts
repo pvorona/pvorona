@@ -23,13 +23,13 @@ export const NormalizedErrors = Object.freeze({
   mode: 'normalized-errors',
 } as const);
 
-export type CreateFailableNormalizeErrorOptions = {
+export type FailableNormalizeErrorOptions = {
   readonly normalizeError: (error: unknown) => Error;
 };
 
-type CreateFailableNormalizeErrorInput =
+type FailableNormalizeErrorInput =
   | typeof NormalizedErrors
-  | CreateFailableNormalizeErrorOptions;
+  | FailableNormalizeErrorOptions;
 
 type Match<T, E> = <U>(
   onSuccess: (data: T) => U,
@@ -55,7 +55,7 @@ export type Failable<T, E> =
  *
  * Boundary rule:
  * - **sender**: `toFailableLike(result)`
- * - **receiver**: `createFailable(message.result)` (rehydrates into a real {@link Failable})
+ * - **receiver**: `failable(message.result)` (rehydrates into a real {@link Failable})
  *
  * Note: `data` / `error` must themselves be structured-cloneable.
  */
@@ -230,12 +230,12 @@ const BASE_FAILURE = (() => {
  * Function-first exports:
  * - `success(data)` / `failure(error)` create hydrated results.
  * - `throwIfError(result)` throws on failure and narrows the same result on success.
- * - `createFailable(...)` captures synchronous throws, async rejections, and wire shapes.
+ * - `failable(...)` captures synchronous throws, async rejections, and wire shapes.
  * - `run(...)` composes existing `Failable` values.
  *
  * Quick chooser:
- * - `createFailable(() => value)`: capture synchronous throws from throwy code.
- * - `await createFailable(promise)`: capture async rejections from promise-based code.
+ * - `failable(() => value)`: capture synchronous throws from throwy code.
+ * - `await failable(promise)`: capture async rejections from promise-based code.
  * - `run(...)`: compose steps that already return `Failable`.
  * - `throwIfError(result)`: keep using the same `result` variable after narrowing.
  * - `result.getOrThrow()`: unwrap the success value in expression or return position.
@@ -254,18 +254,18 @@ const BASE_FAILURE = (() => {
  *
  * Structured-clone boundary rule (RPC, `postMessage`, `chrome.*` messaging):
  * - **sender**: `toFailableLike(result)`
- * - **receiver**: `createFailable(payload)` (rehydrates methods + Symbol tags)
+ * - **receiver**: `failable(payload)` (rehydrates methods + Symbol tags)
  *
- * `createFailable(...)` overloads:
- * - `createFailable(failable)` returns the same instance (no wrapping).
- * - `createFailable(failableLike)` rehydrates into a real `Success` / `Failure`.
- * - `createFailable(() => value)` captures synchronous thrown values into `Failure` and
+ * `failable(...)` overloads:
+ * - `failable(failable)` returns the same instance (no wrapping).
+ * - `failable(failableLike)` rehydrates into a real `Success` / `Failure`.
+ * - `failable(() => value)` captures synchronous thrown values into `Failure` and
  *   preserves/rehydrates returned `Failable` / `FailableLike`.
- * - `createFailable(promise)` captures rejection values into `Failure` and preserves/rehydrates resolved
+ * - `failable(promise)` captures rejection values into `Failure` and preserves/rehydrates resolved
  *   `Failable` / `FailableLike`.
- * - `createFailable(input, NormalizedErrors)` normalizes failures into `Error` shapes while preserving
+ * - `failable(input, NormalizedErrors)` normalizes failures into `Error` shapes while preserving
  *   existing `Error` instances unchanged.
- * - `createFailable(input, { normalizeError })` runs custom failure normalization for failures,
+ * - `failable(input, { normalizeError })` runs custom failure normalization for failures,
  *   including existing `Error` instances, except for the internal promise-returning callback
  *   misuse guard error, which stays unchanged so the actionable message survives.
  *
@@ -276,14 +276,14 @@ const BASE_FAILURE = (() => {
  *   lazy fallbacks.
  * - Without normalization options, whatever you throw/reject becomes `.error` unchanged.
  * - `throwIfError(result)` also throws `.error` unchanged. Normalize earlier with
- *   `createFailable(..., NormalizedErrors)` or a custom `normalizeError` if you need `Error` values.
- * - `createFailable(() => somePromise)` is not the supported API. In TypeScript,
+ *   `failable(..., NormalizedErrors)` or a custom `normalizeError` if you need `Error` values.
+ * - `failable(() => somePromise)` is not the supported API. In TypeScript,
  *   obviously promise-returning callbacks are rejected. JS or any-cast callers receive
  *   a `Failure<Error>` telling them to pass the promise directly instead of producing
  *   `Success<Promise<...>>`.
  *
  * @example
- * const res = createFailable(() => JSON.parse(text));
+ * const res = failable(() => JSON.parse(text));
  * if (res.isSuccess) return res.data;
  * console.error(res.error);
  *
@@ -291,7 +291,7 @@ const BASE_FAILURE = (() => {
  * // Structured-clone transport
  * const wire = toFailableLike(res);
  * // ... send wire ...
- * const hydrated = createFailable(wire);
+ * const hydrated = failable(wire);
  */
 function hasInternalTag<Tag extends symbol>(
   value: unknown,
@@ -333,7 +333,7 @@ export function failure<E = void>(error: E): Failure<E> {
  *
  * Use this when you want control-flow narrowing without replacing the original variable.
  * Use `result.getOrThrow()` when you need the success value itself in expression or return position.
- * If you need `Error`-shaped failures, normalize earlier with `createFailable(...)`.
+ * If you need `Error`-shaped failures, normalize earlier with `failable(...)`.
  */
 export function throwIfError<T, E>(
   result: Failable<T, E>
@@ -352,7 +352,7 @@ export function toFailableLike<T, E>(value: Failable<T, E>): FailableLike<T, E> 
   return { status: FailableStatus.Success, data: value.data };
 }
 
-type InferCreateFailableFromValue<T, E = unknown> = [T] extends [never]
+type InferFailableFromValue<T, E = unknown> = [T] extends [never]
   ? Failure<E>
   : T extends Success<infer A>
   ? Success<A>
@@ -378,9 +378,9 @@ type HasKnownPromiseLikeReturn<T> = IsAny<T> extends true
   ? false
   : true;
 
-type CreateFailableSyncOnlyCallback<F extends () => unknown> = F &
+type FailableSyncOnlyCallback<F extends () => unknown> = F &
   (HasKnownPromiseLikeReturn<ReturnType<F>> extends true
-    ? { readonly __createFailablePassPromiseDirectly: never }
+    ? { readonly __failablePassPromiseDirectly: never }
     : unknown);
 
 type InferReturnTypeFromPromise<
@@ -403,7 +403,7 @@ type InferReturnTypeFromPromise<
   ? Promise<Failable<A, B>>
   : Promise<Failable<Awaited<P>, E>>;
 
-type NormalizeCreateFailableResult<T> = [T] extends [never]
+type NormalizeFailableResult<T> = [T] extends [never]
   ? Failure<Error>
   : T extends Success<infer A>
   ? Success<A>
@@ -419,20 +419,18 @@ type NormalizeCreateFailableResult<T> = [T] extends [never]
   ? Failable<A, Error>
   : Failable<T, Error>;
 
-type CreateFailableInput =
+type FailableInput =
   | FailableLike<unknown, unknown>
   | Failable<unknown, unknown>
   | (() => unknown)
   | PromiseLike<unknown>;
 
-const CREATE_FAILABLE_PROMISE_CALLBACK_MESSAGE =
-  '`createFailable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await createFailable(promise)`.';
-const CREATE_FAILABLE_PROMISE_CALLBACK_GUARD_TAG = Symbol(
-  'CreateFailablePromiseCallbackGuard'
-);
+const FAILABLE_PROMISE_CALLBACK_MESSAGE =
+  '`failable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await failable(promise)`.';
+const FAILABLE_PROMISE_CALLBACK_GUARD_TAG = Symbol('FailablePromiseCallbackGuard');
 
-type CreateFailablePromiseCallbackGuardError = Error & {
-  readonly [CREATE_FAILABLE_PROMISE_CALLBACK_GUARD_TAG]: true;
+type FailablePromiseCallbackGuardError = Error & {
+  readonly [FAILABLE_PROMISE_CALLBACK_GUARD_TAG]: true;
 };
 
 const RUN_GET_TAG = Symbol('RunGet');
@@ -884,40 +882,40 @@ export function run(
   return runSyncIterator(probeIterator);
 }
 
-export function createFailable<T>(value: Success<T>): Success<T>;
-export function createFailable<E>(value: Failure<E>): Failure<E>;
-export function createFailable<T, E>(value: Failable<T, E>): Failable<T, E>;
-export function createFailable<T>(value: FailableLikeSuccess<T>): Success<T>;
-export function createFailable<E>(value: FailableLikeFailure<E>): Failure<E>;
-export function createFailable<T, E>(value: FailableLike<T, E>): Failable<T, E>;
-export function createFailable<T>(
+export function failable<T>(value: Success<T>): Success<T>;
+export function failable<E>(value: Failure<E>): Failure<E>;
+export function failable<T, E>(value: Failable<T, E>): Failable<T, E>;
+export function failable<T>(value: FailableLikeSuccess<T>): Success<T>;
+export function failable<E>(value: FailableLikeFailure<E>): Failure<E>;
+export function failable<T, E>(value: FailableLike<T, E>): Failable<T, E>;
+export function failable<T>(
   value: Success<T>,
-  normalizeOption: CreateFailableNormalizeErrorInput
+  normalizeOption: FailableNormalizeErrorInput
 ): Success<T>;
-export function createFailable<E>(
+export function failable<E>(
   value: Failure<E>,
-  normalizeOption: CreateFailableNormalizeErrorInput
+  normalizeOption: FailableNormalizeErrorInput
 ): Failure<Error>;
-export function createFailable<T, E>(
+export function failable<T, E>(
   value: Failable<T, E>,
-  normalizeOption: CreateFailableNormalizeErrorInput
+  normalizeOption: FailableNormalizeErrorInput
 ): Failable<T, Error>;
-export function createFailable<T>(
+export function failable<T>(
   value: FailableLikeSuccess<T>,
-  normalizeOption: CreateFailableNormalizeErrorInput
+  normalizeOption: FailableNormalizeErrorInput
 ): Success<T>;
-export function createFailable<E>(
+export function failable<E>(
   value: FailableLikeFailure<E>,
-  normalizeOption: CreateFailableNormalizeErrorInput
+  normalizeOption: FailableNormalizeErrorInput
 ): Failure<Error>;
-export function createFailable<T, E>(
+export function failable<T, E>(
   value: FailableLike<T, E>,
-  normalizeOption: CreateFailableNormalizeErrorInput
+  normalizeOption: FailableNormalizeErrorInput
 ): Failable<T, Error>;
 /**
  * Capture the boundary you actually have:
- * - `createFailable(() => value)` for synchronous callbacks that may throw
- * - `await createFailable(promise)` for promise-based code that may reject
+ * - `failable(() => value)` for synchronous callbacks that may throw
+ * - `await failable(promise)` for promise-based code that may reject
  * - `run(...)` when the steps already return `Failable`
  *
  * In TypeScript, obviously promise-returning callbacks like `async () => ...` and
@@ -926,25 +924,25 @@ export function createFailable<T, E>(
  * them to pass the promise directly instead. That guard error is preserved even when
  * a custom `normalizeError` callback is provided.
  */
-export function createFailable<T, P extends PromiseLike<T> = PromiseLike<T>>(
+export function failable<T, P extends PromiseLike<T> = PromiseLike<T>>(
   promise: P,
-  normalizeOption: CreateFailableNormalizeErrorInput
-): Promise<NormalizeCreateFailableResult<Awaited<P>>>;
-export function createFailable<
+  normalizeOption: FailableNormalizeErrorInput
+): Promise<NormalizeFailableResult<Awaited<P>>>;
+export function failable<
   T,
   E = unknown,
   P extends PromiseLike<T> = PromiseLike<T>
 >(promise: P): InferReturnTypeFromPromise<T, E, P>;
-export function createFailable<F extends () => unknown>(
-  fun: CreateFailableSyncOnlyCallback<F>,
-  normalizeOption: CreateFailableNormalizeErrorInput
-): NormalizeCreateFailableResult<ReturnType<F>>;
-export function createFailable<F extends () => unknown, E = unknown>(
-  fun: CreateFailableSyncOnlyCallback<F>
-): InferCreateFailableFromValue<ReturnType<F>, E>;
-export function createFailable(
-  value: CreateFailableInput,
-  normalizeOption?: CreateFailableNormalizeErrorInput
+export function failable<F extends () => unknown>(
+  fun: FailableSyncOnlyCallback<F>,
+  normalizeOption: FailableNormalizeErrorInput
+): NormalizeFailableResult<ReturnType<F>>;
+export function failable<F extends () => unknown, E = unknown>(
+  fun: FailableSyncOnlyCallback<F>
+): InferFailableFromValue<ReturnType<F>, E>;
+export function failable(
+  value: FailableInput,
+  normalizeOption?: FailableNormalizeErrorInput
 ) {
   if (isFailable(value)) {
     return normalizeFailableResult(value, normalizeOption);
@@ -971,12 +969,12 @@ function fromFailableLike<T, E>(
   return failure(failableLike.error);
 }
 
-function createPromiseReturningCallbackGuardError(): CreateFailablePromiseCallbackGuardError {
+function createPromiseReturningCallbackGuardError(): FailablePromiseCallbackGuardError {
   const error = new Error(
-    CREATE_FAILABLE_PROMISE_CALLBACK_MESSAGE
-  ) as CreateFailablePromiseCallbackGuardError;
+    FAILABLE_PROMISE_CALLBACK_MESSAGE
+  ) as FailablePromiseCallbackGuardError;
 
-  Object.defineProperty(error, CREATE_FAILABLE_PROMISE_CALLBACK_GUARD_TAG, {
+  Object.defineProperty(error, FAILABLE_PROMISE_CALLBACK_GUARD_TAG, {
     value: true,
     enumerable: false,
     configurable: false,
@@ -988,13 +986,13 @@ function createPromiseReturningCallbackGuardError(): CreateFailablePromiseCallba
 
 function isPromiseReturningCallbackGuardError(
   error: unknown
-): error is CreateFailablePromiseCallbackGuardError {
+): error is FailablePromiseCallbackGuardError {
   if (!(error instanceof Error)) return false;
 
   return (
     Object.getOwnPropertyDescriptor(
       error,
-      CREATE_FAILABLE_PROMISE_CALLBACK_GUARD_TAG
+      FAILABLE_PROMISE_CALLBACK_GUARD_TAG
     )?.value === true
   );
 }
@@ -1005,7 +1003,7 @@ function consumePromiseLikeRejection(value: PromiseLike<unknown>) {
 
 function fromFunction<T extends () => U, E, U = ReturnType<T>>(
   fun: T,
-  normalizeOption?: CreateFailableNormalizeErrorInput
+  normalizeOption?: FailableNormalizeErrorInput
 ) {
   try {
     const data = fun();
@@ -1034,7 +1032,7 @@ function fromFunction<T extends () => U, E, U = ReturnType<T>>(
 
 function fromPromise<T extends PromiseLike<U>, U = Awaited<T>>(
   promise: T,
-  normalizeOption?: CreateFailableNormalizeErrorInput
+  normalizeOption?: FailableNormalizeErrorInput
 ) {
   return Promise.resolve(promise).then(
     (data) => {
@@ -1054,7 +1052,7 @@ function fromPromise<T extends PromiseLike<U>, U = Awaited<T>>(
 
 function normalizeFailableResult<T, E>(
   result: Failable<T, E>,
-  normalizeOption?: CreateFailableNormalizeErrorInput
+  normalizeOption?: FailableNormalizeErrorInput
 ) {
   if (result.status === FailableStatus.Success) return result;
   if (isPromiseReturningCallbackGuardError(result.error)) return result;
@@ -1073,11 +1071,11 @@ function normalizeFailableResult<T, E>(
 }
 
 function resolveNormalizeError(
-  normalizeOption?: CreateFailableNormalizeErrorInput
+  normalizeOption?: FailableNormalizeErrorInput
 ) {
   if (normalizeOption === undefined) return null;
   if (isNormalizedErrorsPreset(normalizeOption)) return normalizeUnknownError;
-  if (!isCreateFailableNormalizeErrorOptions(normalizeOption)) return null;
+  if (!isFailableNormalizeErrorOptions(normalizeOption)) return null;
 
   return normalizeOption.normalizeError;
 }
@@ -1092,9 +1090,9 @@ function isNormalizedErrorsPreset(
     NormalizedErrors.mode;
 }
 
-function isCreateFailableNormalizeErrorOptions(
+function isFailableNormalizeErrorOptions(
   value: unknown
-): value is CreateFailableNormalizeErrorOptions {
+): value is FailableNormalizeErrorOptions {
   if (!isObject(value)) return false;
 
   return isFunction(value.normalizeError);

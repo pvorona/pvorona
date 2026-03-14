@@ -9,7 +9,7 @@ input, missing config, not found, or a dependency call that can fail. Return a
 A `Failable<T, E>` is either `Success<T>` or `Failure<E>`.
 
 - `success(...)` / `failure(...)` create results
-- `createFailable(...)` captures thrown or rejected boundaries
+- `failable(...)` captures thrown or rejected boundaries
 - `run(...)` composes multiple `Failable` steps
 
 ## Install
@@ -19,6 +19,13 @@ npm i @pvorona/failable
 ```
 
 This package is ESM-only and requires Node 18+.
+
+## Migration Note
+
+If you are upgrading from the previous API name:
+
+- `createFailable(x)` -> `failable(x)`
+- `CreateFailableNormalizeErrorOptions` -> `FailableNormalizeErrorOptions`
 
 ## Basic Usage
 
@@ -111,9 +118,9 @@ carries both the success value and the expected failure reason.
 | Recover to `Success<T>` | `or(...)` / `orElse(...)` |
 | Map both branches to one output | `match(onSuccess, onFailure)` |
 | Throw the stored failure unchanged | `getOrThrow()` / `throwIfError(result)` |
-| Capture a throwing or rejecting boundary | `createFailable(...)` |
+| Capture a throwing or rejecting boundary | `failable(...)` |
 | Compose multiple `Failable` steps | `run(...)` |
-| Cross a structured-clone boundary | `toFailableLike(...)` + `createFailable(...)` |
+| Cross a structured-clone boundary | `toFailableLike(...)` + `failable(...)` |
 | Validate `unknown` input | `isFailable(...)`, `isSuccess(...)`, `isFailure(...)`, `isFailableLike(...)` |
 
 ## Unwrapping And Recovery
@@ -158,16 +165,16 @@ throwIfError(feeResult);
 console.log(feeCents, status, feeResult.data);
 ```
 
-## Capture Thrown Or Rejected Failures With `createFailable(...)`
+## Capture Thrown Or Rejected Failures With `failable(...)`
 
-Use `createFailable(...)` at boundaries that throw or reject, then normalize
+Use `failable(...)` at boundaries that throw or reject, then normalize
 that failure once at the boundary if needed:
 
 Using `TransferPlan` from above:
 
 ```ts
 import {
-  createFailable,
+  failable,
   run,
   success,
   type Failable,
@@ -186,7 +193,7 @@ async function postToLedger(
     return { transferId: 'tr_123' };
   })();
 
-  return await createFailable(request, {
+  return await failable(request, {
     normalizeError(error) {
       return new Error('Ledger unavailable', { cause: error });
     },
@@ -205,7 +212,7 @@ async function submitTransfer(
 ```
 
 `postToLedger(...)` is the boundary adapter. It uses
-`createFailable(..., { normalizeError })` to capture a raw throw/rejection once
+`failable(..., { normalizeError })` to capture a raw throw/rejection once
 and expose one stable `Error` shape to the rest of the app. If you only need
 generic `Error` normalization, `NormalizedErrors` is the built-in shortcut.
 Once that helper already returns `Failable`, `submitTransfer(...)` can use
@@ -214,10 +221,10 @@ Once that helper already returns `Failable`, `submitTransfer(...)` can use
 Pass a promise directly when you want rejection capture:
 
 ```ts
-const responseResult = await createFailable(fetch(url));
+const responseResult = await failable(fetch(url));
 ```
 
-`createFailable(...)` can:
+`failable(...)` can:
 
 - preserve an existing `Failable`
 - rehydrate a `FailableLike`
@@ -228,7 +235,8 @@ const responseResult = await createFailable(fetch(url));
 By default, the thrown or rejected value becomes `.error` unchanged.
 
 Pass the promise itself when you want rejection capture.
-`createFailable(async () => value)` returns `Success<Promise<T>>`.
+`failable(async () => value)` is misuse and returns a `Failure<Error>` telling
+you to pass the promise directly instead.
 
 ## Compose Existing `Failable` Steps With `run(...)`
 
@@ -376,7 +384,7 @@ Keep these rules in mind:
 - if a yielded step fails, `run(...)` returns that original failure unchanged
 - in async builders, keep using `yield* get(...)`; do not write `await get(...)`
 - `run(...)` does not capture thrown values or rejected promises into `Failure`
-- wrap throwing or rejecting boundaries with `createFailable(...)` before they
+- wrap throwing or rejecting boundaries with `failable(...)` before they
   enter `run(...)`
 
 ## Transport And Runtime Validation
@@ -388,7 +396,7 @@ side:
 
 ```ts
 import {
-  createFailable,
+  failable,
   toFailableLike,
 } from '@pvorona/failable';
 
@@ -402,7 +410,7 @@ const result = planTransfer(
 );
 
 const wire = toFailableLike(result);
-const hydrated = createFailable(wire);
+const hydrated = failable(wire);
 ```
 
 Use the runtime guards only when the input did not come from your own local
@@ -431,12 +439,12 @@ if (isFailable(candidate) && candidate.isError) {
 - `success(data)` / `failure(error)`: create hydrated results
 - `throwIfError(result)` / `result.getOrThrow()`: throw the stored failure
   unchanged
-- `createFailable(...)`: preserve, rehydrate, capture, or normalize failures at
+- `failable(...)`: preserve, rehydrate, capture, or normalize failures at
   a boundary
 - `run(...)`: compose `Failable` steps without nested branching
 - `toFailableLike(...)`: convert a hydrated result into a wire shape
 - `isFailableLike(...)`: validate a wire shape
 - `isFailable(...)`, `isSuccess(...)`, `isFailure(...)`: validate hydrated
   results
-- `NormalizedErrors`: built-in `Error` normalization for `createFailable(...)`
+- `NormalizedErrors`: built-in `Error` normalization for `failable(...)`
 - `FailableStatus`: runtime success/failure status values
