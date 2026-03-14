@@ -151,7 +151,7 @@ function ensureDifferentAccounts(
 ): Failable<void, TransferPlanningError> {
   if (source.id === destination.id) return failure({ code: 'same_account' });
 
-  return success(undefined);
+  return success();
 }
 
 function ensureSufficientFunds(
@@ -195,7 +195,7 @@ async function ensureWithinDailyLimit(
     return failure({ code: 'daily_limit_exceeded', remainingCents });
   }
 
-  return success(undefined);
+  return success();
 }
 
 async function planTransferWithRunAsync(request: {

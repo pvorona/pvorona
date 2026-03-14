@@ -80,6 +80,13 @@ expectType<Equal<'throwIfError' extends keyof ConsumerModule ? true : false, tru
 );
 
 const ok = success(123);
+const voidOk = success();
+const explicitUndefinedOk = success(undefined);
+
+expectType<Equal<typeof voidOk, Success<void>>>(true);
+expectType<Equal<typeof explicitUndefinedOk, Success<undefined>>>(true);
+// @ts-expect-error `success<T>()` still requires a value when `T` is explicit.
+success<number>();
 
 const okOrElse = ok.orElse(() => 456);
 expectType<Equal<typeof okOrElse, Success<number>>>(true);
@@ -109,6 +116,13 @@ const normalizeOptions = {
 } satisfies FailableNormalizeErrorOptions;
 
 const problem = failure('boom');
+const voidProblem = failure();
+const explicitUndefinedProblem = failure(undefined);
+
+expectType<Equal<typeof voidProblem, Failure<void>>>(true);
+expectType<Equal<typeof explicitUndefinedProblem, Failure<undefined>>>(true);
+// @ts-expect-error `failure<E>()` still requires a value when `E` is explicit.
+failure<number>();
 
 const problemOrElse = problem.orElse(() => 123);
 expectType<Equal<typeof problemOrElse, Success<number>>>(true);

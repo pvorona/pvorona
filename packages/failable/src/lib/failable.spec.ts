@@ -171,6 +171,7 @@ describe('success()', () => {
     const result = buildResult();
 
     expect(result.data).toBeUndefined();
+    expect(result).toStrictEqual(success(undefined));
     expectTypeOf(result).toEqualTypeOf<Failable<void, string>>();
   });
 });
@@ -201,6 +202,18 @@ describe('failure()', () => {
 
   it('data = null', () => {
     expect(result.data).toBeNull();
+  });
+
+  it('supports omitting the undefined argument for void failures', () => {
+    function buildResult(): Failable<string, void> {
+      return failure();
+    }
+
+    const result = buildResult();
+
+    expect(result.error).toBeUndefined();
+    expect(result).toStrictEqual(failure(undefined));
+    expectTypeOf(result).toEqualTypeOf<Failable<string, void>>();
   });
 });
 

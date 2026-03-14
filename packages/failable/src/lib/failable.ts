@@ -228,7 +228,7 @@ const BASE_FAILURE = (() => {
  * - {@link Failure}: `{ status: 'failure', isFailure: true, error: E, data: null }`
  *
  * Function-first exports:
- * - `success(data)` / `failure(error)` create hydrated results.
+ * - `success()` / `success(data)` / `failure()` / `failure(error)` create hydrated results.
  * - `throwIfError(result)` throws on failure and narrows the same result on success.
  * - `failable(...)` captures synchronous throws, async rejections, and wire shapes.
  * - `run(...)` composes existing `Failable` values.
@@ -316,14 +316,18 @@ export function isFailure(value: unknown): value is Failure<unknown> {
   return hasInternalTag(value, FAILURE_TAG);
 }
 
-export function success<T = void>(data: T): Success<T> {
-  const node: Mutable<InternalSuccess<T>> = Object.create(BASE_SUCCESS);
+export function success(): Success<void>;
+export function success<T>(data: T): Success<T>;
+export function success<T>(data?: T): Success<T | void> {
+  const node: Mutable<InternalSuccess<T | void>> = Object.create(BASE_SUCCESS);
   node.data = data;
   return Object.freeze(node);
 }
 
-export function failure<E = void>(error: E): Failure<E> {
-  const node: Mutable<InternalFailure<E>> = Object.create(BASE_FAILURE);
+export function failure(): Failure<void>;
+export function failure<E>(error: E): Failure<E>;
+export function failure<E>(error?: E): Failure<E | void> {
+  const node: Mutable<InternalFailure<E | void>> = Object.create(BASE_FAILURE);
   node.error = error;
   return Object.freeze(node);
 }
@@ -792,7 +796,7 @@ function finalizeRunResult<TYield, TResult extends RunReturn>(
   }
 
   if (result === undefined) {
-    return success(undefined) as InferRunResult<TYield, TResult>;
+    return success() as InferRunResult<TYield, TResult>;
   }
 
   throw new Error(RUN_INVALID_RETURN_MESSAGE);

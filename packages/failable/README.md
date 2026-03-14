@@ -8,7 +8,7 @@ input, missing config, not found, or a dependency call that can fail. Return a
 
 A `Failable<T, E>` is either `Success<T>` or `Failure<E>`.
 
-- `success(...)` / `failure(...)` create results
+- `success(...)` / `failure()` / `failure(...)` create results
 - `failable(...)` captures thrown or rejected boundaries
 - `run(...)` composes multiple `Failable` steps
 
@@ -289,38 +289,62 @@ function ensureSufficientFunds(
 }
 
 function planTransfer(
-  request: TransferRequest,
+  { fromAccountId, toAccountId, amountCents }: TransferRequest,
 ): Failable<TransferPlan, TransferPlanningError> {
-  const source = readSourceAccount(request.fromAccountId);
-  if (source.isFailure) return source;
+  const source = readSourceAccount(fromAccountId);
 
-  const destination = readDestinationAccount(request.toAccountId);
-  if (destination.isFailure) return destination;
+  if (source.isFailure) {
+    return source;
+  }
 
-  if (source.id === destination.id) return failure({ code: 'same_account' });
+  if (source.balanceCents < amountCents) {
+    return failure({
+      code: 'insufficient_funds',
+      balanceCents: source.balanceCents,
+      attemptedCents: amountCents,
+    });
+  }
 
-  const fundedSource = ensureSufficientFunds(source.data, request.amountCents);
-  if (fundedSource.isFailure) return fundedSource;
+  const destination = readDestinationAccount(toAccountId);
 
-  return success({ ...request, feeCents: 25 });
+  if (destination.isFailure) {
+    return destination;
+  }
+
+  if (source.id === destination.id) {
+    return failure({ code: 'same_account' });
+  }
+
+  return success({ fromAccountId, toAccountId, amountCents, feeCents: 25 });
 }
 ```
 
 With the same helpers, `run(...)` keeps the flow linear:
 
 ```ts
-import { run, success, type Failable } from '@pvorona/failable';
+import { failure, run, success, type Failable } from '@pvorona/failable';
 
 function planTransfer(
-  request: TransferRequest,
+  { fromAccountId, toAccountId, amountCents }: TransferRequest,
 ): Failable<TransferPlan, TransferPlanningError> {
   return run(function* ({ get }) {
-    const source = yield* get(readSourceAccount(request.fromAccountId));
-    const destination = yield* get(readDestinationAccount(request.toAccountId));
-    if (source.id === destination.id) return failure({ code: 'same_account' });
-    yield* get(ensureSufficientFunds(source, request.amountCents));
+    const source = yield* get(readSourceAccount(fromAccountId));
 
-    return success({ ...request, feeCents: 25 });
+    if (source.balanceCents < amountCents) {
+      return failure({
+        code: 'insufficient_funds',
+        balanceCents: source.balanceCents,
+        attemptedCents: amountCents,
+      });
+    }
+
+    const destination = yield* get(readDestinationAccount(toAccountId));
+
+    if (source.id === destination.id) {
+      return failure({ code: 'same_account' });
+    }
+
+    return success({ fromAccountId, toAccountId, amountCents, feeCents: 25 });
   });
 }
 ```
@@ -334,33 +358,41 @@ type TransferAsyncError =
   | TransferPlanningError
   | { code: 'daily_limit_exceeded'; remainingCents: number };
 
-const request = {
-  fromAccountId: 'checking',
-  toAccountId: 'savings',
-  amountCents: 2_500,
-};
+async function planTransfer(
+  { fromAccountId, toAccountId, amountCents }: TransferRequest,
+): Promise<Failable<TransferPlan, TransferAsyncError>> {
+  return await run(async function* ({ get }) {
+    const source = yield* get(readSourceAccount(fromAccountId));
 
-async function ensureWithinDailyLimit(
-  accountId: string,
-  amountCents: number,
-): Promise<Failable<void, TransferAsyncError>> {
-  const remainingCents = accountId === 'checking' ? 3_000 : 0;
-  if (amountCents > remainingCents) {
-    return failure({ code: 'daily_limit_exceeded', remainingCents });
-  }
+    if (source.balanceCents < amountCents) {
+      return failure({
+        code: 'insufficient_funds',
+        balanceCents: source.balanceCents,
+        attemptedCents: amountCents,
+      });
+    }
 
-  return success(undefined);
+    const destination = yield* get(readDestinationAccount(toAccountId));
+
+    if (source.id === destination.id) {
+      return failure({ code: 'same_account' });
+    }
+
+    // Simulate an async step that can fail
+    yield* get(
+      (async () => {
+        const remainingCents = source.id === 'checking' ? 3_000 : 0;
+        if (amountCents > remainingCents) {
+          return failure({ code: 'daily_limit_exceeded', remainingCents });
+        }
+
+        return success();
+      })()
+    );
+
+    return success({ fromAccountId, toAccountId, amountCents, feeCents: 25 });
+  });
 }
-
-const result = await run(async function* ({ get }) {
-  const source = yield* get(readSourceAccount(request.fromAccountId));
-  const destination = yield* get(readDestinationAccount(request.toAccountId));
-  yield* get(ensureDifferentAccounts(source, destination));
-  yield* get(ensureSufficientFunds(source, request.amountCents));
-  yield* get(ensureWithinDailyLimit(source.id, request.amountCents));
-
-  return success({ ...request, feeCents: 25 });
-});
 ```
 
 Keep these rules in mind:
@@ -421,7 +453,7 @@ if (isFailable(candidate) && candidate.isFailure) {
 - `type Failable<T, E>`: `Success<T> | Failure<E>`
 - `type Success<T>` / `type Failure<E>`: hydrated result variants
 - `type FailableLike<T, E>`: structured-clone-friendly wire shape
-- `success(data)` / `failure(error)`: create hydrated results
+- `success()` / `success(data)` / `failure()` / `failure(error)`: create hydrated results
 - `throwIfError(result)` / `result.getOrThrow()`: throw the stored failure
   unchanged
 - `failable(...)`: preserve, rehydrate, capture, or normalize failures at
