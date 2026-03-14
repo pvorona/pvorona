@@ -1,15 +1,41 @@
+import { readFile } from 'node:fs/promises';
 import {
   createFailable,
   failure,
   FailableStatus,
   isFailure,
   isFailableLike,
+  NormalizedErrors,
   run,
   success,
   throwIfError,
   toFailableLike,
   type Failable,
 } from '@pvorona/failable';
+
+const EXPECTED_RUNTIME_EXPORTS = [
+  'FailableStatus',
+  'NormalizedErrors',
+  'createFailable',
+  'failure',
+  'isFailable',
+  'isFailableLike',
+  'isFailure',
+  'isSuccess',
+  'run',
+  'success',
+  'throwIfError',
+  'toFailableLike',
+] as const;
+
+const EXPECTED_PACKAGE_EXPORTS = {
+  './package.json': './package.json',
+  '.': {
+    types: './dist/index.d.ts',
+    import: './dist/index.js',
+    default: './dist/index.js',
+  },
+} as const;
 
 function divide(a: number, b: number): Failable<number, string> {
   if (b === 0) return failure('Cannot divide by zero');
@@ -198,7 +224,36 @@ async function rejectFailable(
   throw rejection;
 }
 
+function createNullPrototypeObject<T extends Record<string, unknown>>(
+  value: T
+): T {
+  return Object.assign(
+    Object.create(null) as Record<string, unknown>,
+    value
+  ) as T;
+}
+
+function throwDirectly(error: unknown): never {
+  throw error;
+}
+
 describe('public surface', () => {
+  it('pins the exact runtime export set', async () => {
+    const packageApi = await import('@pvorona/failable');
+
+    expect(Object.keys(packageApi).sort()).toStrictEqual(
+      [...EXPECTED_RUNTIME_EXPORTS].sort()
+    );
+  });
+
+  it('pins the exact package.json exports object', async () => {
+    const packageJson = JSON.parse(
+      await readFile(new URL('../package.json', import.meta.url), 'utf8')
+    ) as { readonly exports: unknown };
+
+    expect(packageJson.exports).toStrictEqual(EXPECTED_PACKAGE_EXPORTS);
+  });
+
   it('supports the README quick-start branching example', () => {
     const okResult = planTransfer(
       {
@@ -351,6 +406,60 @@ describe('public surface', () => {
     });
   });
 
+  it('supports `NormalizedErrors` for plain-object throws without `[object Object]` messages', () => {
+    const rawError = { code: 'bad_request' } as const;
+    const result = createFailable(
+      () => {
+        throw rawError;
+      },
+      NormalizedErrors
+    );
+
+    if (!result.isError) {
+      throw new Error('Expected `NormalizedErrors` to capture the thrown plain object');
+    }
+
+    expect(result.error).toBeInstanceOf(Error);
+    expect(result.error.message).not.toBe('[object Object]');
+    expect(result.error).toMatchObject({ cause: rawError });
+  });
+
+  it('supports `NormalizedErrors` for null-prototype plain-object throws without escaping', () => {
+    const rawError = createNullPrototypeObject({ code: 'bad_request' as const });
+    const result = createFailable(
+      () => {
+        throw rawError;
+      },
+      NormalizedErrors
+    );
+
+    if (!result.isError) {
+      throw new Error(
+        'Expected `NormalizedErrors` to keep the null-prototype object inside Failure'
+      );
+    }
+
+    expect(result.error).toBeInstanceOf(Error);
+    expect(result.error.message).toBe(JSON.stringify({ code: 'bad_request' }));
+    expect(result.error).toMatchObject({ cause: rawError });
+  });
+
+  it('supports the README `createFailable(...)` chooser: callback for sync throws, promise for async capture', async () => {
+    const syncResult = createFailable(() => JSON.parse('not valid json'));
+    const asyncResult = await createFailable(Promise.resolve(5));
+
+    if (!syncResult.isError) {
+      throw new Error('Expected the sync callback example to capture a thrown error');
+    }
+
+    if (asyncResult.isError) {
+      throw new Error('Expected the direct promise example to capture async success');
+    }
+
+    expect(syncResult.error).toBeInstanceOf(SyntaxError);
+    expect(asyncResult.data).toBe(5);
+  });
+
   it('supports the README `run(...)` example', () => {
     const result = planTransferWithRun({
       fromAccountId: 'checking',
@@ -463,7 +572,7 @@ describe('public surface', () => {
 
           return success('unreachable' as const);
         } finally {
-          throw cleanupThrow;
+          throwDirectly(cleanupThrow);
         }
       })
     ).toThrow(cleanupThrow);
@@ -480,7 +589,7 @@ describe('public surface', () => {
 
           return success('unreachable' as const);
         } finally {
-          throw cleanupThrow;
+          throwDirectly(cleanupThrow);
         }
       })
     ).rejects.toBe(cleanupThrow);
@@ -513,7 +622,7 @@ describe('public surface', () => {
 
           return success('unreachable' as const);
         } finally {
-          throw cleanupThrow;
+          throwDirectly(cleanupThrow);
         }
       })
     ).rejects.toBe(cleanupThrow);
