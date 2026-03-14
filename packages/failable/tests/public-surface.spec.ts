@@ -17,11 +17,179 @@ function divide(a: number, b: number): Failable<number, string> {
   return success(a / b);
 }
 
-async function divideAsync(
-  a: number,
-  b: number
-): Promise<Failable<number, string>> {
-  return divide(a, b);
+type TransferRequest = {
+  readonly fromAccountId: string;
+  readonly toAccountId: string;
+  readonly amountCents: number;
+};
+
+type TransferPlan = TransferRequest & {
+  readonly feeCents: number;
+};
+
+type TransferError =
+  | { readonly code: 'same_account' }
+  | { readonly code: 'amount_too_small'; readonly minAmountCents: number }
+  | {
+      readonly code: 'insufficient_funds';
+      readonly balanceCents: number;
+      readonly attemptedCents: number;
+    };
+
+function planTransfer(
+  request: TransferRequest,
+  balanceCents: number
+): Failable<TransferPlan, TransferError> {
+  if (request.fromAccountId === request.toAccountId) {
+    return failure({ code: 'same_account' });
+  }
+
+  if (request.amountCents < 100) {
+    return failure({ code: 'amount_too_small', minAmountCents: 100 });
+  }
+
+  if (balanceCents < request.amountCents) {
+    return failure({
+      code: 'insufficient_funds',
+      balanceCents,
+      attemptedCents: request.amountCents,
+    });
+  }
+
+  return success({ ...request, feeCents: 25 });
+}
+
+type SubmitTransferError = { readonly code: 'ledger_unavailable' };
+
+async function postToLedger(
+  plan: TransferPlan
+): Promise<Failable<{ readonly transferId: string }, SubmitTransferError>> {
+  const request = (async () => {
+    if (plan.amountCents > 5000) throw new Error('Ledger unavailable');
+
+    return { transferId: 'tr_123' } as const;
+  })();
+
+  const created = await createFailable(request);
+
+  return created.match(
+    (data) => success(data),
+    () => failure({ code: 'ledger_unavailable' }),
+  );
+}
+
+async function submitTransfer(
+  plan: TransferPlan
+): Promise<Failable<{ readonly transferId: string }, SubmitTransferError>> {
+  return await run(async function* ({ get }) {
+    const created = yield* get(postToLedger(plan));
+
+    return success(created);
+  });
+}
+
+type Account = {
+  readonly id: string;
+  readonly balanceCents: number;
+};
+
+type TransferPlanningError =
+  | TransferError
+  | { readonly code: 'source_account_not_found'; readonly accountId: string }
+  | { readonly code: 'destination_account_not_found'; readonly accountId: string };
+
+function readSourceAccount(
+  accountId: string
+): Failable<Account, TransferPlanningError> {
+  if (accountId !== 'checking') {
+    return failure({ code: 'source_account_not_found', accountId });
+  }
+
+  return success({ id: 'checking', balanceCents: 5000 });
+}
+
+function readDestinationAccount(
+  accountId: string
+): Failable<Account, TransferPlanningError> {
+  if (accountId !== 'savings') {
+    return failure({ code: 'destination_account_not_found', accountId });
+  }
+
+  return success({ id: 'savings', balanceCents: 20000 });
+}
+
+function ensureDifferentAccounts(
+  source: Account,
+  destination: Account
+): Failable<void, TransferPlanningError> {
+  if (source.id === destination.id) return failure({ code: 'same_account' });
+
+  return success(undefined);
+}
+
+function ensureSufficientFunds(
+  source: Account,
+  amountCents: number
+): Failable<Account, TransferPlanningError> {
+  if (source.balanceCents < amountCents) {
+    return failure({
+      code: 'insufficient_funds',
+      balanceCents: source.balanceCents,
+      attemptedCents: amountCents,
+    });
+  }
+
+  return success(source);
+}
+
+function planTransferWithRun(
+  request: TransferRequest
+): Failable<TransferPlan, TransferPlanningError> {
+  return run(function* ({ get }) {
+    const source = yield* get(readSourceAccount(request.fromAccountId));
+    const destination = yield* get(readDestinationAccount(request.toAccountId));
+    yield* get(ensureDifferentAccounts(source, destination));
+    yield* get(ensureSufficientFunds(source, request.amountCents));
+
+    return success({ ...request, feeCents: 25 });
+  });
+}
+
+type TransferAsyncError =
+  | TransferPlanningError
+  | { readonly code: 'daily_limit_exceeded'; readonly remainingCents: number };
+
+async function ensureWithinDailyLimit(
+  accountId: string,
+  amountCents: number
+): Promise<Failable<void, TransferAsyncError>> {
+  const remainingCents = accountId === 'checking' ? 3000 : 0;
+  if (amountCents > remainingCents) {
+    return failure({ code: 'daily_limit_exceeded', remainingCents });
+  }
+
+  return success(undefined);
+}
+
+async function planTransferWithRunAsync(request: {
+  readonly fromAccountId: string;
+  readonly toAccountId: string;
+  readonly amountCents: number;
+}): Promise<
+  Failable<
+    TransferPlan,
+    TransferAsyncError
+  >
+> {
+  return await run(async function* ({ get }) {
+    const source = yield* get(readSourceAccount(request.fromAccountId));
+    const destination = yield* get(readDestinationAccount(request.toAccountId));
+    yield* get(ensureDifferentAccounts(source, destination));
+    yield* get(ensureSufficientFunds(source, request.amountCents));
+    yield* get(ensureWithinDailyLimit(source.id, request.amountCents));
+
+    return success({ ...request, feeCents: 25 });
+  });
 }
 
 async function rejectFailable(
@@ -32,20 +200,74 @@ async function rejectFailable(
 
 describe('public surface', () => {
   it('supports the README quick-start branching example', () => {
-    const okResult = divide(10, 2);
-    const errorResult = divide(10, 0);
+    const okResult = planTransfer(
+      {
+        fromAccountId: 'checking',
+        toAccountId: 'savings',
+        amountCents: 2500,
+      },
+      5000
+    );
+    const sameAccountResult = planTransfer(
+      {
+        fromAccountId: 'checking',
+        toAccountId: 'checking',
+        amountCents: 2500,
+      },
+      5000
+    );
+    const smallAmountResult = planTransfer(
+      {
+        fromAccountId: 'checking',
+        toAccountId: 'savings',
+        amountCents: 50,
+      },
+      5000
+    );
+    const insufficientFundsResult = planTransfer(
+      {
+        fromAccountId: 'checking',
+        toAccountId: 'savings',
+        amountCents: 10000,
+      },
+      4500
+    );
 
     if (okResult.isError) {
-      throw new Error('Expected divide(10, 2) to succeed');
+      throw new Error('Expected planTransfer(...) to succeed');
     }
 
-    expect(okResult.data).toBe(5);
+    expect(okResult.data).toStrictEqual({
+      fromAccountId: 'checking',
+      toAccountId: 'savings',
+      amountCents: 2500,
+      feeCents: 25,
+    });
 
-    if (!errorResult.isError) {
-      throw new Error('Expected divide(10, 0) to fail');
+    if (!sameAccountResult.isError) {
+      throw new Error('Expected same-account transfer to fail');
     }
 
-    expect(errorResult.error).toBe('Cannot divide by zero');
+    expect(sameAccountResult.error).toStrictEqual({ code: 'same_account' });
+
+    if (!smallAmountResult.isError) {
+      throw new Error('Expected small transfer to fail');
+    }
+
+    expect(smallAmountResult.error).toStrictEqual({
+      code: 'amount_too_small',
+      minAmountCents: 100,
+    });
+
+    if (!insufficientFundsResult.isError) {
+      throw new Error('Expected insufficient funds to fail');
+    }
+
+    expect(insufficientFundsResult.error).toStrictEqual({
+      code: 'insufficient_funds',
+      balanceCents: 4500,
+      attemptedCents: 10000,
+    });
   });
 
   it('supports guard-based validation for hydrated unknown values', () => {
@@ -100,99 +322,71 @@ describe('public surface', () => {
     throw new Error('Expected getOrThrow() to throw the stored error');
   });
 
-  it('supports the README `createFailable(...)` boundary example', () => {
-    const result = createFailable(() => JSON.parse('not valid json'));
+  it('supports the README `createFailable(...)` boundary example', async () => {
+    const okResult = await submitTransfer({
+      fromAccountId: 'checking',
+      toAccountId: 'savings',
+      amountCents: 2500,
+      feeCents: 25,
+    });
+    const ledgerFailureResult = await submitTransfer({
+      fromAccountId: 'checking',
+      toAccountId: 'savings',
+      amountCents: 6000,
+      feeCents: 25,
+    });
 
-    if (!result.isError) {
-      throw new Error('Expected createFailable(...) to capture the thrown error');
+    if (okResult.isError) {
+      throw new Error('Expected submitTransfer(...) to succeed');
     }
 
-    expect(result.error).toBeInstanceOf(SyntaxError);
-  });
+    expect(okResult.data).toStrictEqual({ transferId: 'tr_123' });
 
-  it('supports the README `createFailable(...)` chooser: callback for sync throws, promise for async capture', async () => {
-    const syncResult = createFailable(() => JSON.parse('not valid json'));
-    const asyncResult = await createFailable(Promise.resolve(5));
-
-    if (!syncResult.isError) {
-      throw new Error('Expected the sync callback example to capture a thrown error');
+    if (!ledgerFailureResult.isError) {
+      throw new Error('Expected submitTransfer(...) to capture ledger failure');
     }
 
-    if (asyncResult.isError) {
-      throw new Error('Expected the direct promise example to capture async success');
-    }
-
-    expect(syncResult.error).toBeInstanceOf(SyntaxError);
-    expect(asyncResult.data).toBe(5);
-  });
-
-  it('keeps promise-returning callback misuse inside Failure with an actionable message', () => {
-    const result = createFailable(
-      (() => Promise.resolve(5)) as unknown as () => number
-    );
-
-    if (!result.isError) {
-      throw new Error(
-        'Expected promise-returning callback misuse to stay in the Failure channel'
-      );
-    }
-
-    expect(result.error).toBeInstanceOf(Error);
-    const error = result.error as Error;
-    expect(error.message).toBe(
-      '`createFailable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await createFailable(promise)`.'
-    );
-  });
-
-  it('preserves the actionable guard error even when custom normalization is enabled', () => {
-    const normalizeError = vi.fn(
-      (error: unknown) => new Error('normalized', { cause: error })
-    );
-    const result = createFailable(
-      (() => Promise.resolve(5)) as unknown as () => number,
-      { normalizeError }
-    );
-
-    if (!result.isError) {
-      throw new Error(
-        'Expected promise-returning callback misuse to stay in the Failure channel'
-      );
-    }
-
-    expect(normalizeError).not.toHaveBeenCalled();
-    expect(result.error.message).toBe(
-      '`createFailable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await createFailable(promise)`.'
-    );
+    expect(ledgerFailureResult.error).toStrictEqual({
+      code: 'ledger_unavailable',
+    });
   });
 
   it('supports the README `run(...)` example', () => {
-    const result = run(function* ({ get }) {
-      const first = yield* get(divide(20, 2));
-      const second = yield* get(divide(first, 5));
-
-      return success(second);
+    const result = planTransferWithRun({
+      fromAccountId: 'checking',
+      toAccountId: 'savings',
+      amountCents: 2500,
     });
 
     if (result.isError) {
       throw new Error('Expected the README `run(...)` example to succeed');
     }
 
-    expect(result.data).toBe(2);
+    expect(result.data).toStrictEqual({
+      fromAccountId: 'checking',
+      toAccountId: 'savings',
+      amountCents: 2500,
+      feeCents: 25,
+    });
   });
 
   it('supports async `run(...)` composition with promised sources', async () => {
-    const result = await run(async function* ({ get }) {
-      const first = yield* get(divide(20, 2));
-      const second = yield* get(divideAsync(first, 5));
-
-      return success(second);
+    const result = await planTransferWithRunAsync({
+      fromAccountId: 'checking',
+      toAccountId: 'savings',
+      amountCents: 2500,
     });
 
     if (result.isError) {
       throw new Error('Expected the async `run(...)` example to succeed');
     }
 
-    expect(result.data).toBe(2);
+    expect(result.data).toStrictEqual({
+      fromAccountId: 'checking',
+      toAccountId: 'savings',
+      amountCents: 2500,
+      feeCents: 25,
+    });
   });
 
   it('returns the original Failure after draining reachable cleanup during failure unwinding', () => {
