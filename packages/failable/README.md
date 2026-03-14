@@ -32,85 +32,42 @@ If you are upgrading from the previous API name:
 
 ## Basic Usage
 
-Use `Failable` when callers need different behavior for different expected
-failures. This is especially useful for business rules that schema validators do
-not model for you:
+Use `Failable` when a failure is expected and the caller needs to decide what to
+do next. Start with the smallest mental model: return `success(...)` or
+`failure(...)`, then branch on `result.isFailure`.
 
 ```ts
 import { failure, success, type Failable } from '@pvorona/failable';
 
-type TransferRequest = {
-  fromAccountId: string;
-  toAccountId: string;
-  amountCents: number;
-};
+type ReadPortError =
+  | { code: 'missing_port' }
+  | { code: 'invalid_port'; value: string };
 
-type TransferPlan = TransferRequest & {
-  feeCents: number;
-};
+function readPort(
+  env: Record<string, string | undefined>,
+): Failable<number, ReadPortError> {
+  const raw = env.PORT;
+  if (raw === undefined) return failure({ code: 'missing_port' });
 
-type TransferError =
-  | { code: 'same_account' }
-  | { code: 'amount_too_small'; minAmountCents: number }
-  | {
-      code: 'insufficient_funds';
-      balanceCents: number;
-      attemptedCents: number;
-    };
-
-function planTransfer(
-  request: TransferRequest,
-  balanceCents: number,
-): Failable<TransferPlan, TransferError> {
-  if (request.fromAccountId === request.toAccountId) {
-    return failure({ code: 'same_account' });
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port <= 0) {
+    return failure({ code: 'invalid_port', value: raw });
   }
 
-  if (request.amountCents < 100) {
-    return failure({ code: 'amount_too_small', minAmountCents: 100 });
-  }
-
-  if (balanceCents < request.amountCents) {
-    return failure({
-      code: 'insufficient_funds',
-      balanceCents,
-      attemptedCents: request.amountCents,
-    });
-  }
-
-  return success({ ...request, feeCents: 25 });
+  return success(port);
 }
 
-const result = planTransfer(
-  {
-    fromAccountId: 'checking',
-    toAccountId: 'savings',
-    amountCents: 10_000,
-  },
-  4_500,
-);
+const result = readPort({ PORT: '3000' });
 
 if (result.isFailure) {
-  switch (result.error.code) {
-    case 'same_account':
-      console.error('Choose a different destination account');
-      break;
-    case 'amount_too_small':
-      console.error(`Transfers start at ${result.error.minAmountCents} cents`);
-      break;
-    case 'insufficient_funds':
-      console.error(
-        `Balance ${result.error.balanceCents} is below ${result.error.attemptedCents}`
-      );
-      break;
-  }
+  console.error(result.error);
 } else {
-  console.log(result.data.feeCents);
+  console.log(`Listening on ${result.data}`);
 }
 ```
 
-That is the default usage model for this package: return a typed result that
-carries both the success value and the expected failure reason.
+That is the core model for this package: a typed result with a success value on
+one branch and an expected failure reason on the other.
 
 ## Choose The Right API
 
@@ -129,7 +86,7 @@ carries both the success value and the expected failure reason.
 ## Unwrapping And Recovery
 
 Start with ordinary branching on `result.isFailure` or `result.isSuccess`. When
-you need a shorter form, use the helper that matches the job:
+you want something shorter, use the helper that matches the job:
 
 - `result.getOr(fallback)`: return the success value or an eager fallback
 - `result.getOrElse(() => fallback)`: same, but lazily
@@ -142,80 +99,78 @@ you need a shorter form, use the helper that matches the job:
 Use the lazy forms when the fallback is expensive or has side effects.
 
 ```ts
-import { failure, success, throwIfError } from '@pvorona/failable';
+import {
+  failure,
+  success,
+  throwIfError,
+  type Failable,
+} from '@pvorona/failable';
 
-const feeResult =
-  Math.random() > 0.5
-    ? success(25)
-    : failure({ code: 'pricing_unavailable' as const });
+type ReadThemeError = { code: 'missing_theme' };
 
-const feeCents = feeResult.getOr(25);
-const status = feeResult.match(
-  (value) => `Fee is ${value} cents`,
-  ({ code }) => `Cannot quote fee: ${code}`
+function readTheme(
+  env: Record<string, string | undefined>,
+): Failable<string, ReadThemeError> {
+  const raw = env.THEME;
+  if (raw === undefined) return failure({ code: 'missing_theme' });
+
+  return success(raw);
+}
+
+const themeResult = readTheme({ THEME: 'dark' });
+
+const displayTheme = themeResult.getOr('light');
+const label = themeResult.match(
+  (value) => `Theme: ${value}`,
+  () => 'Theme: light (fallback)'
 );
 
-throwIfError(feeResult);
-console.log(feeCents, status, feeResult.data);
+console.log(displayTheme, label);
+
+throwIfError(themeResult);
+console.log(themeResult.data.toUpperCase());
 ```
 
 ## Capture Thrown Or Rejected Failures With `failable(...)`
 
-Use `failable(...)` at boundaries that throw or reject, then normalize
-that failure once at the boundary if needed:
+Use `failable(...)` at a boundary you do not control. It turns a thrown or
+rejected value into `Failure`, so the rest of your code can stay in normal
+`Failable` flow.
 
-Using `TransferPlan` from above:
+Use the callback form for synchronous code that can throw:
 
 ```ts
-import {
-  failable,
-  run,
-  success,
-  type Failable,
-} from '@pvorona/failable';
+import { failable, NormalizedErrors } from '@pvorona/failable';
 
-type SubmitTransferError = Error;
+const rawConfig = '{"theme":"dark"}';
+const configResult = failable(() => JSON.parse(rawConfig), NormalizedErrors);
 
-async function postToLedger(
-  plan: TransferPlan,
-): Promise<Failable<{ transferId: string }, SubmitTransferError>> {
-  const request = (async () => {
-    if (plan.amountCents > 5_000) {
-      throw { code: 'ledger_unavailable' } as const;
-    }
-
-    return { transferId: 'tr_123' };
-  })();
-
-  return await failable(request, {
-    normalizeError(error) {
-      return new Error('Ledger unavailable', { cause: error });
-    },
-  });
-}
-
-async function submitTransfer(
-  plan: TransferPlan,
-): Promise<Failable<{ transferId: string }, SubmitTransferError>> {
-  return await run(async function* ({ get }) {
-    const created = yield* get(postToLedger(plan));
-
-    return success(created);
-  });
+if (configResult.isFailure) {
+  console.error(configResult.error.message);
+} else {
+  console.log(configResult.data);
 }
 ```
 
-`postToLedger(...)` is the boundary adapter. It uses
-`failable(..., { normalizeError })` to capture a raw throw/rejection once
-and expose one stable `Error` shape to the rest of the app. If you only need
-generic `Error` normalization, `NormalizedErrors` is the built-in shortcut.
-Once that helper already returns `Failable`, `submitTransfer(...)` can use
-`run(...)` to compose it like any other step.
+`NormalizedErrors` is the built-in shortcut when you want `.error` to be an
+`Error`.
 
 Pass a promise directly when you want rejection capture:
 
 ```ts
-const responseResult = await failable(fetch(url));
+import { failable, NormalizedErrors } from '@pvorona/failable';
+import { readFile } from 'node:fs/promises';
+
+const fileResult = await failable(
+  readFile('config.json', 'utf8'),
+  NormalizedErrors
+);
+
+if (fileResult.isFailure) {
+  console.error(fileResult.error.message);
+} else {
+  console.log(fileResult.data);
+}
 ```
 
 `failable(...)` can:
@@ -235,162 +190,44 @@ you to pass the promise directly instead.
 ## Compose Existing `Failable` Steps With `run(...)`
 
 Use `run(...)` when each step already returns `Failable` and you want to write
-the success path once:
-
-Without `run(...)`, composition often becomes an error ladder:
-
-```ts
-import { failure, success, type Failable } from '@pvorona/failable';
-
-type Account = {
-  id: string;
-  balanceCents: number;
-};
-
-type TransferPlanningError =
-  | TransferError
-  | { code: 'source_account_not_found'; accountId: string }
-  | { code: 'destination_account_not_found'; accountId: string };
-
-function readSourceAccount(
-  accountId: string,
-): Failable<Account, TransferPlanningError> {
-  if (accountId !== 'checking') {
-    return failure({ code: 'source_account_not_found', accountId });
-  }
-
-  return success({ id: 'checking', balanceCents: 5_000 });
-}
-
-function readDestinationAccount(
-  accountId: string,
-): Failable<Account, TransferPlanningError> {
-  if (accountId !== 'savings') {
-    return failure({ code: 'destination_account_not_found', accountId });
-  }
-
-  return success({ id: 'savings', balanceCents: 20_000 });
-}
-
-
-function ensureSufficientFunds(
-  source: Account,
-  amountCents: number,
-): Failable<Account, TransferPlanningError> {
-  if (source.balanceCents < amountCents) {
-    return failure({
-      code: 'insufficient_funds',
-      balanceCents: source.balanceCents,
-      attemptedCents: amountCents,
-    });
-  }
-
-  return success(source);
-}
-
-function planTransfer(
-  { fromAccountId, toAccountId, amountCents }: TransferRequest,
-): Failable<TransferPlan, TransferPlanningError> {
-  const source = readSourceAccount(fromAccountId);
-
-  if (source.isFailure) {
-    return source;
-  }
-
-  if (source.balanceCents < amountCents) {
-    return failure({
-      code: 'insufficient_funds',
-      balanceCents: source.balanceCents,
-      attemptedCents: amountCents,
-    });
-  }
-
-  const destination = readDestinationAccount(toAccountId);
-
-  if (destination.isFailure) {
-    return destination;
-  }
-
-  if (source.id === destination.id) {
-    return failure({ code: 'same_account' });
-  }
-
-  return success({ fromAccountId, toAccountId, amountCents, feeCents: 25 });
-}
-```
-
-With the same helpers, `run(...)` keeps the flow linear:
+the success path once. If any yielded step fails, `run(...)` returns that same
+failure unchanged.
 
 ```ts
 import { failure, run, success, type Failable } from '@pvorona/failable';
 
-function planTransfer(
-  { fromAccountId, toAccountId, amountCents }: TransferRequest,
-): Failable<TransferPlan, TransferPlanningError> {
+type LoadDashboardError =
+  | { code: 'missing_user_id' }
+  | { code: 'user_not_found'; id: string }
+  | { code: 'beta_disabled' };
+
+function readUserId(
+  raw: string | undefined,
+): Failable<string, LoadDashboardError> {
+  if (raw === undefined) return failure({ code: 'missing_user_id' });
+
+  return success(raw);
+}
+
+function findUser(
+  id: string,
+): Failable<{ id: string; hasBetaAccess: boolean }, LoadDashboardError> {
+  if (id !== 'user_123' && id !== 'user_456') {
+    return failure({ code: 'user_not_found', id });
+  }
+
+  return success({ id, hasBetaAccess: id === 'user_123' });
+}
+
+function loadDashboard(
+  rawUserId: string | undefined,
+): Failable<{ userId: string }, LoadDashboardError> {
   return run(function* ({ get }) {
-    const source = yield* get(readSourceAccount(fromAccountId));
+    const userId = yield* get(readUserId(rawUserId));
+    const user = yield* get(findUser(userId));
+    if (!user.hasBetaAccess) return failure({ code: 'beta_disabled' });
 
-    if (source.balanceCents < amountCents) {
-      return failure({
-        code: 'insufficient_funds',
-        balanceCents: source.balanceCents,
-        attemptedCents: amountCents,
-      });
-    }
-
-    const destination = yield* get(readDestinationAccount(toAccountId));
-
-    if (source.id === destination.id) {
-      return failure({ code: 'same_account' });
-    }
-
-    return success({ fromAccountId, toAccountId, amountCents, feeCents: 25 });
-  });
-}
-```
-
-With one async rule added, the shape stays the same:
-
-```ts
-import { failure, run, success, type Failable } from '@pvorona/failable';
-
-type TransferAsyncError =
-  | TransferPlanningError
-  | { code: 'daily_limit_exceeded'; remainingCents: number };
-
-async function planTransfer(
-  { fromAccountId, toAccountId, amountCents }: TransferRequest,
-): Promise<Failable<TransferPlan, TransferAsyncError>> {
-  return await run(async function* ({ get }) {
-    const source = yield* get(readSourceAccount(fromAccountId));
-
-    if (source.balanceCents < amountCents) {
-      return failure({
-        code: 'insufficient_funds',
-        balanceCents: source.balanceCents,
-        attemptedCents: amountCents,
-      });
-    }
-
-    const destination = yield* get(readDestinationAccount(toAccountId));
-
-    if (source.id === destination.id) {
-      return failure({ code: 'same_account' });
-    }
-
-    // Simulate an async step that can fail
-    yield* get(
-      (async () => {
-        const remainingCents = source.id === 'checking' ? 3_000 : 0;
-        if (amountCents > remainingCents) {
-          return failure({ code: 'daily_limit_exceeded', remainingCents });
-        }
-
-        return success();
-      })()
-    );
-
-    return success({ fromAccountId, toAccountId, amountCents, feeCents: 25 });
+    return success({ userId: user.id });
   });
 }
 ```
@@ -413,18 +250,12 @@ side:
 
 ```ts
 import {
+  failure,
   failable,
   toFailableLike,
 } from '@pvorona/failable';
 
-const result = planTransfer(
-  {
-    fromAccountId: 'checking',
-    toAccountId: 'savings',
-    amountCents: 2_500,
-  },
-  5_000,
-);
+const result = failure({ code: 'missing_port' as const });
 
 const wire = toFailableLike(result);
 const hydrated = failable(wire);
