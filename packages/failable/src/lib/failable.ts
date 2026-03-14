@@ -5,7 +5,9 @@ import {
   isObject,
 } from '@pvorona/assert';
 import { notImplemented } from '@pvorona/not-implemented';
-import type { Mutable } from '@pvorona/types';
+type Mutable<T> = {
+  -readonly [P in keyof T]: T[P];
+};
 
 const FAILABLE_TAG = Symbol('Failable');
 const SUCCESS_TAG = Symbol('Success');
@@ -208,6 +210,9 @@ const BASE_FAILURE = (() => {
     return getValue();
   };
   node.getOrThrow = function getOrThrowFailure() {
+    if (this.error === undefined) {
+      throw new Error('getOrThrow() called on Failure<void> with no error value');
+    }
     throw this.error;
   };
   node.match = function matchFailure(
@@ -250,7 +255,8 @@ const BASE_FAILURE = (() => {
  * - Instances are shallow-immutable (`Object.freeze`) and tagged with Symbols.
  * - They are NOT class instances; do not use `instanceof`. Prefer `result.isSuccess` / `result.isFailure`
  *   or the guards {@link isSuccess} / {@link isFailure}.
- * - Exactly one of `data` / `error` is non-null.
+ * - Discriminate on `isSuccess` / `isFailure` or `status`, not on `data` / `error` nullity
+ *   (`success(null)` is valid and both slots will be `null`).
  *
  * Structured-clone boundary rule (RPC, `postMessage`, `chrome.*` messaging):
  * - **sender**: `toFailableLike(result)`

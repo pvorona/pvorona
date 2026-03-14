@@ -738,6 +738,12 @@ describe('getOrThrow()', () => {
       expect(() => failure(error).getOrThrow()).toThrow(error);
     });
 
+    it('throws a descriptive Error for void failures without an error value', () => {
+      expect(() => failure().getOrThrow()).toThrow(
+        'getOrThrow() called on Failure<void> with no error value'
+      );
+    });
+
     it('returns never for failure types', () => {
       const result = failure('boom' as const);
 

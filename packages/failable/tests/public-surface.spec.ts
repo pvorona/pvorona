@@ -378,6 +378,12 @@ describe('public surface', () => {
     throw new Error('Expected getOrThrow() to throw the stored error');
   });
 
+  it('throws a descriptive Error for `failure().getOrThrow()`', () => {
+    expect(() => failure().getOrThrow()).toThrow(
+      'getOrThrow() called on Failure<void> with no error value'
+    );
+  });
+
   it('supports the README `failable(...)` boundary example', async () => {
     const okResult = await submitTransfer({
       fromAccountId: 'checking',
