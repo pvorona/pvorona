@@ -8,7 +8,7 @@ input, missing config, not found, or a dependency call that can fail. Return a
 
 A `Failable<T, E>` is either `Success<T>` or `Failure<E>`.
 
-- `success(...)` / `failure()` / `failure(...)` create results
+- `success()` / `success(data)` / `failure()` / `failure(error)` create results
 - `failable(...)` captures thrown or rejected boundaries
 - `run(...)` composes multiple `Failable` steps
 
@@ -20,54 +20,44 @@ npm i @pvorona/failable
 
 This package is ESM-only and requires Node 18+.
 
-## Migration Note
-
-If you are upgrading from the previous API name:
-
-- `createFailable(x)` -> `failable(x)`
-- `CreateFailableNormalizeErrorOptions` -> `FailableNormalizeErrorOptions`
-- `result.isError` -> `result.isFailure`
-- `.error` is unchanged
-- `failure(...)`, `Failure<E>`, `throwIfError(...)`, and `getOrThrow()` are unchanged
-
 ## Basic Usage
 
-Use `Failable` when a failure is expected and the caller needs to decide what to
-do next. Start with the smallest mental model: return `success(...)` or
-`failure(...)`, then branch on `result.isFailure`.
+Return `success(...)` or `failure(...)`, then branch on `result.isFailure`.
+The typed error lets the caller decide what to do for each failure reason.
 
 ```ts
 import { failure, success, type Failable } from '@pvorona/failable';
 
 type ReadPortError =
-  | { code: 'missing_port' }
-  | { code: 'invalid_port'; value: string };
+  | { code: 'missing' }
+  | { code: 'invalid'; raw: string };
 
-function readPort(
-  env: Record<string, string | undefined>,
-): Failable<number, ReadPortError> {
-  const raw = env.PORT;
-  if (raw === undefined) return failure({ code: 'missing_port' });
+function readPort(raw: string | undefined): Failable<number, ReadPortError> {
+  if (raw === undefined) return failure({ code: 'missing' });
 
   const port = Number(raw);
   if (!Number.isInteger(port) || port <= 0) {
-    return failure({ code: 'invalid_port', value: raw });
+    return failure({ code: 'invalid', raw });
   }
 
   return success(port);
 }
 
-const result = readPort({ PORT: '3000' });
+const result = readPort(process.env.PORT);
 
 if (result.isFailure) {
-  console.error(result.error);
+  switch (result.error.code) {
+    case 'missing':
+      console.error('PORT is not set');
+      break;
+    case 'invalid':
+      console.error(`PORT is not a valid number: ${result.error.raw}`);
+      break;
+  }
 } else {
   console.log(`Listening on ${result.data}`);
 }
 ```
-
-That is the core model for this package: a typed result with a success value on
-one branch and an expected failure reason on the other.
 
 ## Choose The Right API
 
@@ -98,37 +88,28 @@ you want something shorter, use the helper that matches the job:
 
 Use the lazy forms when the fallback is expensive or has side effects.
 
+Using `readPort` from above:
+
 ```ts
-import {
-  failure,
-  success,
-  throwIfError,
-  type Failable,
-} from '@pvorona/failable';
+const result = readPort(process.env.PORT);
 
-type ReadThemeError = { code: 'missing_theme' };
-
-function readTheme(
-  env: Record<string, string | undefined>,
-): Failable<string, ReadThemeError> {
-  const raw = env.THEME;
-  if (raw === undefined) return failure({ code: 'missing_theme' });
-
-  return success(raw);
-}
-
-const themeResult = readTheme({ THEME: 'dark' });
-
-const displayTheme = themeResult.getOr('light');
-const label = themeResult.match(
-  (value) => `Theme: ${value}`,
-  () => 'Theme: light (fallback)'
+const port = result.getOr(3000);
+const label = result.match(
+  (port) => `Listening on ${port}`,
+  (error) => `Using default port (${error.code})`
 );
+```
 
-console.log(displayTheme, label);
+`throwIfError` narrows the result to `Success` in place, so
+subsequent code can access `.data` without branching:
 
-throwIfError(themeResult);
-console.log(themeResult.data.toUpperCase());
+```ts
+import { throwIfError } from '@pvorona/failable';
+
+const result = readPort(process.env.PORT);
+
+throwIfError(result);
+console.log(result.data * 2);
 ```
 
 ## Capture Thrown Or Rejected Failures With `failable(...)`
@@ -166,11 +147,7 @@ const fileResult = await failable(
   NormalizedErrors
 );
 
-if (fileResult.isFailure) {
-  console.error(fileResult.error.message);
-} else {
-  console.log(fileResult.data);
-}
+const config = fileResult.getOr('{}');
 ```
 
 `failable(...)` can:
@@ -193,53 +170,73 @@ Use `run(...)` when each step already returns `Failable` and you want to write
 the success path once. If any yielded step fails, `run(...)` returns that same
 failure unchanged.
 
+Without `run(...)`, composing steps means checking each result before
+continuing:
+
 ```ts
-import { failure, run, success, type Failable } from '@pvorona/failable';
+import { failure, success, type Failable } from '@pvorona/failable';
 
-type LoadDashboardError =
-  | { code: 'missing_user_id' }
-  | { code: 'user_not_found'; id: string }
-  | { code: 'beta_disabled' };
+type ConfigError =
+  | { code: 'missing'; key: string }
+  | { code: 'invalid'; key: string; raw: string };
 
-function readUserId(
-  raw: string | undefined,
-): Failable<string, LoadDashboardError> {
-  if (raw === undefined) return failure({ code: 'missing_user_id' });
+function readEnv(
+  key: string,
+  env: Record<string, string | undefined>,
+): Failable<string, ConfigError> {
+  const raw = env[key];
+  if (raw === undefined) return failure({ code: 'missing', key });
 
   return success(raw);
 }
 
-function findUser(
-  id: string,
-): Failable<{ id: string; hasBetaAccess: boolean }, LoadDashboardError> {
-  if (id !== 'user_123' && id !== 'user_456') {
-    return failure({ code: 'user_not_found', id });
+function parsePort(raw: string): Failable<number, ConfigError> {
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port <= 0) {
+    return failure({ code: 'invalid', key: 'PORT', raw });
   }
 
-  return success({ id, hasBetaAccess: id === 'user_123' });
+  return success(port);
 }
 
-function loadDashboard(
-  rawUserId: string | undefined,
-): Failable<{ userId: string }, LoadDashboardError> {
-  return run(function* ({ get }) {
-    const userId = yield* get(readUserId(rawUserId));
-    const user = yield* get(findUser(userId));
-    if (!user.hasBetaAccess) return failure({ code: 'beta_disabled' });
+function loadConfig(
+  env: Record<string, string | undefined>,
+): Failable<{ host: string; port: number }, ConfigError> {
+  const hostResult = readEnv('HOST', env);
+  if (hostResult.isFailure) return hostResult;
 
-    return success({ userId: user.id });
+  const rawPortResult = readEnv('PORT', env);
+  if (rawPortResult.isFailure) return rawPortResult;
+
+  const portResult = parsePort(rawPortResult.data);
+  if (portResult.isFailure) return portResult;
+
+  return success({ host: hostResult.data, port: portResult.data });
+}
+```
+
+With `run(...)`, the same flow stays linear:
+
+```ts
+import { run, success, type Failable } from '@pvorona/failable';
+
+function loadConfig(
+  env: Record<string, string | undefined>,
+): Failable<{ host: string; port: number }, ConfigError> {
+  return run(function* ({ get }) {
+    const host = yield* get(readEnv('HOST', env));
+    const rawPort = yield* get(readEnv('PORT', env));
+    const port = yield* get(parsePort(rawPort));
+
+    return success({ host, port });
   });
 }
 ```
 
-Keep these rules in mind:
-
-- `run(...)` composes existing `Failable` values
 - if a yielded step fails, `run(...)` returns that original failure unchanged
 - in async builders, keep using `yield* get(...)`; do not write `await get(...)`
-- `run(...)` does not capture thrown values or rejected promises into `Failure`
-- wrap throwing or rejecting boundaries with `failable(...)` before they
-  enter `run(...)`
+- `run(...)` does not capture thrown values or rejected promises into `Failure`;
+  wrap throwing boundaries with `failable(...)` before they enter `run(...)`
 
 ## Transport And Runtime Validation
 
@@ -255,7 +252,7 @@ import {
   toFailableLike,
 } from '@pvorona/failable';
 
-const result = failure({ code: 'missing_port' as const });
+const result = failure({ code: 'missing' as const });
 
 const wire = toFailableLike(result);
 const hydrated = failable(wire);
