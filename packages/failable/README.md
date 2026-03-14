@@ -142,26 +142,17 @@ you need a shorter form, use the helper that matches the job:
 Use the lazy forms when the fallback is expensive or has side effects.
 
 ```ts
-import {
-  failure,
-  success,
-  throwIfError,
-  type Failable,
-} from '@pvorona/failable';
+import { failure, success, throwIfError } from '@pvorona/failable';
 
-type QuoteError = {
-  code: 'pricing_unavailable';
-};
-
-const feeResult: Failable<number, QuoteError> =
+const feeResult =
   Math.random() > 0.5
     ? success(25)
-    : failure({ code: 'pricing_unavailable' });
+    : failure({ code: 'pricing_unavailable' as const });
 
 const feeCents = feeResult.getOr(25);
 const status = feeResult.match(
   (value) => `Fee is ${value} cents`,
-  (error) => `Cannot quote fee: ${error.code}`
+  ({ code }) => `Cannot quote fee: ${code}`
 );
 
 throwIfError(feeResult);
@@ -281,14 +272,6 @@ function readDestinationAccount(
   return success({ id: 'savings', balanceCents: 20_000 });
 }
 
-function ensureDifferentAccounts(
-  source: Account,
-  destination: Account,
-): Failable<void, TransferPlanningError> {
-  if (source.id === destination.id) return failure({ code: 'same_account' });
-
-  return success(undefined);
-}
 
 function ensureSufficientFunds(
   source: Account,
@@ -314,8 +297,7 @@ function planTransfer(
   const destination = readDestinationAccount(request.toAccountId);
   if (destination.isFailure) return destination;
 
-  const differentAccounts = ensureDifferentAccounts(source.data, destination.data);
-  if (differentAccounts.isFailure) return differentAccounts;
+  if (source.id === destination.id) return failure({ code: 'same_account' });
 
   const fundedSource = ensureSufficientFunds(source.data, request.amountCents);
   if (fundedSource.isFailure) return fundedSource;
@@ -335,7 +317,7 @@ function planTransfer(
   return run(function* ({ get }) {
     const source = yield* get(readSourceAccount(request.fromAccountId));
     const destination = yield* get(readDestinationAccount(request.toAccountId));
-    yield* get(ensureDifferentAccounts(source, destination));
+    if (source.id === destination.id) return failure({ code: 'same_account' });
     yield* get(ensureSufficientFunds(source, request.amountCents));
 
     return success({ ...request, feeCents: 25 });

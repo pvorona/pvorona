@@ -74,11 +74,11 @@ export type FailableLikeFailure<E> = {
 };
 
 type SuccessMatch<T> = {
-  <U, E>(onSuccess: (data: T) => U, onFailure: (error: E) => U): U;
+  <U>(onSuccess: (data: T) => U, onFailure: (error: never) => U): U;
 };
 
 type FailureMatch<E> = {
-  <U, T>(onSuccess: (data: T) => U, onFailure: (error: E) => U): U;
+  <U>(onSuccess: (data: never) => U, onFailure: (error: E) => U): U;
 };
 
 function isFailableLikeSuccess(

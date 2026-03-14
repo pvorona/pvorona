@@ -162,6 +162,17 @@ describe('success()', () => {
   it('error = null', () => {
     expect(result.error).toBeNull();
   });
+
+  it('supports omitting the undefined argument for void results', () => {
+    function buildResult(): Failable<void, string> {
+      return success();
+    }
+
+    const result = buildResult();
+
+    expect(result.data).toBeUndefined();
+    expectTypeOf(result).toEqualTypeOf<Failable<void, string>>();
+  });
 });
 
 describe('failure()', () => {
@@ -881,6 +892,28 @@ describe('match()', () => {
       );
 
       expectTypeOf(result).toEqualTypeOf<string>();
+    });
+
+    it('infers callback parameter types for Success/Failure unions', () => {
+      const result =
+        Math.random() > 0.5
+          ? success(25 as const)
+          : failure({ code: 'pricing_unavailable' as const });
+
+      const status = result.match(
+        (value) => {
+          expectTypeOf(value).toEqualTypeOf<25>();
+          return `Fee is ${value} cents`;
+        },
+        (error) => {
+          expectTypeOf(error).toEqualTypeOf<{
+            code: 'pricing_unavailable';
+          }>();
+          return `Cannot quote fee: ${error.code}`;
+        }
+      );
+
+      expectTypeOf(status).toEqualTypeOf<string>();
     });
   });
 });
