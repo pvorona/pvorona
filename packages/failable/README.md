@@ -26,6 +26,9 @@ If you are upgrading from the previous API name:
 
 - `createFailable(x)` -> `failable(x)`
 - `CreateFailableNormalizeErrorOptions` -> `FailableNormalizeErrorOptions`
+- `result.isError` -> `result.isFailure`
+- `.error` is unchanged
+- `failure(...)`, `Failure<E>`, `throwIfError(...)`, and `getOrThrow()` are unchanged
 
 ## Basic Usage
 
@@ -87,7 +90,7 @@ const result = planTransfer(
   4_500,
 );
 
-if (result.isError) {
+if (result.isFailure) {
   switch (result.error.code) {
     case 'same_account':
       console.error('Choose a different destination account');
@@ -125,7 +128,7 @@ carries both the success value and the expected failure reason.
 
 ## Unwrapping And Recovery
 
-Start with ordinary branching on `result.isError` or `result.isSuccess`. When
+Start with ordinary branching on `result.isFailure` or `result.isSuccess`. When
 you need a shorter form, use the helper that matches the job:
 
 - `result.getOr(fallback)`: return the success value or an eager fallback
@@ -306,16 +309,16 @@ function planTransfer(
   request: TransferRequest,
 ): Failable<TransferPlan, TransferPlanningError> {
   const source = readSourceAccount(request.fromAccountId);
-  if (source.isError) return source;
+  if (source.isFailure) return source;
 
   const destination = readDestinationAccount(request.toAccountId);
-  if (destination.isError) return destination;
+  if (destination.isFailure) return destination;
 
   const differentAccounts = ensureDifferentAccounts(source.data, destination.data);
-  if (differentAccounts.isError) return differentAccounts;
+  if (differentAccounts.isFailure) return differentAccounts;
 
   const fundedSource = ensureSufficientFunds(source.data, request.amountCents);
-  if (fundedSource.isError) return fundedSource;
+  if (fundedSource.isFailure) return fundedSource;
 
   return success({ ...request, feeCents: 25 });
 }
@@ -421,7 +424,7 @@ import { isFailable } from '@pvorona/failable';
 
 const candidate: unknown = maybeFromAnotherModule();
 
-if (isFailable(candidate) && candidate.isError) {
+if (isFailable(candidate) && candidate.isFailure) {
   console.error(candidate.error);
 }
 ```

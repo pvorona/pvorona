@@ -9,9 +9,13 @@ const disposable: Disposable = createDisposable();
 disposable.onDispose(() => undefined);
 disposable.onDispose(async () => undefined);
 disposable.onDisposed((result: DisposeResult) => {
-  if (result.isSuccess) return;
+  if (result.isFailure) {
+    console.error(result.error.errors);
+    return;
+  }
 
-  console.error(result.error.errors);
+  const data: null = result.data;
+  void data;
 });
 
 const didStartDisposal: boolean = disposable.dispose();

@@ -43,7 +43,7 @@ disposable.onDispose(async () => {
 });
 
 disposable.onDisposed((result) => {
-  if (result.isError) {
+  if (result.isFailure) {
     console.error('cleanup failed:', result.error.errors);
     return;
   }
@@ -97,7 +97,7 @@ disposable.onDispose(async () => {
 });
 
 disposable.onDisposed((result) => {
-  if (result.isError) {
+  if (result.isFailure) {
     console.error('disposal failed:', result.error.errors);
     return;
   }

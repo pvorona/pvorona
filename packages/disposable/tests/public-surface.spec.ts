@@ -56,4 +56,33 @@ describe('public surface', () => {
     expect(results).toHaveLength(1);
     expect(results[0]?.isSuccess).toBe(true);
   });
+
+  it('exposes failure results through `result.isFailure`', () => {
+    const disposable = createDisposable();
+    const results: DisposeResult[] = [];
+    const cleanupError = new Error('cleanup failed');
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    try {
+      disposable.onDispose(() => {
+        throw cleanupError;
+      });
+      disposable.onDisposed((result) => {
+        results.push(result);
+      });
+
+      expect(disposable.dispose()).toBe(true);
+      expect(results).toHaveLength(1);
+      const result = results[0];
+      if (result == null || !result.isFailure) {
+        throw new Error('Expected disposal failure result');
+      }
+
+      expect(result.error.errors).toStrictEqual([cleanupError]);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
 });

@@ -53,7 +53,7 @@ function createSuccessLookalike<T>(data: T): unknown {
   return {
     status: FailableStatus.Success,
     isSuccess: true as const,
-    isError: false as const,
+    isFailure: false as const,
     data,
     error: null,
     or: vi.fn(),
@@ -69,7 +69,7 @@ function createFailureLookalike<E>(error: E): unknown {
   return {
     status: FailableStatus.Failure,
     isSuccess: false as const,
-    isError: true as const,
+    isFailure: true as const,
     data: null,
     error,
     or: vi.fn(),
@@ -151,8 +151,8 @@ describe('success()', () => {
     expect(result.isSuccess).toBe(true);
   });
 
-  it('isError = false', () => {
-    expect(result.isError).toBe(false);
+  it('isFailure = false', () => {
+    expect(result.isFailure).toBe(false);
   });
 
   it('data = T', () => {
@@ -180,8 +180,8 @@ describe('failure()', () => {
     expect(result.isSuccess).toBe(false);
   });
 
-  it('isError = true', () => {
-    expect(result.isError).toBe(true);
+  it('isFailure = true', () => {
+    expect(result.isFailure).toBe(true);
   });
 
   it('error = E', () => {

@@ -67,7 +67,7 @@ export type Disposable = {
  * disposable.onDispose(() => window.removeEventListener('resize', onResize));
  *
  * disposable.onDisposed((result) => {
- *   if (result.isError) {
+ *   if (result.isFailure) {
  *     console.error(result.error.errors);
  *   }
  * });

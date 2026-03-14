@@ -289,7 +289,7 @@ describe('public surface', () => {
       4500
     );
 
-    if (okResult.isError) {
+    if (okResult.isFailure) {
       throw new Error('Expected planTransfer(...) to succeed');
     }
 
@@ -300,13 +300,13 @@ describe('public surface', () => {
       feeCents: 25,
     });
 
-    if (!sameAccountResult.isError) {
+    if (!sameAccountResult.isFailure) {
       throw new Error('Expected same-account transfer to fail');
     }
 
     expect(sameAccountResult.error).toStrictEqual({ code: 'same_account' });
 
-    if (!smallAmountResult.isError) {
+    if (!smallAmountResult.isFailure) {
       throw new Error('Expected small transfer to fail');
     }
 
@@ -315,7 +315,7 @@ describe('public surface', () => {
       minAmountCents: 100,
     });
 
-    if (!insufficientFundsResult.isError) {
+    if (!insufficientFundsResult.isFailure) {
       throw new Error('Expected insufficient funds to fail');
     }
 
@@ -392,13 +392,13 @@ describe('public surface', () => {
       feeCents: 25,
     });
 
-    if (okResult.isError) {
+    if (okResult.isFailure) {
       throw new Error('Expected submitTransfer(...) to succeed');
     }
 
     expect(okResult.data).toStrictEqual({ transferId: 'tr_123' });
 
-    if (!ledgerFailureResult.isError) {
+    if (!ledgerFailureResult.isFailure) {
       throw new Error('Expected submitTransfer(...) to capture ledger failure');
     }
 
@@ -418,7 +418,7 @@ describe('public surface', () => {
       NormalizedErrors
     );
 
-    if (!result.isError) {
+    if (!result.isFailure) {
       throw new Error('Expected `NormalizedErrors` to capture the thrown plain object');
     }
 
@@ -436,7 +436,7 @@ describe('public surface', () => {
       NormalizedErrors
     );
 
-    if (!result.isError) {
+    if (!result.isFailure) {
       throw new Error(
         'Expected `NormalizedErrors` to keep the null-prototype object inside Failure'
       );
@@ -451,11 +451,11 @@ describe('public surface', () => {
     const syncResult = failable(() => JSON.parse('not valid json'));
     const asyncResult = await failable(Promise.resolve(5));
 
-    if (!syncResult.isError) {
+    if (!syncResult.isFailure) {
       throw new Error('Expected the sync callback example to capture a thrown error');
     }
 
-    if (asyncResult.isError) {
+    if (asyncResult.isFailure) {
       throw new Error('Expected the direct promise example to capture async success');
     }
 
@@ -468,7 +468,7 @@ describe('public surface', () => {
       (() => Promise.resolve(5)) as unknown as () => number
     );
 
-    if (!result.isError) {
+    if (!result.isFailure) {
       throw new Error('Expected `failable(() => promise)` to return a Failure');
     }
 
@@ -488,7 +488,7 @@ describe('public surface', () => {
       amountCents: 2500,
     });
 
-    if (result.isError) {
+    if (result.isFailure) {
       throw new Error('Expected the README `run(...)` example to succeed');
     }
 
@@ -507,7 +507,7 @@ describe('public surface', () => {
       amountCents: 2500,
     });
 
-    if (result.isError) {
+    if (result.isFailure) {
       throw new Error('Expected the async `run(...)` example to succeed');
     }
 
@@ -705,7 +705,7 @@ describe('public surface', () => {
 
     const hydrated = failable(wire);
 
-    if (hydrated.isError) {
+    if (hydrated.isFailure) {
       throw new Error('Expected structured-clone rehydration to succeed');
     }
 

@@ -112,7 +112,7 @@ export function isFailableLike(
 export type Success<T> = {
   readonly status: typeof FailableStatus.Success;
   readonly isSuccess: true;
-  readonly isError: false;
+  readonly isFailure: false;
   readonly data: T;
   readonly error: null;
   readonly or: <U>(value: U) => Success<T>;
@@ -126,7 +126,7 @@ export type Success<T> = {
 export type Failure<E> = {
   readonly status: typeof FailableStatus.Failure;
   readonly isSuccess: false;
-  readonly isError: true;
+  readonly isFailure: true;
   readonly error: E;
   readonly data: null;
   readonly or: <U>(value: U) => Success<U>;
@@ -150,7 +150,7 @@ type InternalFailure<E> = Failure<E> & {
 const BASE_FAILABLE = {
   [FAILABLE_TAG]: true,
   isSuccess: false,
-  isError: false,
+  isFailure: false,
   data: null,
   error: null,
   or: notImplemented,
@@ -194,7 +194,7 @@ const BASE_FAILURE = (() => {
   const node: Mutable<InternalFailure<unknown>> = Object.create(BASE_FAILABLE);
   node[FAILURE_TAG] = true;
   node.status = FailableStatus.Failure;
-  node.isError = true;
+  node.isFailure = true;
   node.or = function orFailure(value) {
     return success(value);
   };
@@ -225,7 +225,7 @@ const BASE_FAILURE = (() => {
  *
  * `Failable<T, E>` is a discriminated union of:
  * - {@link Success}: `{ status: 'success', isSuccess: true, data: T, error: null }`
- * - {@link Failure}: `{ status: 'failure', isError: true, error: E, data: null }`
+ * - {@link Failure}: `{ status: 'failure', isFailure: true, error: E, data: null }`
  *
  * Function-first exports:
  * - `success(data)` / `failure(error)` create hydrated results.
@@ -248,7 +248,7 @@ const BASE_FAILURE = (() => {
  *
  * Runtime model / invariants:
  * - Instances are shallow-immutable (`Object.freeze`) and tagged with Symbols.
- * - They are NOT class instances; do not use `instanceof`. Prefer `result.isSuccess` / `result.isError`
+ * - They are NOT class instances; do not use `instanceof`. Prefer `result.isSuccess` / `result.isFailure`
  *   or the guards {@link isSuccess} / {@link isFailure}.
  * - Exactly one of `data` / `error` is non-null.
  *

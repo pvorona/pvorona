@@ -124,10 +124,19 @@ const problemMatch = problem.match(
   (error) => error
 );
 expectType<Equal<typeof problemMatch, string>>(true);
+expectType<Equal<'isError' extends keyof Success<number> ? true : false, false>>(
+  true
+);
+expectType<Equal<'isError' extends keyof Failure<string> ? true : false, false>>(
+  true
+);
+expectType<
+  Equal<'isError' extends keyof Failable<number, string> ? true : false, false>
+>(true);
 
 const union: Failable<number, string> = Math.random() > 0.5 ? ok : problem;
 
-if (union.isError) {
+if (union.isFailure) {
   expectType<Equal<typeof union.error, string>>(true);
 } else {
   expectType<Equal<typeof union.data, number>>(true);
@@ -142,7 +151,7 @@ const maybeHydrated:
   ? problem
   : { nope: true };
 
-if (isFailable(maybeHydrated) && maybeHydrated.isError) {
+if (isFailable(maybeHydrated) && maybeHydrated.isFailure) {
   expectType<Equal<typeof maybeHydrated.error, string>>(true);
 }
 
