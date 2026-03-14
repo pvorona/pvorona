@@ -85,24 +85,24 @@ function planTransfer(
   return success({ ...request, feeCents: 25 });
 }
 
-type SubmitTransferError = { readonly code: 'ledger_unavailable' };
+type SubmitTransferError = Error;
 
 async function postToLedger(
   plan: TransferPlan
 ): Promise<Failable<{ readonly transferId: string }, SubmitTransferError>> {
   const request = (async () => {
-    if (plan.amountCents > 5000) throw new Error('Ledger unavailable');
+    if (plan.amountCents > 5000) {
+      throw { code: 'ledger_unavailable' } as const;
+    }
 
     return { transferId: 'tr_123' } as const;
   })();
 
-  const created = await createFailable(request);
-
-  if (created.isError) {
-    return failure({ code: 'ledger_unavailable' });
-  }
-
-  return success(created.data);
+  return await createFailable(request, {
+    normalizeError(error) {
+      return new Error('Ledger unavailable', { cause: error });
+    },
+  });
 }
 
 async function submitTransfer(
@@ -402,8 +402,10 @@ describe('public surface', () => {
       throw new Error('Expected submitTransfer(...) to capture ledger failure');
     }
 
-    expect(ledgerFailureResult.error).toStrictEqual({
-      code: 'ledger_unavailable',
+    expect(ledgerFailureResult.error).toBeInstanceOf(Error);
+    expect(ledgerFailureResult.error).toMatchObject({
+      message: 'Ledger unavailable',
+      cause: { code: 'ledger_unavailable' },
     });
   });
 

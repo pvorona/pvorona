@@ -160,40 +160,37 @@ console.log(feeCents, status, feeResult.data);
 
 ## Capture Thrown Or Rejected Failures With `createFailable(...)`
 
-Use `createFailable(...)` at boundaries that throw or reject, then convert that
-failure into your domain error if needed:
+Use `createFailable(...)` at boundaries that throw or reject, then normalize
+that failure once at the boundary if needed:
 
 Using `TransferPlan` from above:
 
 ```ts
 import {
   createFailable,
-  failure,
   run,
   success,
   type Failable,
 } from '@pvorona/failable';
 
-type SubmitTransferError = {
-  code: 'ledger_unavailable';
-};
+type SubmitTransferError = Error;
 
 async function postToLedger(
   plan: TransferPlan,
 ): Promise<Failable<{ transferId: string }, SubmitTransferError>> {
   const request = (async () => {
-    if (plan.amountCents > 5_000) throw new Error('Ledger unavailable');
+    if (plan.amountCents > 5_000) {
+      throw { code: 'ledger_unavailable' } as const;
+    }
 
     return { transferId: 'tr_123' };
   })();
 
-  const created = await createFailable(request);
-
-  if (created.isError) {
-    return failure({ code: 'ledger_unavailable' });
-  }
-
-  return success(created.data);
+  return await createFailable(request, {
+    normalizeError(error) {
+      return new Error('Ledger unavailable', { cause: error });
+    },
+  });
 }
 
 async function submitTransfer(
@@ -208,9 +205,11 @@ async function submitTransfer(
 ```
 
 `postToLedger(...)` is the boundary adapter. It uses
-`createFailable(...)` to capture a raw throw/rejection and normalize it into the
-domain error `ledger_unavailable`. Once that helper already returns `Failable`,
-`submitTransfer(...)` can use `run(...)` to compose it like any other step.
+`createFailable(..., { normalizeError })` to capture a raw throw/rejection once
+and expose one stable `Error` shape to the rest of the app. If you only need
+generic `Error` normalization, `NormalizedErrors` is the built-in shortcut.
+Once that helper already returns `Failable`, `submitTransfer(...)` can use
+`run(...)` to compose it like any other step.
 
 Pass a promise directly when you want rejection capture:
 
