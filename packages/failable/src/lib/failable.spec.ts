@@ -1864,13 +1864,69 @@ describe('createFailable()', () => {
         expect(result.data).toBe(lookalike);
       });
 
-      it('treats async function results as plain success values and does not await them', async () => {
+      it('returns Failure<Error> when an async function is passed by any-cast', () => {
         const value = faker.number.float();
-        const result = createFailable(async () => value);
+        const result = createFailable((async () => value) as unknown as () => number);
 
-        ensureSuccess(result);
-        expect(result.data).toBeInstanceOf(Promise);
-        await expect(result.data).resolves.toBe(value);
+        ensureFailure(result);
+        expect(result.error).toBeInstanceOf(Error);
+        const error = result.error as Error;
+        expect(error.message).toBe(
+          '`createFailable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await createFailable(promise)`.'
+        );
+      });
+
+      it('returns Failure<Error> when a callback returns a promise by any-cast', () => {
+        const value = faker.number.float();
+        const result = createFailable(
+          (() => Promise.resolve(value)) as unknown as () => number
+        );
+
+        ensureFailure(result);
+        expect(result.error).toBeInstanceOf(Error);
+        const error = result.error as Error;
+        expect(error.message).toBe(
+          '`createFailable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await createFailable(promise)`.'
+        );
+      });
+
+      it('consumes rejected promise-returning callback misuse so it does not leak an unhandled rejection', async () => {
+        const rejection = { code: faker.string.uuid() };
+        let sawUnhandledRejection = false;
+        const onUnhandledRejection = (reason: unknown) => {
+          if (reason === rejection) sawUnhandledRejection = true;
+        };
+
+        process.on('unhandledRejection', onUnhandledRejection);
+
+        try {
+          const result = createFailable(
+            (() => Promise.reject(rejection)) as unknown as () => number
+          );
+
+          ensureFailure(result);
+          expect(result.error).toBeInstanceOf(Error);
+          await new Promise<void>((resolve) => setImmediate(resolve));
+          expect(sawUnhandledRejection).toBe(false);
+        } finally {
+          process.off('unhandledRejection', onUnhandledRejection);
+        }
+      });
+
+      it('preserves the actionable guard error even when custom normalization is enabled', () => {
+        const normalizeError = vi.fn(
+          (error: unknown) => new Error('normalized', { cause: error })
+        );
+        const result = createFailable(
+          (() => Promise.resolve(faker.number.float())) as unknown as () => number,
+          { normalizeError }
+        );
+
+        ensureFailure(result);
+        expect(normalizeError).not.toHaveBeenCalled();
+        expect(result.error.message).toBe(
+          '`createFailable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await createFailable(promise)`.'
+        );
       });
     });
 

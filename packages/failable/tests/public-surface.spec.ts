@@ -110,6 +110,61 @@ describe('public surface', () => {
     expect(result.error).toBeInstanceOf(SyntaxError);
   });
 
+  it('supports the README `createFailable(...)` chooser: callback for sync throws, promise for async capture', async () => {
+    const syncResult = createFailable(() => JSON.parse('not valid json'));
+    const asyncResult = await createFailable(Promise.resolve(5));
+
+    if (!syncResult.isError) {
+      throw new Error('Expected the sync callback example to capture a thrown error');
+    }
+
+    if (asyncResult.isError) {
+      throw new Error('Expected the direct promise example to capture async success');
+    }
+
+    expect(syncResult.error).toBeInstanceOf(SyntaxError);
+    expect(asyncResult.data).toBe(5);
+  });
+
+  it('keeps promise-returning callback misuse inside Failure with an actionable message', () => {
+    const result = createFailable(
+      (() => Promise.resolve(5)) as unknown as () => number
+    );
+
+    if (!result.isError) {
+      throw new Error(
+        'Expected promise-returning callback misuse to stay in the Failure channel'
+      );
+    }
+
+    expect(result.error).toBeInstanceOf(Error);
+    const error = result.error as Error;
+    expect(error.message).toBe(
+      '`createFailable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await createFailable(promise)`.'
+    );
+  });
+
+  it('preserves the actionable guard error even when custom normalization is enabled', () => {
+    const normalizeError = vi.fn(
+      (error: unknown) => new Error('normalized', { cause: error })
+    );
+    const result = createFailable(
+      (() => Promise.resolve(5)) as unknown as () => number,
+      { normalizeError }
+    );
+
+    if (!result.isError) {
+      throw new Error(
+        'Expected promise-returning callback misuse to stay in the Failure channel'
+      );
+    }
+
+    expect(normalizeError).not.toHaveBeenCalled();
+    expect(result.error.message).toBe(
+      '`createFailable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await createFailable(promise)`.'
+    );
+  });
+
   it('supports the README `run(...)` example', () => {
     const result = run(function* ({ get }) {
       const first = yield* get(divide(20, 2));

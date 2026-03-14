@@ -35,6 +35,14 @@ if (result.isError) {
 
 ## Everyday Usage
 
+### Quick chooser
+
+- Use `createFailable(() => ...)` when the boundary is synchronous code that might throw.
+- Use `await createFailable(promise)` when the boundary is async code that might reject.
+- Use `run(...)` when each step already returns `Failable` and you want to compose the happy path.
+- Use `throwIfError(result)` when you want to keep using the same `result` variable after narrowing.
+- Use `result.getOrThrow()` when you want the success value itself in expression or return position.
+
 ### Return `success(...)` and `failure(...)`
 
 Use the explicit constructors when your function already knows which branch it should return:
@@ -76,6 +84,24 @@ console.log(port, ensuredPort.data);
 - `result.match(onSuccess, onFailure)`: map both branches to one output type
 - `throwIfError(result)`: throw the stored failure unchanged and keep using the same result on success
 - `result.getOrThrow()`: unwrap success as a value or throw the stored failure unchanged
+
+Use `throwIfError(result)` when you want to keep the same result variable and continue with narrowed access to `result.data`:
+
+```ts
+import {
+  failure,
+  success,
+  throwIfError,
+  type Failable,
+} from '@pvorona/failable';
+
+const portResult: Failable<number, string> = Math.random() > 0.5
+  ? success(3000)
+  : failure('Missing port');
+
+throwIfError(portResult);
+console.log(portResult.data);
+```
 
 Use `getOrThrow()` when you want the success value itself in expression or return position:
 
@@ -122,32 +148,14 @@ const status = portResult.match(
 );
 ```
 
-When you want to keep using the same result variable, use `throwIfError(result)` instead. It throws `result.error` unchanged on failure, but on success it narrows the same hydrated result so `result.data` stays available:
-
-```ts
-import {
-  failure,
-  success,
-  throwIfError,
-  type Failable,
-} from '@pvorona/failable';
-
-const portResult: Failable<number, string> = Math.random() > 0.5
-  ? success(3000)
-  : failure('Missing port');
-
-throwIfError(portResult);
-console.log(portResult.data);
-```
-
 ### `createFailable(...)` for throwy or rejecting code
 
-`createFailable(...)` is the convenience entrypoint when you want to capture sync throws, promise rejections, or reuse an existing result shape. Unlike `run(...)`, it is for exception/rejection boundaries rather than `Failable`-to-`Failable` composition:
+`createFailable(...)` is the boundary helper for non-`Failable` code. Use it when you need to capture sync throws, promise rejections, or rehydrate an existing result shape. Unlike `run(...)`, it is not for `Failable`-to-`Failable` composition:
 
 - `createFailable(failable)` returns the same tagged hydrated instance
 - `createFailable(failableLike)` rehydrates a strict wire shape into a real `Success` / `Failure`
-- `createFailable(() => value)` captures sync throws into `Failure`
-- `createFailable(promise)` captures promise rejections into `Failure`
+- `createFailable(() => value)` captures synchronous throws into `Failure`
+- `createFailable(promise)` captures async rejections into `Failure`
 - If a callback returns, or a promise resolves to, a `Failable` or `FailableLike`, `createFailable(...)` preserves that result instead of nesting it inside `Success`
 
 Plain lookalike objects are not treated as hydrated `Failable` instances. If you have plain `{ status, data }` or `{ status, error }` transport data, validate it with `isFailableLike(...)` or pass it to `createFailable(...)` to rehydrate before calling instance methods.
@@ -196,9 +204,11 @@ const responseResult = await createFailable(fetch(url));
 if (responseResult.isError) console.error(responseResult.error);
 ```
 
+`createFailable(() => promise)` is not the supported API. In TypeScript, obviously promise-returning callbacks such as `async () => ...` and `() => Promise.resolve(...)` are rejected. JS callers, plus `any`/`unknown`-typed callbacks, still rely on the runtime guard; those cases stay in the failure channel as an `Error` telling you to pass the promise directly instead. That guard error is preserved even when you pass a custom `normalizeError`.
+
 ### `run(...)` for `Failable` composition
 
-Use `run(...)` when you want to compose existing `Failable` results without nested `if` blocks. Inside both the sync and async builder forms, use `yield* get(result)` to unwrap a success value. In async builders, `result` can be either a `Failable` or a `PromiseLike<Failable>`, but the control flow stays the same: keep using `yield* get(...)`, not `await get(...)`. If any yielded result is a `Failure`, `run(...)` returns that same `Failure` instance after entering any `finally` cleanup and skips the remaining happy-path steps. Cleanup keeps unwinding while cleanup `yield* get(...)` steps succeed. Cleanup `Failure`s preserve the original `Failure` and continue into outer `finally` blocks, while promised cleanup rejections still escape unchanged. If a promised source rejects in the main path, async `run(...)` still rejects with that same value unchanged after managed `yield* get(...)` cleanup unwinds. Managed cleanup `Failure`s and managed cleanup promise rejections do not replace that original rejection. Direct `throw`s inside `finally` are outside managed cleanup: they still escape unchanged, and they can replace an in-flight yielded `Failure` or main-path rejection.
+Use `run(...)` when each step already returns `Failable` and you want the happy path to read top-down. Inside both the sync and async builder forms, use `yield* get(result)` to unwrap success values. The mental model is simple: success values keep flowing forward, and the first yielded `Failure` short-circuits with that same `Failure` instance.
 
 ```ts
 import { failure, run, success, type Failable } from '@pvorona/failable';
@@ -223,7 +233,7 @@ if (result.isError) {
 }
 ```
 
-Async builders use the same composition pattern:
+Async builders use the same composition pattern. Keep using `yield* get(...)`; do not switch to `await get(...)`:
 
 ```ts
 import { failure, run, success, type Failable } from '@pvorona/failable';
@@ -263,7 +273,8 @@ Important `run(...)` rules:
 - Use `yield* get(failable)` inside the callback. Other interaction with `get` internals is unsupported and not part of the API contract.
 - `get` exists only inside the generator callback; it is not a public export.
 - Return `success(...)`, `failure(...)`, or another `Failable`. An empty generator or bare `return` becomes `Success<void>`, but raw return values are rejected.
-- Throwing inside the generator is not converted into `Failure`, and rejected promised sources are not converted into `Failure`; foreign exceptions and rejections escape unchanged. In async builders, promised source rejections still unwind `finally` cleanup before they escape.
+- Throwing inside the generator is not converted into `Failure`, and rejected promised sources are not converted into `Failure`; foreign exceptions and rejections escape unchanged.
+- Rare cleanup edge cases: cleanup `yield* get(...)` steps unwind before a yielded `Failure` returns, cleanup `Failure`s preserve the original `Failure` while outer `finally` blocks keep unwinding, and promised source rejections still unwind managed cleanup before rejecting. Direct `throw`s inside `finally` are outside that managed cleanup and can replace the in-flight failure or rejection.
 
 ### Use guards for `unknown` values
 
@@ -297,10 +308,10 @@ Use `isSuccess(...)` / `isFailure(...)` when you only care about one branch. If 
 - `throwIfError(result)` is deliberately minimal. It does not normalize or map errors; if you want `Error` values, normalize earlier with `createFailable(..., NormalizedErrors)` or a custom `normalizeError`.
 - `isFailable(...)`, `isSuccess(...)`, and `isFailure(...)` recognize only tagged hydrated instances, not public-shape lookalikes.
 - `isFailableLike(...)` remains the validator for transport shapes, and `createFailable(failableLike)` is the supported rehydration path before calling instance methods.
-- `createFailable(...)` remains the boundary tool for capture. Use it when you need throws or promise rejections turned into `Failure`.
+- `createFailable(...)` remains the boundary tool for capture. Use `createFailable(() => ...)` for synchronous throw capture and `await createFailable(promise)` for async rejection capture.
 - By default, `createFailable(...)` preserves raw thrown and rejected values. If something throws `'boom'`, `{ code: 'bad_request' }`, or `[error1, error2]`, that exact value becomes `.error`.
 - `getOrThrow()` returns the success value and throws `result.error` unchanged on failures. Use `throwIfError(result)` when you want control-flow narrowing instead of a returned value.
-- `createFailable(async () => value)` is a footgun. The async function itself is treated as a sync return value, so the result is `Success<Promise<T>>`. If you want rejection capture, pass the promise directly: `await createFailable(somePromise)`.
+- `createFailable(() => ...)` is for genuinely synchronous callbacks. TypeScript rejects obviously promise-returning callbacks, but JS callers and `any`/`unknown`-typed callbacks still rely on the runtime guard. If you already have a promise, pass it directly: `await createFailable(promise)`. That guard error stays actionable even when a custom `normalizeError` is present.
 
 ## Normalizing Errors
 
@@ -332,8 +343,10 @@ Built-in normalization behaves like this:
 - other values become `Error`
 - the original raw value is preserved in `error.cause`
 
-Custom normalization is different: `normalizeError` runs for every failure value, including
-existing `Error` instances, so you can wrap or replace them.
+Custom normalization is different: `normalizeError` runs for failure values, including
+existing `Error` instances, so you can wrap or replace them. The one exception is the
+internal sync-only callback misuse guard error from `createFailable(() => promise)`,
+which is preserved as-is so the actionable message survives.
 
 For custom normalization:
 

@@ -197,6 +197,12 @@ void failureWireAsConsumerType;
 const wrappedFunction = createFailable(() => 123);
 expectType<Equal<typeof wrappedFunction, Failable<number, unknown>>>(true);
 
+// @ts-expect-error `createFailable(() => ...)` accepts sync callbacks only.
+createFailable(async () => 123);
+
+// @ts-expect-error `createFailable(() => ...)` accepts sync callbacks only.
+createFailable(() => Promise.resolve(123));
+
 const wrappedPromise = createFailable(Promise.resolve(123));
 expectType<
   Equal<typeof wrappedPromise, Promise<Failable<number, unknown>>>
