@@ -223,19 +223,23 @@ import { run, success, type Failable } from '@pvorona/failable';
 function loadConfig(
   env: Record<string, string | undefined>,
 ): Failable<{ host: string; port: number }, ConfigError> {
-  return run(function* ({ get }) {
-    const host = yield* get(readEnv('HOST', env));
-    const rawPort = yield* get(readEnv('PORT', env));
-    const port = yield* get(parsePort(rawPort));
+  return run(function* () {
+    const host = yield* readEnv('HOST', env);
+    const rawPort = yield* readEnv('PORT', env);
+    const port = yield* parsePort(rawPort);
 
     return success({ host, port });
   });
 }
 ```
 
-For async flows, switch to `run(async function* ...)`. `get(...)` also accepts
-promises that resolve to `Success` / `Failure` unions, so helper functions can
-stay unannotated and still infer the full error union:
+When a helper already returns a hydrated sync `Failable`, yield it directly with
+`yield* helper()`. Keep `yield* get(...)` for sources that are promises or
+thenables.
+
+For async flows, switch to `run(async function* ...)`. Sync hydrated helpers
+still work with direct `yield* helper()`, while `get(...)` handles promised
+sources and keeps their full `Success` / `Failure` union inference:
 
 ```ts
 import {
@@ -294,7 +298,9 @@ async function loadUserPage(
 ```
 
 - if a yielded step fails, `run(...)` returns that original failure unchanged
-- in async builders, keep using `yield* get(...)`; do not write `await get(...)`
+- sync hydrated `Failable` helpers can use direct `yield* helper()` in both sync
+  and async builders
+- promised sources still use `yield* get(...)`; do not write `await get(...)`
 - `run(...)` does not capture thrown values or rejected promises into `Failure`;
   wrap throwing boundaries with `failable(...)` before they enter `run(...)`
 

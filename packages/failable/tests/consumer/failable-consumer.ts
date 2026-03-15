@@ -352,6 +352,15 @@ expectType<
   Equal<typeof runHelperReturn, Failable<'helper-data', 'helper-error'>>
 >(true);
 
+const runDirectHelper = run(function* () {
+  const value = yield* helperResult();
+
+  return success(value);
+});
+expectType<
+  Equal<typeof runDirectHelper, Failable<'helper-data', 'helper-error'>>
+>(true);
+
 const shouldUseString = true as boolean;
 
 const runDistributed = run(function* ({ get }) {
@@ -387,6 +396,19 @@ const runAsyncSuccess = run(async function* ({ get }) {
 });
 expectType<
   Equal<typeof runAsyncSuccess, Promise<Success<readonly [123, 'ready']>>>
+>(true);
+
+const runAsyncDirectHelper = run(async function* ({ get }) {
+  const first = yield* helperResult();
+  const second = yield* get(Promise.resolve(success('ready' as const)));
+
+  return success([first, second] as const);
+});
+expectType<
+  Equal<
+    typeof runAsyncDirectHelper,
+    Promise<Failable<readonly ['helper-data', 'ready'], 'helper-error'>>
+  >
 >(true);
 
 const runAsyncNeverSuccess = run(async function* () {
@@ -455,6 +477,13 @@ run(function* ({ get }) {
   return success(value);
 });
 
+run(async function* () {
+  // @ts-expect-error promised sources still require `get(...)`.
+  const value = yield* Promise.resolve(success(123 as const));
+
+  return success(value);
+});
+
 // @ts-expect-error `run(...)` builders must return a `Failable`.
 run(function* () {
   return 123 as const;
@@ -495,8 +524,10 @@ void runInlineFailure;
 void runNeverSuccessWithYieldedError;
 void runNeverSuccessWithGuaranteedFailureInYieldSet;
 void runHelperReturn;
+void runDirectHelper;
 void runDistributed;
 void runAsyncSuccess;
+void runAsyncDirectHelper;
 void runAsyncNeverSuccess;
 void runAsyncFailure;
 void runAsyncHelperReturn;

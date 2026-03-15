@@ -1022,6 +1022,22 @@ describe('run()', () => {
       void buildResult;
     });
 
+    it('infers direct sync helper `yield*` in sync builders', () => {
+      const buildResult = () =>
+        run(function* () {
+          const value = yield* getHelperResult();
+
+          expectTypeOf(value).toEqualTypeOf<'helper-data'>();
+
+          return success(value);
+        });
+
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Failable<'helper-data', 'helper-error'>
+      >();
+      void buildResult;
+    });
+
     it('distributes over yielded wrapper unions and returned Success or Failure', () => {
       const shouldUseString = true as boolean;
 
@@ -1263,6 +1279,28 @@ describe('run()', () => {
       void buildResult;
     });
 
+    it('infers direct sync helper `yield*` alongside promised `get(...)` in async builders', () => {
+      async function getAsyncValue() {
+        return success('async-value' as const);
+      }
+
+      const buildResult = () =>
+        run(async function* ({ get }) {
+          const syncValue = yield* getHelperResult();
+          const asyncValue = yield* get(getAsyncValue());
+
+          expectTypeOf(syncValue).toEqualTypeOf<'helper-data'>();
+          expectTypeOf(asyncValue).toEqualTypeOf<'async-value'>();
+
+          return success([syncValue, asyncValue] as const);
+        });
+
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Promise<Failable<readonly ['helper-data', 'async-value'], 'helper-error'>>
+      >();
+      void buildResult;
+    });
+
     it('unions promised source errors with explicit async builder failures', () => {
       const firstSource = success('first-value' as const) as Failable<
         'first-value',
@@ -1377,6 +1415,18 @@ describe('run()', () => {
 
       void buildResult;
     });
+
+    it('rejects direct promised sources in async builders at type level', () => {
+      const buildResult = () =>
+        run(async function* () {
+          // @ts-expect-error promised sources still require `get(...)`.
+          const value = yield* Promise.resolve(success(123 as const));
+
+          return success(value);
+        });
+
+      void buildResult;
+    });
   });
 
   describe('runtime', () => {
@@ -1391,6 +1441,20 @@ describe('run()', () => {
       expect(result).toStrictEqual(success(42));
     });
 
+    it('supports direct sync helper `yield*` in sync builders', () => {
+      function getUserId(): Failable<'123', 'missing-user-id'> {
+        return success('123' as const);
+      }
+
+      const result = run(function* () {
+        const userId = yield* getUserId();
+
+        return success(userId);
+      });
+
+      expect(result).toStrictEqual(success('123' as const));
+    });
+
     it('supports mixed sync and async `yield* get(...)` steps in async builders', async () => {
       const result = await run(async function* ({ get }) {
         const left = yield* get(success(20 as const));
@@ -1400,6 +1464,30 @@ describe('run()', () => {
       });
 
       expect(result).toStrictEqual(success(42));
+    });
+
+    it('short-circuits direct sync helper `yield*` before promised `get(...)` steps in async builders', async () => {
+      const original = failure('missing-user-id' as const);
+      let reachedPromisedStep = false;
+
+      function getUserId(): Failable<string, 'missing-user-id'> {
+        return original;
+      }
+
+      async function getUser(userId: string) {
+        reachedPromisedStep = true;
+        return success({ id: userId } as const);
+      }
+
+      const result = await run(async function* ({ get }) {
+        const userId = yield* getUserId();
+        const user = yield* get(getUser(userId));
+
+        return success(user);
+      });
+
+      expect(result).toBe(original);
+      expect(reachedPromisedStep).toBe(false);
     });
 
     it('supports custom PromiseLike success sources in async builders', async () => {
@@ -1837,7 +1925,7 @@ describe('run()', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(Error);
         expect((error as Error).message).toBe(
-          '`run()` generators must yield only values produced by `get(...)`. Use `yield* get(...)` in normal code.'
+          '`run()` generators must use `yield*` only with hydrated sync `Failable` values or with `get(...)`. Use `yield* helper()` for sync hydrated `Failable` helpers and `yield* get(...)` for promised sources.'
         );
         return;
       }
@@ -1857,7 +1945,7 @@ describe('run()', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(Error);
         expect((error as Error).message).toBe(
-          '`run()` generators must yield only values produced by `get(...)`. Use `yield* get(...)` in normal code.'
+          '`run()` generators must use `yield*` only with hydrated sync `Failable` values or with `get(...)`. Use `yield* helper()` for sync hydrated `Failable` helpers and `yield* get(...)` for promised sources.'
         );
         return;
       }
@@ -1875,7 +1963,7 @@ describe('run()', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(Error);
         expect((error as Error).message).toBe(
-          '`run()` generators must yield only values produced by `get(...)`. Use `yield* get(...)` in normal code.'
+          '`run()` generators must use `yield*` only with hydrated sync `Failable` values or with `get(...)`. Use `yield* helper()` for sync hydrated `Failable` helpers and `yield* get(...)` for promised sources.'
         );
         return;
       }
@@ -1895,7 +1983,7 @@ describe('run()', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(Error);
         expect((error as Error).message).toBe(
-          '`run()` generators must yield only values produced by `get(...)`. Use `yield* get(...)` in normal code.'
+          '`run()` generators must use `yield*` only with hydrated sync `Failable` values or with `get(...)`. Use `yield* helper()` for sync hydrated `Failable` helpers and `yield* get(...)` for promised sources.'
         );
         return;
       }
@@ -2616,6 +2704,30 @@ describe('failable()', () => {
 
 describe('E2E', () => {
   it('manual managing and async run() are equivalent', async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = input.toString();
+
+      if (url.endsWith('/profile')) {
+        return new Response(
+          JSON.stringify({
+            id: '10',
+            name: 'Ada Lovelace',
+            pictureUrl: 'https://example.com/ada.png',
+          })
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          id: '10',
+          email: 'ada@example.com',
+        })
+      );
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    try {
     async function getUser(userId: string) {
       const fetchResult = await failable(
         fetch(`https://api.example.com/users/${userId}`)
@@ -2680,9 +2792,17 @@ describe('E2E', () => {
       );
     }
 
-    const userId = '10';
+    const getUserId = () => success('10');
 
     async function withoutRun() {
+      const getUserIdResult = getUserId();
+
+      if (getUserIdResult.isFailure) {
+        return getUserIdResult;
+      }
+
+      const userId = getUserIdResult.data;
+
       const [getUserResult, getProfileResult] = await Promise.all([
         getUser(userId),
         getUserProfile(userId),
@@ -2704,6 +2824,7 @@ describe('E2E', () => {
 
     async function withRun() {
       return run(async function* ({ get }) {
+        const userId = yield* getUserId();
         const user = yield* get(getUser(userId));
         const profile = yield* get(getUserProfile(userId));
 
@@ -2715,5 +2836,8 @@ describe('E2E', () => {
     const result2 = await withRun();
 
     expect(result1).toStrictEqual(result2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

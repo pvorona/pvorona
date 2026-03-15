@@ -172,11 +172,11 @@ function ensureSufficientFunds(
 function planTransferWithRun(
   request: TransferRequest
 ): Failable<TransferPlan, TransferPlanningError> {
-  return run(function* ({ get }) {
-    const source = yield* get(readSourceAccount(request.fromAccountId));
-    const destination = yield* get(readDestinationAccount(request.toAccountId));
-    yield* get(ensureDifferentAccounts(source, destination));
-    yield* get(ensureSufficientFunds(source, request.amountCents));
+  return run(function* () {
+    const source = yield* readSourceAccount(request.fromAccountId);
+    const destination = yield* readDestinationAccount(request.toAccountId);
+    yield* ensureDifferentAccounts(source, destination);
+    yield* ensureSufficientFunds(source, request.amountCents);
 
     return success({ ...request, feeCents: 25 });
   });
@@ -209,10 +209,10 @@ async function planTransferWithRunAsync(request: {
   >
 > {
   return await run(async function* ({ get }) {
-    const source = yield* get(readSourceAccount(request.fromAccountId));
-    const destination = yield* get(readDestinationAccount(request.toAccountId));
-    yield* get(ensureDifferentAccounts(source, destination));
-    yield* get(ensureSufficientFunds(source, request.amountCents));
+    const source = yield* readSourceAccount(request.fromAccountId);
+    const destination = yield* readDestinationAccount(request.toAccountId);
+    yield* ensureDifferentAccounts(source, destination);
+    yield* ensureSufficientFunds(source, request.amountCents);
     yield* get(ensureWithinDailyLimit(source.id, request.amountCents));
 
     return success({ ...request, feeCents: 25 });
@@ -523,6 +523,16 @@ describe('public surface', () => {
       amountCents: 2500,
       feeCents: 25,
     });
+  });
+
+  it('exposes iterable and async-iterable hydrated results for direct `yield*` use', () => {
+    const ok = success(123 as const);
+    const problem = failure('boom' as const);
+
+    expect(typeof ok[Symbol.iterator]).toBe('function');
+    expect(typeof ok[Symbol.asyncIterator]).toBe('function');
+    expect(typeof problem[Symbol.iterator]).toBe('function');
+    expect(typeof problem[Symbol.asyncIterator]).toBe('function');
   });
 
   it('returns the original Failure after draining reachable cleanup during failure unwinding', () => {

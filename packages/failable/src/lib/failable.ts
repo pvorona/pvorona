@@ -123,6 +123,12 @@ export type Success<T> = {
   readonly getOrElse: <U>(getValue: () => U) => T;
   readonly getOrThrow: () => T;
   readonly match: SuccessMatch<T>;
+  readonly [Symbol.iterator]: () => RunGetIterator<T, never, Success<T>>;
+  readonly [Symbol.asyncIterator]: () => AsyncRunGetIterator<
+    T,
+    never,
+    Success<T>
+  >;
 };
 
 export type Failure<E> = {
@@ -137,6 +143,12 @@ export type Failure<E> = {
   readonly getOrElse: <U>(getValue: () => U) => U;
   readonly getOrThrow: () => never;
   readonly match: FailureMatch<E>;
+  readonly [Symbol.iterator]: () => RunGetIterator<never, E, Failure<E>>;
+  readonly [Symbol.asyncIterator]: () => AsyncRunGetIterator<
+    never,
+    E,
+    Failure<E>
+  >;
 };
 
 type InternalSuccess<T> = Success<T> & {
@@ -161,6 +173,16 @@ const BASE_FAILABLE = {
   getOrElse: notImplemented,
   getOrThrow: notImplemented,
   match: notImplemented,
+  [Symbol.iterator]: function failableIterator(
+    this: Failable<unknown, unknown>
+  ) {
+    return getRunIterator(this);
+  },
+  [Symbol.asyncIterator]: function failableAsyncIterator(
+    this: Failable<unknown, unknown>
+  ) {
+    return getAsyncRunIterator(this);
+  },
 } as const;
 
 const BASE_SUCCESS = (() => {
@@ -621,7 +643,7 @@ type InferRunResult<TYield, TResult> = [TResult] extends [never]
     >;
 
 const RUN_INVALID_YIELD_MESSAGE =
-  '`run()` generators must yield only values produced by `get(...)`. Use `yield* get(...)` in normal code.';
+  '`run()` generators must use `yield*` only with hydrated sync `Failable` values or with `get(...)`. Use `yield* helper()` for sync hydrated `Failable` helpers and `yield* get(...)` for promised sources.';
 const RUN_INVALID_RETURN_MESSAGE =
   '`run()` generators must return a `Failable` or finish without returning a value.';
 
