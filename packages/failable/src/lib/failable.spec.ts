@@ -1090,6 +1090,33 @@ describe('run()', () => {
       void buildResult;
     });
 
+    it('unions yielded source errors from multiple sources when returning success', () => {
+      const firstSource = success('first-value' as const) as Failable<
+        'first-value',
+        'first-source-error'
+      >;
+      const secondSource = success('second-value' as const) as Failable<
+        'second-value',
+        'second-source-error'
+      >;
+
+      const buildResult = () =>
+        run(function* ({ get }) {
+          const first = yield* get(firstSource);
+          const second = yield* get(secondSource);
+
+          return success([first, second] as const);
+        });
+
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Failable<
+          readonly ['first-value', 'second-value'],
+          'first-source-error' | 'second-source-error'
+        >
+      >();
+      void buildResult;
+    });
+
     it('keeps yielded maybe-failure types when later returning explicit Success<never>', () => {
       const source = success(123 as const) as Failable<123, 'source-error'>;
 
@@ -1140,6 +1167,89 @@ describe('run()', () => {
 
       expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
         Promise<Failure<'async-inline-source-error'>>
+      >();
+      void buildResult;
+    });
+
+    it('infers promised unions of raw success and failure sources in async builders', () => {
+      async function getUser(userId: string) {
+        if (userId === '') {
+          return failure('missing-user-id' as const);
+        }
+
+        if (userId === 'offline') {
+          return failure('network-error' as const);
+        }
+
+        return success({ id: userId } as const);
+      }
+
+      const buildResult = () =>
+        run(async function* ({ get }) {
+          const user = yield* get(getUser('123'));
+
+          expectTypeOf(user).toEqualTypeOf<{ readonly id: string }>();
+
+          return success(user);
+        });
+
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Promise<
+          Failable<
+            { readonly id: string },
+            'missing-user-id' | 'network-error'
+          >
+        >
+      >();
+      void buildResult;
+    });
+
+    it('unions promised source errors from multiple sources when returning success', () => {
+      async function getFirstValue(id: string) {
+        if (id === '') {
+          return failure('missing-first-id' as const);
+        }
+
+        if (id === 'offline') {
+          return failure('first-network-error' as const);
+        }
+
+        return success({ id, kind: 'first' } as const);
+      }
+
+      async function getSecondValue(id: string) {
+        if (id === '') {
+          return failure('missing-second-id' as const);
+        }
+
+        if (id === 'offline') {
+          return failure('second-network-error' as const);
+        }
+
+        return success({ id, kind: 'second' } as const);
+      }
+
+      const buildResult = () =>
+        run(async function* ({ get }) {
+          const first = yield* get(getFirstValue('123'));
+          const second = yield* get(getSecondValue('456'));
+
+          return success({ first, second } as const);
+        });
+
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Promise<
+          Failable<
+            {
+              readonly first: { readonly id: string; readonly kind: 'first' };
+              readonly second: { readonly id: string; readonly kind: 'second' };
+            },
+            | 'missing-first-id'
+            | 'first-network-error'
+            | 'missing-second-id'
+            | 'second-network-error'
+          >
+        >
       >();
       void buildResult;
     });

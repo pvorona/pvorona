@@ -403,6 +403,36 @@ expectType<
   Equal<typeof runAsyncFailure, Promise<Failure<'async-error'>>>
 >(true);
 
+const getAsyncUser = async (userId: string) => {
+  if (userId === '') {
+    return failure('missing-user-id' as const);
+  }
+
+  if (userId === 'offline') {
+    return failure('network-error' as const);
+  }
+
+  return success({ id: userId } as const);
+};
+
+const runAsyncPromisedSourceUnion = run(async function* ({ get }) {
+  const user = yield* get(getAsyncUser('123'));
+
+  return success(user);
+});
+expectType<
+  Equal<
+    typeof runAsyncPromisedSourceUnion,
+    Promise<
+      Failable<
+        { readonly id: string },
+        'missing-user-id' | 'network-error'
+      >
+    >
+  >
+>(true);
+void runAsyncPromisedSourceUnion;
+
 const runAsyncHelperReturn = run(async function* () {
   return helperResult();
 });

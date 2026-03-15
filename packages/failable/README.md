@@ -233,6 +233,66 @@ function loadConfig(
 }
 ```
 
+For async flows, switch to `run(async function* ...)`. `get(...)` also accepts
+promises that resolve to `Success` / `Failure` unions, so helper functions can
+stay unannotated and still infer the full error union:
+
+```ts
+import {
+  failable,
+  failure,
+  run,
+  success,
+  type Failable,
+} from '@pvorona/failable';
+
+type ApiError =
+  | { code: 'network_error'; cause: unknown }
+  | { code: 'http_error'; status: number }
+  | { code: 'json_parse_error'; cause: unknown };
+
+type User = { id: string; email: string };
+type Profile = { id: string; pictureUrl: string };
+
+async function readJson<T>(url: string) {
+  const responseResult = await failable(fetch(url));
+  if (responseResult.isFailure) {
+    return failure({ code: 'network_error', cause: responseResult.error } as const);
+  }
+
+  const response = responseResult.data;
+  if (!response.ok) {
+    return failure({ code: 'http_error', status: response.status } as const);
+  }
+
+  const jsonResult = await failable(response.json());
+  if (jsonResult.isFailure) {
+    return failure({ code: 'json_parse_error', cause: jsonResult.error } as const);
+  }
+
+  return success(jsonResult.data as T);
+}
+
+async function getUser(userId: string) {
+  return readJson<User>(`https://api.example.com/users/${userId}`);
+}
+
+async function getUserProfile(userId: string) {
+  return readJson<Profile>(`https://api.example.com/users/${userId}/profile`);
+}
+
+async function loadUserPage(
+  userId: string,
+): Promise<Failable<{ user: User; profile: Profile }, ApiError>> {
+  return await run(async function* ({ get }) {
+    const user = yield* get(getUser(userId));
+    const profile = yield* get(getUserProfile(userId));
+
+    return success({ user, profile });
+  });
+}
+```
+
 - if a yielded step fails, `run(...)` returns that original failure unchanged
 - in async builders, keep using `yield* get(...)`; do not write `await get(...)`
 - `run(...)` does not capture thrown values or rejected promises into `Failure`;

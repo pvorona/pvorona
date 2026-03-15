@@ -445,6 +445,36 @@ type FailablePromiseCallbackGuardError = Error & {
 
 const RUN_GET_TAG = Symbol('RunGet');
 
+type RunSource<T, E> = Success<T> | Failure<E> | Failable<T, E>;
+
+type RunSourceSuccessLike<TData = unknown> = {
+  readonly status: typeof FailableStatus.Success;
+  readonly data: TData;
+};
+
+type RunSourceFailureLike<TError = unknown> = {
+  readonly status: typeof FailableStatus.Failure;
+  readonly error: TError;
+};
+
+type InferRunSourceValue<TSource> = TSource extends PromiseLike<infer TValue>
+  ? TValue
+  : TSource;
+
+type InferRunSourceData<TSource> = Extract<
+  InferRunSourceValue<TSource>,
+  RunSourceSuccessLike
+> extends { readonly data: infer TData }
+  ? TData
+  : never;
+
+type InferRunSourceError<TSource> = Extract<
+  InferRunSourceValue<TSource>,
+  RunSourceFailureLike
+> extends { readonly error: infer TError }
+  ? TError
+  : never;
+
 class RunGet<
   T,
   E,
@@ -460,11 +490,13 @@ class RunGet<
   static create<
     T,
     E,
-    TSource extends Failable<T, E> | PromiseLike<Failable<T, E>>,
+    TSource extends
+      | Failable<T, E>
+      | PromiseLike<Failable<T, E>>,
   >(
     source: TSource
   ): RunGet<T, E, TSource> {
-    return new RunGet(source);
+    return new RunGet<T, E, TSource>(source);
   }
 }
 
@@ -493,9 +525,15 @@ type RunHelpers = {
     <E>(
       source: PromiseLike<Failure<E>>
     ): AsyncRunGetIterator<never, E, PromiseLike<Failure<E>>>;
-    <T, E>(
-      source: PromiseLike<Failable<T, E>>
-    ): AsyncRunGetIterator<T, E, PromiseLike<Failable<T, E>>>;
+    <TPromise extends PromiseLike<unknown>>(
+      source: TPromise & PromiseLike<RunSource<unknown, unknown>>
+    ): AsyncRunGetIterator<
+      InferRunSourceData<TPromise>,
+      InferRunSourceError<TPromise>,
+      PromiseLike<
+        Failable<InferRunSourceData<TPromise>, InferRunSourceError<TPromise>>
+      >
+    >;
   };
 };
 
@@ -599,7 +637,7 @@ function getRunIterator<T, E>(
 function* getRunIterator<T, E>(
   source: Failable<T, E>
 ): RunGetIterator<T, E, Failable<T, E>> {
-  return (yield RunGet.create(source)) as T;
+  return (yield RunGet.create<T, E, Failable<T, E>>(source)) as T;
 }
 
 function getAsyncRunIterator<T>(
@@ -620,6 +658,15 @@ function getAsyncRunIterator<E>(
 function getAsyncRunIterator<T, E>(
   source: PromiseLike<Failable<T, E>>
 ): AsyncRunGetIterator<T, E, PromiseLike<Failable<T, E>>>;
+function getAsyncRunIterator<TSource extends PromiseLike<RunSource<unknown, unknown>>>(
+  source: TSource
+): AsyncRunGetIterator<
+  InferRunSourceData<TSource>,
+  InferRunSourceError<TSource>,
+  PromiseLike<
+    Failable<InferRunSourceData<TSource>, InferRunSourceError<TSource>>
+  >
+>;
 async function* getAsyncRunIterator<T, E>(
   source: Failable<T, E> | PromiseLike<Failable<T, E>>
 ): AsyncRunGetIterator<T, E, Failable<T, E> | PromiseLike<Failable<T, E>>> {
@@ -650,16 +697,22 @@ function getRunSourceIterator<T>(
 function getRunSourceIterator<E>(
   source: PromiseLike<Failure<E>>
 ): AsyncRunGetIterator<never, E, PromiseLike<Failure<E>>>;
+function getRunSourceIterator<TPromise extends PromiseLike<unknown>>(
+  source: TPromise & PromiseLike<RunSource<unknown, unknown>>
+): AsyncRunGetIterator<
+  InferRunSourceData<TPromise>,
+  InferRunSourceError<TPromise>,
+  PromiseLike<
+    Failable<InferRunSourceData<TPromise>, InferRunSourceError<TPromise>>
+  >
+>;
 function getRunSourceIterator<T, E>(
-  source: PromiseLike<Failable<T, E>>
-): AsyncRunGetIterator<T, E, PromiseLike<Failable<T, E>>>;
-function getRunSourceIterator<T, E>(
-  source: Failable<T, E> | PromiseLike<Failable<T, E>>
+  source: Failable<T, E> | PromiseLike<RunSource<T, E>>
 ):
   | RunGetIterator<T, E, Failable<T, E>>
   | AsyncRunGetIterator<T, E, PromiseLike<Failable<T, E>>> {
-  if (isPromiseLike<Failable<T, E>>(source)) {
-    return getAsyncRunIterator(source);
+  if (isPromiseLike<RunSource<T, E>>(source)) {
+    return getAsyncRunIterator(source as PromiseLike<Failable<T, E>>);
   }
 
   return getRunIterator(source);
