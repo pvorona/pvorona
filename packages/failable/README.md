@@ -233,13 +233,13 @@ function loadConfig(
 }
 ```
 
-When a helper already returns a hydrated sync `Failable`, yield it directly with
-`yield* helper()`. Keep `yield* get(...)` for sources that are promises or
-thenables.
+When a helper already returns a hydrated `Failable`, yield it directly with
+`yield* helper()`. For promised sources in async builders, await them first and
+then yield the hydrated result with `yield* await promisedHelper()`.
 
 For async flows, switch to `run(async function* ...)`. Sync hydrated helpers
-still work with direct `yield* helper()`, while `get(...)` handles promised
-sources and keeps their full `Success` / `Failure` union inference:
+still work with direct `yield* helper()`, and promised sources compose with
+`yield* await ...`:
 
 ```ts
 import {
@@ -288,9 +288,9 @@ async function getUserProfile(userId: string) {
 async function loadUserPage(
   userId: string,
 ): Promise<Failable<{ user: User; profile: Profile }, ApiError>> {
-  return await run(async function* ({ get }) {
-    const user = yield* get(getUser(userId));
-    const profile = yield* get(getUserProfile(userId));
+  return await run(async function* () {
+    const user = yield* await getUser(userId);
+    const profile = yield* await getUserProfile(userId);
 
     return success({ user, profile });
   });
@@ -300,7 +300,9 @@ async function loadUserPage(
 - if a yielded step fails, `run(...)` returns that original failure unchanged
 - sync hydrated `Failable` helpers can use direct `yield* helper()` in both sync
   and async builders
-- promised sources still use `yield* get(...)`; do not write `await get(...)`
+- promised sources in async builders use `yield* await promisedHelper()`
+- rejected promised sources follow normal async `await` / `try` / `finally`
+  semantics rather than a helper-managed rejection path
 - `run(...)` does not capture thrown values or rejected promises into `Failure`;
   wrap throwing boundaries with `failable(...)` before they enter `run(...)`
 

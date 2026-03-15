@@ -108,8 +108,8 @@ async function postToLedger(
 async function submitTransfer(
   plan: TransferPlan
 ): Promise<Failable<{ readonly transferId: string }, SubmitTransferError>> {
-  return await run(async function* ({ get }) {
-    const created = yield* get(postToLedger(plan));
+  return await run(async function* () {
+    const created = yield* await postToLedger(plan);
 
     return success(created);
   });
@@ -208,12 +208,12 @@ async function planTransferWithRunAsync(request: {
     TransferAsyncError
   >
 > {
-  return await run(async function* ({ get }) {
+  return await run(async function* () {
     const source = yield* readSourceAccount(request.fromAccountId);
     const destination = yield* readDestinationAccount(request.toAccountId);
     yield* ensureDifferentAccounts(source, destination);
     yield* ensureSufficientFunds(source, request.amountCents);
-    yield* get(ensureWithinDailyLimit(source.id, request.amountCents));
+    yield* await ensureWithinDailyLimit(source.id, request.amountCents);
 
     return success({ ...request, feeCents: 25 });
   });
@@ -539,15 +539,15 @@ describe('public surface', () => {
     const original = failure('cleanup-failure' as const);
     const cleanupSteps: string[] = [];
 
-    const result = run(function* ({ get }) {
+    const result = run(function* () {
       try {
-        yield* get(original);
+        yield* original;
 
         return success('unreachable' as const);
       } finally {
-        yield* get(success('cleanup-step-1' as const));
+        yield* success('cleanup-step-1' as const);
         cleanupSteps.push('cleanup-step-1');
-        yield* get(success('cleanup-step-2' as const));
+        yield* success('cleanup-step-2' as const);
         cleanupSteps.push('cleanup-step-2');
       }
     });
@@ -562,13 +562,13 @@ describe('public surface', () => {
     let reachedLaterCleanup = false;
 
     await expect(
-      run(async function* ({ get }) {
+      run(async function* () {
         try {
-          yield* get(Promise.resolve(original));
+          yield* await Promise.resolve(original);
 
           return success('unreachable' as const);
         } finally {
-          yield* get(rejectFailable(rejection));
+          yield* await rejectFailable(rejection);
           reachedLaterCleanup = true;
         }
       })
@@ -580,14 +580,14 @@ describe('public surface', () => {
     const original = failure('original-failure' as const);
     let outerCleanupRan = false;
 
-    const result = await run(async function* ({ get }) {
+    const result = await run(async function* () {
       try {
         try {
-          yield* get(Promise.resolve(original));
+          yield* await Promise.resolve(original);
 
           return success('unreachable' as const);
         } finally {
-          yield* get(failure('cleanup-failure' as const));
+          yield* failure('cleanup-failure' as const);
         }
       } finally {
         outerCleanupRan = true;
@@ -603,9 +603,9 @@ describe('public surface', () => {
     const cleanupThrow = new Error('cleanup-throw');
 
     expect(() =>
-      run(function* ({ get }) {
+      run(function* () {
         try {
-          yield* get(original);
+          yield* original;
 
           return success('unreachable' as const);
         } finally {
@@ -620,9 +620,9 @@ describe('public surface', () => {
     const cleanupThrow = new Error('async-cleanup-throw');
 
     await expect(
-      run(async function* ({ get }) {
+      run(async function* () {
         try {
-          yield* get(Promise.resolve(original));
+          yield* await Promise.resolve(original);
 
           return success('unreachable' as const);
         } finally {
@@ -637,13 +637,13 @@ describe('public surface', () => {
     let managedCleanupRan = false;
 
     await expect(
-      run(async function* ({ get }) {
+      run(async function* () {
         try {
-          yield* get(rejectFailable(rejection));
+          yield* await rejectFailable(rejection);
 
           return success('unreachable' as const);
         } finally {
-          yield* get(Promise.resolve(success('cleanup-step' as const)));
+          yield* await Promise.resolve(success('cleanup-step' as const));
           managedCleanupRan = true;
         }
       })
@@ -653,9 +653,9 @@ describe('public surface', () => {
     const cleanupThrow = new Error('cleanup-rejection-throw');
 
     await expect(
-      run(async function* ({ get }) {
+      run(async function* () {
         try {
-          yield* get(rejectFailable(rejection));
+          yield* await rejectFailable(rejection);
 
           return success('unreachable' as const);
         } finally {
@@ -665,48 +665,49 @@ describe('public surface', () => {
     ).rejects.toBe(cleanupThrow);
   });
 
-  it('preserves main-path rejections when managed cleanup yields Failure', async () => {
+  it('returns the cleanup Failure when managed cleanup yields Failure', async () => {
     const rejection = { code: 'main-rejection' } as const;
+    const cleanupFailure = failure('cleanup-failure' as const);
     let outerCleanupRan = false;
 
     await expect(
-      run(async function* ({ get }) {
+      run(async function* () {
         try {
           try {
-            yield* get(rejectFailable(rejection));
+            yield* await rejectFailable(rejection);
 
             return success('unreachable' as const);
           } finally {
-            yield* get(failure('cleanup-failure' as const));
+            yield* cleanupFailure;
           }
         } finally {
           outerCleanupRan = true;
         }
       })
-    ).rejects.toBe(rejection);
+    ).resolves.toBe(cleanupFailure);
     expect(outerCleanupRan).toBe(true);
   });
 
-  it('preserves main-path rejections when managed cleanup promise rejections also happen', async () => {
+  it('uses the cleanup rejection when managed cleanup promise rejections also happen', async () => {
     const rejection = { code: 'main-rejection' } as const;
     const cleanupRejection = { code: 'cleanup-rejection' } as const;
     let outerCleanupRan = false;
 
     await expect(
-      run(async function* ({ get }) {
+      run(async function* () {
         try {
           try {
-            yield* get(rejectFailable(rejection));
+            yield* await rejectFailable(rejection);
 
             return success('unreachable' as const);
           } finally {
-            yield* get(rejectFailable(cleanupRejection));
+            yield* await rejectFailable(cleanupRejection);
           }
         } finally {
           outerCleanupRan = true;
         }
       })
-    ).rejects.toBe(rejection);
+    ).rejects.toBe(cleanupRejection);
     expect(outerCleanupRan).toBe(true);
   });
 

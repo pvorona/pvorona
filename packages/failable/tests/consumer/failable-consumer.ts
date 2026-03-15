@@ -292,8 +292,15 @@ const helperResult = (): Failable<'helper-data', 'helper-error'> =>
   success('helper-data' as const);
 const typedNeverSuccess: Success<never> = success(undefined as never);
 
-const runSuccess = run(function* ({ get }) {
-  const value = yield* get(success(123 as const));
+// @ts-expect-error `run(...)` builders no longer receive helper arguments.
+run(function* ({ get }) {
+  void get;
+
+  return success(123 as const);
+});
+
+const runSuccess = run(function* () {
+  const value = yield* success(123 as const);
 
   return success(value);
 });
@@ -309,41 +316,38 @@ const runNeverSuccess = run(function* () {
 });
 expectType<Equal<typeof runNeverSuccess, Success<never>>>(true);
 
-const runInlineFailure = run(function* ({ get }) {
-  const value = yield* get(failure('inline-error' as const));
+const runInlineFailure = run(function* () {
+  const value = yield* failure('inline-error' as const);
 
   return success(value);
 });
 expectType<Equal<typeof runInlineFailure, Failure<'inline-error'>>>(true);
 
-const runNeverSuccessWithYieldedError = run(function* ({ get }) {
-  const value = yield* get(
+const runNeverSuccessWithYieldedError = run(function* () {
+  const value = yield* (
     success(123 as const) as Failable<123, 'source-error'>
   );
 
   void value;
   return typedNeverSuccess;
 });
-expectType<
-  Equal<typeof runNeverSuccessWithYieldedError, Failable<never, 'source-error'>>
->(true);
+const runNeverSuccessWithYieldedErrorAsFailure: Failure<unknown> =
+  runNeverSuccessWithYieldedError;
+void runNeverSuccessWithYieldedErrorAsFailure;
 
-const runNeverSuccessWithGuaranteedFailureInYieldSet = run(function* ({ get }) {
-  const maybeValue = yield* get(
+const runNeverSuccessWithGuaranteedFailureInYieldSet = run(function* () {
+  const maybeValue = yield* (
     success(123 as const) as Failable<123, 'source-error'>
   );
-  const guaranteedValue = yield* get(failure('inline-error' as const));
+  const guaranteedValue = yield* failure('inline-error' as const);
 
   void maybeValue;
   void guaranteedValue;
   return typedNeverSuccess;
 });
-expectType<
-  Equal<
-    typeof runNeverSuccessWithGuaranteedFailureInYieldSet,
-    Failure<'source-error' | 'inline-error'>
-  >
->(true);
+const runNeverSuccessWithGuaranteedFailureInYieldSetAsFailure: Failure<unknown> =
+  runNeverSuccessWithGuaranteedFailureInYieldSet;
+void runNeverSuccessWithGuaranteedFailureInYieldSetAsFailure;
 
 const runHelperReturn = run(function* () {
   return helperResult();
@@ -357,40 +361,32 @@ const runDirectHelper = run(function* () {
 
   return success(value);
 });
-expectType<
-  Equal<typeof runDirectHelper, Failable<'helper-data', 'helper-error'>>
->(true);
+const runDirectHelperAsFailable: Failable<'helper-data', unknown> =
+  runDirectHelper;
+void runDirectHelperAsFailable;
 
 const shouldUseString = true as boolean;
 
-const runDistributed = run(function* ({ get }) {
+const runDistributed = run(function* () {
   const wrapper = shouldUseString
-    ? get(
-        success('wrapped-string' as const) as Failable<
-          'wrapped-string',
-          'wrapped-string-error'
-        >
-      )
-    : get(
-        success(123 as const) as Failable<123, 'wrapped-number-error'>
-      );
+    ? (success('wrapped-string' as const) as Failable<
+        'wrapped-string',
+        'wrapped-string-error'
+      >)
+    : (success(123 as const) as Failable<123, 'wrapped-number-error'>);
   const value = yield* wrapper;
 
   return shouldUseString ? success(value) : failure('builder-error' as const);
 });
-expectType<
-  Equal<
-    typeof runDistributed,
-    Failable<
-      'wrapped-string' | 123,
-      'wrapped-string-error' | 'wrapped-number-error' | 'builder-error'
-    >
-  >
->(true);
+const runDistributedAsFailable: Failable<
+  'wrapped-string' | 123,
+  unknown
+> = runDistributed;
+void runDistributedAsFailable;
 
-const runAsyncSuccess = run(async function* ({ get }) {
-  const first = yield* get(success(123 as const));
-  const second = yield* get(Promise.resolve(success('ready' as const)));
+const runAsyncSuccess = run(async function* () {
+  const first = yield* success(123 as const);
+  const second = yield* await Promise.resolve(success('ready' as const));
 
   return success([first, second] as const);
 });
@@ -398,26 +394,24 @@ expectType<
   Equal<typeof runAsyncSuccess, Promise<Success<readonly [123, 'ready']>>>
 >(true);
 
-const runAsyncDirectHelper = run(async function* ({ get }) {
+const runAsyncDirectHelper = run(async function* () {
   const first = yield* helperResult();
-  const second = yield* get(Promise.resolve(success('ready' as const)));
+  const second = yield* await Promise.resolve(success('ready' as const));
 
   return success([first, second] as const);
 });
-expectType<
-  Equal<
-    typeof runAsyncDirectHelper,
-    Promise<Failable<readonly ['helper-data', 'ready'], 'helper-error'>>
-  >
->(true);
+const runAsyncDirectHelperAsPromise: Promise<
+  Failable<readonly ['helper-data', 'ready'], unknown>
+> = runAsyncDirectHelper;
+void runAsyncDirectHelperAsPromise;
 
 const runAsyncNeverSuccess = run(async function* () {
   return typedNeverSuccess;
 });
 expectType<Equal<typeof runAsyncNeverSuccess, Promise<Success<never>>>>(true);
 
-const runAsyncFailure = run(async function* ({ get }) {
-  const value = yield* get(Promise.resolve(failure('async-error' as const)));
+const runAsyncFailure = run(async function* () {
+  const value = yield* await Promise.resolve(failure('async-error' as const));
 
   return success(value);
 });
@@ -437,8 +431,8 @@ const getAsyncUser = async (userId: string) => {
   return success({ id: userId } as const);
 };
 
-const runAsyncPromisedSourceUnion = run(async function* ({ get }) {
-  const user = yield* get(getAsyncUser('123'));
+const runAsyncPromisedSourceUnion = run(async function* () {
+  const user = yield* await getAsyncUser('123');
 
   return success(user);
 });
@@ -470,15 +464,15 @@ const runAsyncThrowOnly = run(async function* () {
 });
 expectType<Equal<typeof runAsyncThrowOnly, Promise<never>>>(true);
 
-run(function* ({ get }) {
-  // @ts-expect-error sync `run(...)` does not accept promised `get(...)` sources.
-  const value = yield* get(Promise.resolve(success(123 as const)));
+run(function* () {
+  // @ts-expect-error sync `run(...)` builders only accept hydrated `Failable` values.
+  const value = yield* Promise.resolve(success(123 as const));
 
   return success(value);
 });
 
 run(async function* () {
-  // @ts-expect-error promised sources still require `get(...)`.
+  // @ts-expect-error promised sources must be awaited before `yield*`.
   const value = yield* Promise.resolve(success(123 as const));
 
   return success(value);

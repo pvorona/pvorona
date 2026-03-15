@@ -44,7 +44,14 @@ export type Failable<T, E> =
   }) |
     (Failure<E> & {
       readonly match: Match<T, E>;
-    }));
+    })) & {
+    readonly [Symbol.iterator]: () => RunGetIterator<T, E, Failable<T, E>>;
+    readonly [Symbol.asyncIterator]: () => AsyncRunGetIterator<
+      T,
+      E,
+      Failable<T, E>
+    >;
+  };
 
 /**
  * Structured-clone-friendly representation of {@link Failable}.
@@ -467,36 +474,6 @@ type FailablePromiseCallbackGuardError = Error & {
 
 const RUN_GET_TAG = Symbol('RunGet');
 
-type RunSource<T, E> = Success<T> | Failure<E> | Failable<T, E>;
-
-type RunSourceSuccessLike<TData = unknown> = {
-  readonly status: typeof FailableStatus.Success;
-  readonly data: TData;
-};
-
-type RunSourceFailureLike<TError = unknown> = {
-  readonly status: typeof FailableStatus.Failure;
-  readonly error: TError;
-};
-
-type InferRunSourceValue<TSource> = TSource extends PromiseLike<infer TValue>
-  ? TValue
-  : TSource;
-
-type InferRunSourceData<TSource> = Extract<
-  InferRunSourceValue<TSource>,
-  RunSourceSuccessLike
-> extends { readonly data: infer TData }
-  ? TData
-  : never;
-
-type InferRunSourceError<TSource> = Extract<
-  InferRunSourceValue<TSource>,
-  RunSourceFailureLike
-> extends { readonly error: infer TError }
-  ? TError
-  : never;
-
 class RunGet<
   T,
   E,
@@ -512,9 +489,7 @@ class RunGet<
   static create<
     T,
     E,
-    TSource extends
-      | Failable<T, E>
-      | PromiseLike<Failable<T, E>>,
+    TSource extends Failable<T, E>,
   >(
     source: TSource
   ): RunGet<T, E, TSource> {
@@ -531,39 +506,22 @@ type RunGetIterator<
 type AsyncRunGetIterator<
   T,
   E,
-  TSource extends
-    | Failable<T, E>
-    | PromiseLike<Failable<T, E>> = Failable<T, E> | PromiseLike<Failable<T, E>>,
+  TSource extends Failable<T, E> = Failable<T, E>,
 > = AsyncGenerator<RunGet<T, E, TSource>, T, unknown>;
 
-type RunHelpers = {
-  readonly get: {
-    <T>(source: Success<T>): RunGetIterator<T, never, Success<T>>;
-    <E>(source: Failure<E>): RunGetIterator<never, E, Failure<E>>;
-    <T, E>(source: Failable<T, E>): RunGetIterator<T, E, Failable<T, E>>;
-    <T>(
-      source: PromiseLike<Success<T>>
-    ): AsyncRunGetIterator<T, never, PromiseLike<Success<T>>>;
-    <E>(
-      source: PromiseLike<Failure<E>>
-    ): AsyncRunGetIterator<never, E, PromiseLike<Failure<E>>>;
-    <TPromise extends PromiseLike<unknown>>(
-      source: TPromise & PromiseLike<RunSource<unknown, unknown>>
-    ): AsyncRunGetIterator<
-      InferRunSourceData<TPromise>,
-      InferRunSourceError<TPromise>,
-      PromiseLike<
-        Failable<InferRunSourceData<TPromise>, InferRunSourceError<TPromise>>
-      >
-    >;
-  };
-};
-
 type RunYield = RunGet<unknown, unknown, unknown>;
+type RunReturnSuccessLike<TData = unknown> = Pick<
+  Success<TData>,
+  'status' | 'data' | 'error' | 'match'
+>;
+type RunReturnFailureLike<TError = unknown> = Pick<
+  Failure<TError>,
+  'status' | 'data' | 'error' | 'match'
+>;
 type RunReturn =
   | void
-  | Success<unknown>
-  | Failure<unknown>
+  | RunReturnSuccessLike<unknown>
+  | RunReturnFailureLike<unknown>
   | Failable<unknown, unknown>;
 
 type InferRunYieldError<TYield> = TYield extends RunGet<
@@ -579,22 +537,10 @@ type InferRunGuaranteedFailureError<TYield> = TYield extends RunGet<
   infer TError,
   infer TSource
 >
-  ? [TSource] extends [Failure<TError> | PromiseLike<Failure<TError>>]
+  ? [TSource] extends [Failure<TError>]
     ? TError
     : never
   : never;
-
-type RunReturnSuccessLike<TData = unknown> = {
-  readonly status: typeof FailableStatus.Success;
-  readonly data: TData;
-  readonly error: null;
-};
-
-type RunReturnFailureLike<TError = unknown> = {
-  readonly status: typeof FailableStatus.Failure;
-  readonly data: null;
-  readonly error: TError;
-};
 
 type MergeRunErrors<TYield, TError> = InferRunYieldError<TYield> | TError;
 
@@ -643,7 +589,7 @@ type InferRunResult<TYield, TResult> = [TResult] extends [never]
     >;
 
 const RUN_INVALID_YIELD_MESSAGE =
-  '`run()` generators must use `yield*` only with hydrated sync `Failable` values or with `get(...)`. Use `yield* helper()` for sync hydrated `Failable` helpers and `yield* get(...)` for promised sources.';
+  '`run()` generators must use `yield*` only with hydrated `Failable` values. Use `yield* helper()` for sync helpers and `yield* await promisedHelper()` for promised sources.';
 const RUN_INVALID_RETURN_MESSAGE =
   '`run()` generators must return a `Failable` or finish without returning a value.';
 
@@ -671,27 +617,9 @@ function getAsyncRunIterator<E>(
 function getAsyncRunIterator<T, E>(
   source: Failable<T, E>
 ): AsyncRunGetIterator<T, E, Failable<T, E>>;
-function getAsyncRunIterator<T>(
-  source: PromiseLike<Success<T>>
-): AsyncRunGetIterator<T, never, PromiseLike<Success<T>>>;
-function getAsyncRunIterator<E>(
-  source: PromiseLike<Failure<E>>
-): AsyncRunGetIterator<never, E, PromiseLike<Failure<E>>>;
-function getAsyncRunIterator<T, E>(
-  source: PromiseLike<Failable<T, E>>
-): AsyncRunGetIterator<T, E, PromiseLike<Failable<T, E>>>;
-function getAsyncRunIterator<TSource extends PromiseLike<RunSource<unknown, unknown>>>(
-  source: TSource
-): AsyncRunGetIterator<
-  InferRunSourceData<TSource>,
-  InferRunSourceError<TSource>,
-  PromiseLike<
-    Failable<InferRunSourceData<TSource>, InferRunSourceError<TSource>>
-  >
->;
 async function* getAsyncRunIterator<T, E>(
-  source: Failable<T, E> | PromiseLike<Failable<T, E>>
-): AsyncRunGetIterator<T, E, Failable<T, E> | PromiseLike<Failable<T, E>>> {
+  source: Failable<T, E>
+): AsyncRunGetIterator<T, E, Failable<T, E>> {
   return (yield RunGet.create(source)) as T;
 }
 
@@ -704,55 +632,21 @@ function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
   return isFunction(candidate.then);
 }
 
-function getRunSourceIterator<T>(
-  source: Success<T>
-): RunGetIterator<T, never, Success<T>>;
-function getRunSourceIterator<E>(
-  source: Failure<E>
-): RunGetIterator<never, E, Failure<E>>;
-function getRunSourceIterator<T, E>(
-  source: Failable<T, E>
-): RunGetIterator<T, E, Failable<T, E>>;
-function getRunSourceIterator<T>(
-  source: PromiseLike<Success<T>>
-): AsyncRunGetIterator<T, never, PromiseLike<Success<T>>>;
-function getRunSourceIterator<E>(
-  source: PromiseLike<Failure<E>>
-): AsyncRunGetIterator<never, E, PromiseLike<Failure<E>>>;
-function getRunSourceIterator<TPromise extends PromiseLike<unknown>>(
-  source: TPromise & PromiseLike<RunSource<unknown, unknown>>
-): AsyncRunGetIterator<
-  InferRunSourceData<TPromise>,
-  InferRunSourceError<TPromise>,
-  PromiseLike<
-    Failable<InferRunSourceData<TPromise>, InferRunSourceError<TPromise>>
-  >
->;
-function getRunSourceIterator<T, E>(
-  source: Failable<T, E> | PromiseLike<RunSource<T, E>>
-):
-  | RunGetIterator<T, E, Failable<T, E>>
-  | AsyncRunGetIterator<T, E, PromiseLike<Failable<T, E>>> {
-  if (isPromiseLike<RunSource<T, E>>(source)) {
-    return getAsyncRunIterator(source as PromiseLike<Failable<T, E>>);
-  }
-
-  return getRunIterator(source);
-}
-
-const RUN_HELPERS: RunHelpers = Object.freeze({
-  get: getRunSourceIterator,
-});
-
 type SyncRunBuilder<
   TYield extends RunYield = never,
   TResult extends RunReturn = RunReturn,
-> = (helpers: RunHelpers) => Generator<TYield, TResult, unknown>;
+> = (_helpers: RunNoHelpers) => Generator<TYield, TResult, unknown>;
 
 type AsyncRunBuilder<
   TYield extends RunGet<unknown, unknown, unknown> = never,
   TResult extends RunReturn = RunReturn,
-> = (helpers: RunHelpers) => AsyncGenerator<TYield, TResult, unknown>;
+> = (_helpers: RunNoHelpers) => AsyncGenerator<TYield, TResult, unknown>;
+
+type RunNoHelpers = {
+  readonly __runNoHelpers?: never;
+};
+
+const RUN_NO_HELPERS: RunNoHelpers = Object.freeze({});
 
 function readRunGetSource(yielded: unknown): Failable<unknown, unknown> {
   if (!(yielded instanceof RunGet)) {
@@ -782,31 +676,6 @@ async function readAsyncRunGetSource(
   return source;
 }
 
-type AsyncRunGetSourceRead =
-  | { readonly kind: 'source'; readonly source: Failable<unknown, unknown> }
-  | { readonly kind: 'rejection'; readonly rejection: unknown };
-
-async function readAsyncRunGetSourceWithRejection(
-  yielded: unknown
-): Promise<AsyncRunGetSourceRead> {
-  if (!(yielded instanceof RunGet)) {
-    throw new Error(RUN_INVALID_YIELD_MESSAGE);
-  }
-
-  let source: unknown;
-  try {
-    source = await yielded.source;
-  } catch (rejection) {
-    return { kind: 'rejection', rejection };
-  }
-
-  if (!isFailable(source)) {
-    throw new Error(RUN_INVALID_YIELD_MESSAGE);
-  }
-
-  return { kind: 'source', source };
-}
-
 function closeRunIterator<TYield extends RunYield, TResult extends RunReturn>(
   iterator: Generator<TYield, TResult, unknown>,
   result: Failure<unknown>
@@ -829,7 +698,7 @@ async function closeAsyncRunIterator<
   TResult extends RunReturn,
 >(
   iterator: AsyncGenerator<TYield, TResult, unknown>,
-  result: Failure<unknown> | undefined
+  result: Failure<unknown>
 ) {
   let closing = await iterator.return(result as never);
 
@@ -837,31 +706,6 @@ async function closeAsyncRunIterator<
     const source = await readAsyncRunGetSource(closing.value);
     if (source.status === FailableStatus.Failure) {
       closing = await iterator.return(result as never);
-      continue;
-    }
-
-    closing = await iterator.next(source.data);
-  }
-}
-
-async function closeAsyncRunIteratorOnRejection<
-  TYield extends RunGet<unknown, unknown, unknown>,
-  TResult extends RunReturn,
->(
-  iterator: AsyncGenerator<TYield, TResult, unknown>
-) {
-  let closing = await iterator.return(undefined as never);
-
-  while (!closing.done) {
-    const sourceRead = await readAsyncRunGetSourceWithRejection(closing.value);
-    if (sourceRead.kind === 'rejection') {
-      closing = await iterator.return(undefined as never);
-      continue;
-    }
-
-    const source = sourceRead.source;
-    if (source.status === FailableStatus.Failure) {
-      closing = await iterator.return(undefined as never);
       continue;
     }
 
@@ -916,14 +760,7 @@ async function runAsyncIterator<
   let iteration = await iterator.next();
 
   while (!iteration.done) {
-    const sourceRead = await readAsyncRunGetSourceWithRejection(iteration.value);
-    if (sourceRead.kind === 'rejection') {
-      // Promise rejections remain foreign values, but `finally` cleanup should still unwind.
-      await closeAsyncRunIteratorOnRejection(iterator);
-      throw sourceRead.rejection;
-    }
-
-    const source = sourceRead.source;
+    const source = await readAsyncRunGetSource(iteration.value);
     if (source.status === FailableStatus.Failure) {
       await closeAsyncRunIterator(iterator, source);
       return source as InferRunResult<TYield, TResult>;
@@ -939,13 +776,13 @@ export function run<
   TYield extends RunGet<unknown, unknown, unknown> = never,
   TResult extends RunReturn = RunReturn,
 >(
-  builder: (helpers: RunHelpers) => AsyncGenerator<TYield, TResult, unknown>
+  builder: (_helpers: RunNoHelpers) => AsyncGenerator<TYield, TResult, unknown>
 ): Promise<InferRunResult<TYield, TResult>>;
 export function run<
   TYield extends RunYield = never,
   TResult extends RunReturn = RunReturn,
 >(
-  builder: (helpers: RunHelpers) => Generator<TYield, TResult, unknown>
+  builder: (_helpers: RunNoHelpers) => Generator<TYield, TResult, unknown>
 ): InferRunResult<TYield, TResult>;
 export function run(
   builder:
@@ -953,12 +790,10 @@ export function run(
     | AsyncRunBuilder<RunGet<unknown, unknown, unknown>, RunReturn>
 ): unknown {
   const probeIterator = (
-    builder as (
-      helpers: RunHelpers
-    ) =>
+    builder as (_helpers: RunNoHelpers) =>
       | Generator<RunYield, RunReturn, unknown>
       | AsyncGenerator<RunGet<unknown, unknown, unknown>, RunReturn, unknown>
-  )(RUN_HELPERS);
+  )(RUN_NO_HELPERS);
 
   if (isAsyncRunIterator(probeIterator)) {
     return runAsyncIterator(probeIterator);

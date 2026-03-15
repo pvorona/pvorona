@@ -946,8 +946,8 @@ describe('run()', () => {
 
     it('infers yielded success data', () => {
       const buildResult = () =>
-        run(function* ({ get }) {
-          const value = yield* get(success(123 as number));
+        run(function* () {
+          const value = yield* success(123 as number);
 
           expectTypeOf(value).toEqualTypeOf<number>();
 
@@ -962,8 +962,8 @@ describe('run()', () => {
 
     it('keeps inline failure sources as Failure when success is unreachable', () => {
       const buildResult = () =>
-        run(function* ({ get }) {
-          const value = yield* get(failure('inline-source-error' as const));
+        run(function* () {
+          const value = yield* failure('inline-source-error' as const);
 
           return success(value);
         });
@@ -1042,17 +1042,13 @@ describe('run()', () => {
       const shouldUseString = true as boolean;
 
       const buildResult = () =>
-        run(function* ({ get }) {
+        run(function* () {
           const wrapper = shouldUseString
-            ? get(
-                success('wrapped-string' as const) as Failable<
-                  'wrapped-string',
-                  'wrapped-string-error'
-                >
-              )
-            : get(
-                success(123 as const) as Failable<123, 'wrapped-number-error'>
-              );
+            ? (success('wrapped-string' as const) as Failable<
+                'wrapped-string',
+                'wrapped-string-error'
+              >)
+            : (success(123 as const) as Failable<123, 'wrapped-number-error'>);
           const value = yield* wrapper;
 
           expectTypeOf(value).toEqualTypeOf<'wrapped-string' | 123>();
@@ -1082,9 +1078,9 @@ describe('run()', () => {
       >;
 
       const buildResult = () =>
-        run(function* ({ get }) {
-          const first = yield* get(firstSource);
-          const second = yield* get(secondSource);
+        run(function* () {
+          const first = yield* firstSource;
+          const second = yield* secondSource;
 
           void first;
           void second;
@@ -1109,9 +1105,9 @@ describe('run()', () => {
       >;
 
       const buildResult = () =>
-        run(function* ({ get }) {
-          const first = yield* get(firstSource);
-          const second = yield* get(secondSource);
+        run(function* () {
+          const first = yield* firstSource;
+          const second = yield* secondSource;
 
           return success([first, second] as const);
         });
@@ -1129,8 +1125,8 @@ describe('run()', () => {
       const source = success(123 as const) as Failable<123, 'source-error'>;
 
       const buildResult = () =>
-        run(function* ({ get }) {
-          const value = yield* get(source);
+        run(function* () {
+          const value = yield* source;
 
           void value;
           return getExplicitNeverSuccess();
@@ -1146,11 +1142,9 @@ describe('run()', () => {
       const source = success(123 as const) as Failable<123, 'source-error'>;
 
       const buildResult = () =>
-        run(function* ({ get }) {
-          const maybeValue = yield* get(source);
-          const guaranteedValue = yield* get(
-            failure('inline-source-error' as const)
-          );
+        run(function* () {
+          const maybeValue = yield* source;
+          const guaranteedValue = yield* failure('inline-source-error' as const);
 
           void maybeValue;
           void guaranteedValue;
@@ -1165,9 +1159,9 @@ describe('run()', () => {
 
     it('keeps promised inline failure sources as Failure in async builders', () => {
       const buildResult = () =>
-        run(async function* ({ get }) {
-          const value = yield* get(
-            Promise.resolve(failure('async-inline-source-error' as const))
+        run(async function* () {
+          const value = yield* await Promise.resolve(
+            failure('async-inline-source-error' as const)
           );
 
           return success(value);
@@ -1193,8 +1187,8 @@ describe('run()', () => {
       }
 
       const buildResult = () =>
-        run(async function* ({ get }) {
-          const user = yield* get(getUser('123'));
+        run(async function* () {
+          const user = yield* await getUser('123');
 
           expectTypeOf(user).toEqualTypeOf<{ readonly id: string }>();
 
@@ -1235,9 +1229,9 @@ describe('run()', () => {
       }
 
       const buildResult = () =>
-        run(async function* ({ get }) {
-          const first = yield* get(getFirstValue('123'));
-          const second = yield* get(getSecondValue('456'));
+        run(async function* () {
+          const first = yield* await getFirstValue('123');
+          const second = yield* await getSecondValue('456');
 
           return success({ first, second } as const);
         });
@@ -1261,10 +1255,10 @@ describe('run()', () => {
 
     it('infers mixed sync and async yielded payloads in async builders', () => {
       const buildResult = () =>
-        run(async function* ({ get }) {
-          const syncValue = yield* get(success(123 as const));
-          const asyncValue = yield* get(
-            Promise.resolve(success('async-value' as const))
+        run(async function* () {
+          const syncValue = yield* success(123 as const);
+          const asyncValue = yield* await Promise.resolve(
+            success('async-value' as const)
           );
 
           expectTypeOf(syncValue).toEqualTypeOf<123>();
@@ -1279,15 +1273,15 @@ describe('run()', () => {
       void buildResult;
     });
 
-    it('infers direct sync helper `yield*` alongside promised `get(...)` in async builders', () => {
+    it('infers direct sync helper `yield*` alongside `yield* await ...` in async builders', () => {
       async function getAsyncValue() {
         return success('async-value' as const);
       }
 
       const buildResult = () =>
-        run(async function* ({ get }) {
+        run(async function* () {
           const syncValue = yield* getHelperResult();
-          const asyncValue = yield* get(getAsyncValue());
+          const asyncValue = yield* await getAsyncValue();
 
           expectTypeOf(syncValue).toEqualTypeOf<'helper-data'>();
           expectTypeOf(asyncValue).toEqualTypeOf<'async-value'>();
@@ -1312,9 +1306,9 @@ describe('run()', () => {
       >;
 
       const buildResult = () =>
-        run(async function* ({ get }) {
-          const first = yield* get(Promise.resolve(firstSource));
-          const second = yield* get(secondSource);
+        run(async function* () {
+          const first = yield* await Promise.resolve(firstSource);
+          const second = yield* secondSource;
 
           void first;
           void second;
@@ -1391,8 +1385,8 @@ describe('run()', () => {
       const source = success(123 as const) as Failable<123, 'source-error'>;
 
       const buildResult = () =>
-        run(function* ({ get }) {
-          const value = yield* get(source);
+        run(function* () {
+          const value = yield* source;
 
           void value;
           throw new Error('boom');
@@ -1406,9 +1400,9 @@ describe('run()', () => {
 
     it('rejects promised `get(...)` sources in sync builders at type level', () => {
       const buildResult = () =>
-        run(function* ({ get }) {
-          // @ts-expect-error sync `run(...)` does not accept promised sources.
-          const value = yield* get(Promise.resolve(success(123 as const)));
+        run(function* () {
+          // @ts-expect-error sync `run(...)` only accepts hydrated `Failable` values.
+          const value = yield* Promise.resolve(success(123 as const));
 
           return success(value);
         });
@@ -1419,7 +1413,7 @@ describe('run()', () => {
     it('rejects direct promised sources in async builders at type level', () => {
       const buildResult = () =>
         run(async function* () {
-          // @ts-expect-error promised sources still require `get(...)`.
+          // @ts-expect-error promised sources must be awaited before `yield*`.
           const value = yield* Promise.resolve(success(123 as const));
 
           return success(value);
@@ -1431,9 +1425,9 @@ describe('run()', () => {
 
   describe('runtime', () => {
     it('returns Success when all yielded sources succeed', () => {
-      const result = run(function* ({ get }) {
-        const left = yield* get(success(20 as const));
-        const right = yield* get(success(22 as const));
+      const result = run(function* () {
+        const left = yield* success(20 as const);
+        const right = yield* success(22 as const);
 
         return success(left + right);
       });
@@ -1455,10 +1449,10 @@ describe('run()', () => {
       expect(result).toStrictEqual(success('123' as const));
     });
 
-    it('supports mixed sync and async `yield* get(...)` steps in async builders', async () => {
-      const result = await run(async function* ({ get }) {
-        const left = yield* get(success(20 as const));
-        const right = yield* get(Promise.resolve(success(22 as const)));
+    it('supports mixed sync and async `yield* await ...` steps in async builders', async () => {
+      const result = await run(async function* () {
+        const left = yield* success(20 as const);
+        const right = yield* await Promise.resolve(success(22 as const));
 
         return success(left + right);
       });
@@ -1479,9 +1473,9 @@ describe('run()', () => {
         return success({ id: userId } as const);
       }
 
-      const result = await run(async function* ({ get }) {
+      const result = await run(async function* () {
         const userId = yield* getUserId();
-        const user = yield* get(getUser(userId));
+        const user = yield* await getUser(userId);
 
         return success(user);
       });
@@ -1491,9 +1485,9 @@ describe('run()', () => {
     });
 
     it('supports custom PromiseLike success sources in async builders', async () => {
-      const result = await run(async function* ({ get }) {
-        const left = yield* get(success(20 as const));
-        const right = yield* get(createResolvingThenable(success(22 as const)));
+      const result = await run(async function* () {
+        const left = yield* success(20 as const);
+        const right = yield* await createResolvingThenable(success(22 as const));
 
         return success(left + right);
       });
@@ -1517,9 +1511,9 @@ describe('run()', () => {
       expect(result).toStrictEqual(success(42));
     });
 
-    it('returns inline Failure values from `yield* get(failure(...))`', () => {
-      const result = run(function* ({ get }) {
-        const value = yield* get(failure('inline-failure' as const));
+    it('returns inline Failure values from direct `yield* failure(...)`', () => {
+      const result = run(function* () {
+        const value = yield* failure('inline-failure' as const);
 
         return success(value);
       });
@@ -1529,8 +1523,8 @@ describe('run()', () => {
 
     it('returns the original Failure instance unchanged', () => {
       const original = failure('original-failure' as const);
-      const result = run(function* ({ get }) {
-        const value = yield* get(original);
+      const result = run(function* () {
+        const value = yield* original;
 
         return success(value);
       });
@@ -1540,8 +1534,8 @@ describe('run()', () => {
 
     it('returns the original promised Failure instance unchanged', async () => {
       const original = failure('promised-failure' as const);
-      const result = await run(async function* ({ get }) {
-        const value = yield* get(Promise.resolve(original));
+      const result = await run(async function* () {
+        const value = yield* await Promise.resolve(original);
 
         return success(value);
       });
@@ -1553,8 +1547,8 @@ describe('run()', () => {
       const original = failure('short-circuit-failure' as const);
       let reachedLaterStep = false;
 
-      const result = run(function* ({ get }) {
-        yield* get(original);
+      const result = run(function* () {
+        yield* original;
         reachedLaterStep = true;
 
         return success('unreachable' as const);
@@ -1568,9 +1562,9 @@ describe('run()', () => {
       const original = failure('cleanup-failure' as const);
       let cleanedUp = false;
 
-      const result = run(function* ({ get }) {
+      const result = run(function* () {
         try {
-          yield* get(original);
+          yield* original;
 
           return success('unreachable' as const);
         } finally {
@@ -1582,17 +1576,17 @@ describe('run()', () => {
       expect(cleanedUp).toBe(true);
     });
 
-    it('runs async `yield* get(...)` cleanup before returning the first Failure', async () => {
+    it('runs async `yield* await ...` cleanup before returning the first Failure', async () => {
       const original = failure('cleanup-failure' as const);
       let cleanedUp = false;
 
-      const result = await run(async function* ({ get }) {
+      const result = await run(async function* () {
         try {
-          yield* get(Promise.resolve(original));
+          yield* await Promise.resolve(original);
 
           return success('unreachable' as const);
         } finally {
-          yield* get(Promise.resolve(success('cleanup-step' as const)));
+          yield* await Promise.resolve(success('cleanup-step' as const));
           cleanedUp = true;
         }
       });
@@ -1601,17 +1595,17 @@ describe('run()', () => {
       expect(cleanedUp).toBe(true);
     });
 
-    it('drains `yield* get(...)` cleanup in finally blocks before returning the first Failure', () => {
+    it('drains direct `yield*` cleanup in finally blocks before returning the first Failure', () => {
       const original = failure('cleanup-yield-failure' as const);
       let cleanedUp = false;
 
-      const result = run(function* ({ get }) {
+      const result = run(function* () {
         try {
-          yield* get(original);
+          yield* original;
 
           return success('unreachable' as const);
         } finally {
-          yield* get(success('cleanup-step' as const));
+          yield* success('cleanup-step' as const);
           cleanedUp = true;
         }
       });
@@ -1625,15 +1619,15 @@ describe('run()', () => {
       let step1 = false;
       let step2 = false;
 
-      const result = run(function* ({ get }) {
+      const result = run(function* () {
         try {
-          yield* get(original);
+          yield* original;
 
           return success('unreachable' as const);
         } finally {
-          yield* get(success('ignored' as const));
+          yield* success('ignored' as const);
           step1 = true;
-          yield* get(success('also-ignored' as const));
+          yield* success('also-ignored' as const);
           step2 = true;
         }
       });
@@ -1647,13 +1641,13 @@ describe('run()', () => {
       const original = failure('original-failure' as const);
       let cleanedUp = false;
 
-      const result = run(function* ({ get }) {
+      const result = run(function* () {
         try {
-          yield* get(original);
+          yield* original;
 
           return success('unreachable' as const);
         } finally {
-          yield* get(failure('cleanup-err' as const));
+          yield* failure('cleanup-err' as const);
           cleanedUp = true;
         }
       });
@@ -1666,14 +1660,14 @@ describe('run()', () => {
       const original = failure('cleanup-base-failure' as const);
       let outerCleanedUp = false;
 
-      const result = await run(async function* ({ get }) {
+      const result = await run(async function* () {
         try {
           try {
-            yield* get(Promise.resolve(original));
+            yield* await Promise.resolve(original);
 
             return success('unreachable' as const);
           } finally {
-            yield* get(failure('cleanup-failure' as const));
+            yield* failure('cleanup-failure' as const);
           }
         } finally {
           outerCleanedUp = true;
@@ -1688,10 +1682,8 @@ describe('run()', () => {
       const rejection = { code: 'main-rejection' } as const;
 
       await expect(
-        run(async function* ({ get }) {
-          yield* get(
-            createRejectingThenable<Failable<never, never>>(rejection)
-          );
+        run(async function* () {
+          yield* await createRejectingThenable<Failable<never, never>>(rejection);
 
           return success('unreachable' as const);
         })
@@ -1703,11 +1695,9 @@ describe('run()', () => {
       let cleanedUp = false;
 
       await expect(
-        run(async function* ({ get }) {
+        run(async function* () {
           try {
-            yield* get(
-              createRejectingThenable<Failable<never, never>>(rejection)
-            );
+            yield* await createRejectingThenable<Failable<never, never>>(rejection);
 
             return success('unreachable' as const);
           } finally {
@@ -1718,20 +1708,18 @@ describe('run()', () => {
       expect(cleanedUp).toBe(true);
     });
 
-    it('drains async `yield* get(...)` cleanup before rejecting promised source rejections in the main path', async () => {
+    it('drains async `yield* await ...` cleanup before rejecting promised source rejections in the main path', async () => {
       const rejection = { code: 'main-rejection' } as const;
       let cleanedUp = false;
 
       await expect(
-        run(async function* ({ get }) {
+        run(async function* () {
           try {
-            yield* get(
-              createRejectingThenable<Failable<never, never>>(rejection)
-            );
+            yield* await createRejectingThenable<Failable<never, never>>(rejection);
 
             return success('unreachable' as const);
           } finally {
-            yield* get(Promise.resolve(success('cleanup-step' as const)));
+            yield* await Promise.resolve(success('cleanup-step' as const));
             cleanedUp = true;
           }
         })
@@ -1739,25 +1727,23 @@ describe('run()', () => {
       expect(cleanedUp).toBe(true);
     });
 
-    it('preserves the original promised source rejection when cleanup also rejects', async () => {
+    it('uses the cleanup rejection when cleanup also rejects', async () => {
       const rejection = { code: 'main-rejection' } as const;
       const cleanupRejection = { code: 'cleanup-rejection' } as const;
 
       await expect(
-        run(async function* ({ get }) {
+        run(async function* () {
           try {
-            yield* get(
-              createRejectingThenable<Failable<never, never>>(rejection)
-            );
+            yield* await createRejectingThenable<Failable<never, never>>(rejection);
 
             return success('unreachable' as const);
           } finally {
-            yield* get(
-              createRejectingThenable<Failable<never, never>>(cleanupRejection)
+            yield* await createRejectingThenable<Failable<never, never>>(
+              cleanupRejection
             );
           }
         })
-      ).rejects.toBe(rejection);
+      ).rejects.toBe(cleanupRejection);
     });
 
     it('lets direct cleanup throws replace main-path promised source rejections', async () => {
@@ -1765,11 +1751,9 @@ describe('run()', () => {
       const cleanupError = { code: 'cleanup-throw' } as const;
 
       await expect(
-        run(async function* ({ get }) {
+        run(async function* () {
           try {
-            yield* get(
-              createRejectingThenable<Failable<never, never>>(rejection)
-            );
+            yield* await createRejectingThenable<Failable<never, never>>(rejection);
 
             return success('unreachable' as const);
           } finally {
@@ -1779,27 +1763,28 @@ describe('run()', () => {
       ).rejects.toBe(cleanupError);
     });
 
-    it('preserves the original main-path promised rejection when cleanup yields Failure', async () => {
+    it('returns the cleanup Failure when cleanup yields Failure during main-path rejection unwinding', async () => {
       const rejection = { code: 'main-rejection' } as const;
+      const cleanupFailure = failure('cleanup-failure' as const);
       let outerCleanedUp = false;
 
       await expect(
-        run(async function* ({ get }) {
+        run(async function* () {
           try {
             try {
-              yield* get(
-                createRejectingThenable<Failable<never, never>>(rejection)
+              yield* await createRejectingThenable<Failable<never, never>>(
+                rejection
               );
 
               return success('unreachable' as const);
             } finally {
-              yield* get(failure('cleanup-failure' as const));
+              yield* cleanupFailure;
             }
           } finally {
             outerCleanedUp = true;
           }
         })
-      ).rejects.toBe(rejection);
+      ).resolves.toBe(cleanupFailure);
       expect(outerCleanedUp).toBe(true);
     });
 
@@ -1809,26 +1794,24 @@ describe('run()', () => {
       let outerCleanedUp = false;
 
       await expect(
-        run(async function* ({ get }) {
+        run(async function* () {
           try {
             try {
-              yield* get(
-                createRejectingThenable<Failable<never, never>>(rejection)
+              yield* await createRejectingThenable<Failable<never, never>>(
+                rejection
               );
 
               return success('unreachable' as const);
             } finally {
-              yield* get(
-                createRejectingThenable<Failable<never, never>>(
-                  cleanupRejection
-                )
+              yield* await createRejectingThenable<Failable<never, never>>(
+                cleanupRejection
               );
             }
           } finally {
             outerCleanedUp = true;
           }
         })
-      ).rejects.toBe(rejection);
+      ).rejects.toBe(cleanupRejection);
       expect(outerCleanedUp).toBe(true);
     });
 
@@ -1837,35 +1820,33 @@ describe('run()', () => {
       const rejection = { code: 'cleanup-rejection' } as const;
 
       await expect(
-        run(async function* ({ get }) {
+        run(async function* () {
           try {
-            yield* get(Promise.resolve(original));
+            yield* await Promise.resolve(original);
 
             return success('unreachable' as const);
           } finally {
-            yield* get(
-              createRejectingThenable<Failable<never, never>>(rejection)
-            );
+            yield* await createRejectingThenable<Failable<never, never>>(rejection);
           }
         })
       ).rejects.toBe(rejection);
     });
 
-    it('stops unwinding outer finally blocks when cleanup rejects during failure unwinding', async () => {
+    it('continues unwinding outer finally blocks when cleanup rejects during failure unwinding', async () => {
       const original = failure('cleanup-base-failure' as const);
       const rejection = { code: 'cleanup-rejection' } as const;
       let outerCleanedUp = false;
 
       await expect(
-        run(async function* ({ get }) {
+        run(async function* () {
           try {
             try {
-              yield* get(Promise.resolve(original));
+              yield* await Promise.resolve(original);
 
               return success('unreachable' as const);
             } finally {
-              yield* get(
-                createRejectingThenable<Failable<never, never>>(rejection)
+              yield* await createRejectingThenable<Failable<never, never>>(
+                rejection
               );
             }
           } finally {
@@ -1873,7 +1854,7 @@ describe('run()', () => {
           }
         })
       ).rejects.toBe(rejection);
-      expect(outerCleanedUp).toBe(false);
+      expect(outerCleanedUp).toBe(true);
     });
 
     it('returns explicit builder failures', () => {
@@ -1903,8 +1884,8 @@ describe('run()', () => {
       const foreignValue = { code: 'foreign-throw' } as const;
 
       try {
-        run(function* ({ get }) {
-          yield* get(success('safe-step' as const));
+        run(function* () {
+          yield* success('safe-step' as const);
           throw foreignValue;
         });
       } catch (error) {
@@ -1925,7 +1906,7 @@ describe('run()', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(Error);
         expect((error as Error).message).toBe(
-          '`run()` generators must use `yield*` only with hydrated sync `Failable` values or with `get(...)`. Use `yield* helper()` for sync hydrated `Failable` helpers and `yield* get(...)` for promised sources.'
+          '`run()` generators must use `yield*` only with hydrated `Failable` values. Use `yield* helper()` for sync helpers and `yield* await promisedHelper()` for promised sources.'
         );
         return;
       }
@@ -1945,52 +1926,12 @@ describe('run()', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(Error);
         expect((error as Error).message).toBe(
-          '`run()` generators must use `yield*` only with hydrated sync `Failable` values or with `get(...)`. Use `yield* helper()` for sync hydrated `Failable` helpers and `yield* get(...)` for promised sources.'
+          '`run()` generators must use `yield*` only with hydrated `Failable` values. Use `yield* helper()` for sync helpers and `yield* await promisedHelper()` for promised sources.'
         );
         return;
       }
 
       throw new Error('Expected `run(...)` to reject invalid yielded values');
-    });
-
-    it('rejects `yield* get(...)` sources that are not `Failable` values', () => {
-      try {
-        run(function* ({ get }) {
-          const value = yield* get(123 as never);
-
-          return success(value);
-        });
-      } catch (error) {
-        expect(error).toBeInstanceOf(Error);
-        expect((error as Error).message).toBe(
-          '`run()` generators must use `yield*` only with hydrated sync `Failable` values or with `get(...)`. Use `yield* helper()` for sync hydrated `Failable` helpers and `yield* get(...)` for promised sources.'
-        );
-        return;
-      }
-
-      throw new Error(
-        'Expected `run(...)` to reject invalid `get(...)` sources'
-      );
-    });
-
-    it('rejects awaited `get(...)` sources that are not `Failable` values', async () => {
-      try {
-        await run(async function* ({ get }) {
-          const value = yield* get(Promise.resolve(123 as never));
-
-          return success(value);
-        });
-      } catch (error) {
-        expect(error).toBeInstanceOf(Error);
-        expect((error as Error).message).toBe(
-          '`run()` generators must use `yield*` only with hydrated sync `Failable` values or with `get(...)`. Use `yield* helper()` for sync hydrated `Failable` helpers and `yield* get(...)` for promised sources.'
-        );
-        return;
-      }
-
-      throw new Error(
-        'Expected async `run(...)` to reject invalid awaited `get(...)` sources'
-      );
     });
 
     it('rejects raw runtime return values', () => {
@@ -2823,10 +2764,10 @@ describe('E2E', () => {
     }
 
     async function withRun() {
-      return run(async function* ({ get }) {
+      return run(async function* () {
         const userId = yield* getUserId();
-        const user = yield* get(getUser(userId));
-        const profile = yield* get(getUserProfile(userId));
+        const user = yield* await getUser(userId);
+        const profile = yield* await getUserProfile(userId);
 
         return success({ user, profile });
       });
