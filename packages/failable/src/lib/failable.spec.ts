@@ -1132,9 +1132,12 @@ describe('run()', () => {
           return getExplicitNeverSuccess();
         });
 
-      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+      expectTypeOf<ReturnType<typeof buildResult>>().toMatchTypeOf<
         Failable<never, 'source-error'>
       >();
+      expectTypeOf<
+        Extract<ReturnType<typeof buildResult>, Failure<unknown>>
+      >().toEqualTypeOf<Failure<'source-error'>>();
       void buildResult;
     });
 
@@ -1316,11 +1319,11 @@ describe('run()', () => {
           return failure('builder-error' as const);
         });
 
-      const expectedResult: Promise<
-        Failure<'first-source-error' | 'second-source-error' | 'builder-error'>
-      > = buildResult();
-
-      void expectedResult;
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Promise<
+          Failure<'first-source-error' | 'second-source-error' | 'builder-error'>
+        >
+      >();
       void buildResult;
     });
 

@@ -331,9 +331,11 @@ const runNeverSuccessWithYieldedError = run(function* () {
   void value;
   return typedNeverSuccess;
 });
-const runNeverSuccessWithYieldedErrorAsFailure: Failure<unknown> =
-  runNeverSuccessWithYieldedError;
-void runNeverSuccessWithYieldedErrorAsFailure;
+const runNeverSuccessWithYieldedErrorAsFailable: Failable<
+  never,
+  'source-error'
+> = runNeverSuccessWithYieldedError;
+void runNeverSuccessWithYieldedErrorAsFailable;
 
 const runNeverSuccessWithGuaranteedFailureInYieldSet = run(function* () {
   const maybeValue = yield* (
@@ -345,8 +347,9 @@ const runNeverSuccessWithGuaranteedFailureInYieldSet = run(function* () {
   void guaranteedValue;
   return typedNeverSuccess;
 });
-const runNeverSuccessWithGuaranteedFailureInYieldSetAsFailure: Failure<unknown> =
-  runNeverSuccessWithGuaranteedFailureInYieldSet;
+const runNeverSuccessWithGuaranteedFailureInYieldSetAsFailure: Failure<
+  'source-error' | 'inline-error'
+> = runNeverSuccessWithGuaranteedFailureInYieldSet;
 void runNeverSuccessWithGuaranteedFailureInYieldSetAsFailure;
 
 const runHelperReturn = run(function* () {
@@ -361,7 +364,7 @@ const runDirectHelper = run(function* () {
 
   return success(value);
 });
-const runDirectHelperAsFailable: Failable<'helper-data', unknown> =
+const runDirectHelperAsFailable: Failable<'helper-data', 'helper-error'> =
   runDirectHelper;
 void runDirectHelperAsFailable;
 
@@ -380,7 +383,7 @@ const runDistributed = run(function* () {
 });
 const runDistributedAsFailable: Failable<
   'wrapped-string' | 123,
-  unknown
+  'wrapped-string-error' | 'wrapped-number-error' | 'builder-error'
 > = runDistributed;
 void runDistributedAsFailable;
 
@@ -401,7 +404,7 @@ const runAsyncDirectHelper = run(async function* () {
   return success([first, second] as const);
 });
 const runAsyncDirectHelperAsPromise: Promise<
-  Failable<readonly ['helper-data', 'ready'], unknown>
+  Failable<readonly ['helper-data', 'ready'], 'helper-error'>
 > = runAsyncDirectHelper;
 void runAsyncDirectHelperAsPromise;
 

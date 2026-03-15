@@ -44,14 +44,7 @@ export type Failable<T, E> =
   }) |
     (Failure<E> & {
       readonly match: Match<T, E>;
-    })) & {
-    readonly [Symbol.iterator]: () => RunGetIterator<T, E, Failable<T, E>>;
-    readonly [Symbol.asyncIterator]: () => AsyncRunGetIterator<
-      T,
-      E,
-      Failable<T, E>
-    >;
-  };
+    }));
 
 /**
  * Structured-clone-friendly representation of {@link Failable}.
