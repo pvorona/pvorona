@@ -336,6 +336,44 @@ describe('public surface', () => {
     expect(candidate.error).toBe('Cannot divide by zero');
   });
 
+  it('supports error-aware lazy recovery with `orElse(...)`', () => {
+    const result = divide(10, 0).orElse((error) => error.length);
+
+    expect(result).toStrictEqual(success('Cannot divide by zero'.length));
+  });
+
+  it('keeps zero-arg lazy recovery callbacks arg-free on Failure', () => {
+    let receivedArgumentCount = -1;
+
+    const result = divide(10, 0).orElse(function legacyFallback() {
+      receivedArgumentCount = arguments.length;
+
+      return 'fallback';
+    });
+
+    expect(receivedArgumentCount).toBe(0);
+    expect(result).toStrictEqual(success('fallback'));
+  });
+
+  it('supports error-aware lazy fallback values with `getOrElse(...)`', () => {
+    const value = divide(10, 0).getOrElse((error) => error.toUpperCase());
+
+    expect(value).toBe('CANNOT DIVIDE BY ZERO');
+  });
+
+  it('keeps zero-arg lazy fallback callbacks arg-free on Failure', () => {
+    let receivedArgumentCount = -1;
+
+    const value = divide(10, 0).getOrElse(function legacyFallback() {
+      receivedArgumentCount = arguments.length;
+
+      return 'fallback';
+    });
+
+    expect(receivedArgumentCount).toBe(0);
+    expect(value).toBe('fallback');
+  });
+
   it('supports the README `throwIfError(...)` example', () => {
     const result = divide(10, 2);
 

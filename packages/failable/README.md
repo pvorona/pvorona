@@ -79,14 +79,23 @@ Start with ordinary branching on `result.isFailure` or `result.isSuccess`. When
 you want something shorter, use the helper that matches the job:
 
 - `result.getOr(fallback)`: return the success value or an eager fallback
-- `result.getOrElse(() => fallback)`: same, but lazily
+- `result.getOrElse(() => fallback)`: lazy fallback
+- `result.getOrElse((error) => fallback)`: lazy fallback derived from the failure
 - `result.or(fallback)`: recover to `Success<T>` with an eager fallback
-- `result.orElse(() => fallback)`: recover to `Success<T>` lazily
+- `result.orElse(() => fallback)`: lazy recovery to `Success<T>`
+- `result.orElse((error) => fallback)`: lazy recovery to `Success<T>` derived from the failure
 - `result.match(onSuccess, onFailure)`: map both branches to one output
 - `result.getOrThrow()`: return the success value or throw `result.error`
 - `throwIfError(result)`: throw `result.error` and narrow the same variable
 
-Use the lazy forms when the fallback is expensive or has side effects.
+Use the lazy forms when the fallback is expensive or has side effects. Use the
+`(error) => ...` form when the fallback depends on the failure value:
+
+```ts
+const port = result.getOrElse((error) => {
+  return error.code === 'missing' ? 3000 : 8080;
+});
+```
 
 Using `readPort` from above:
 
