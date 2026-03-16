@@ -342,16 +342,21 @@ describe('public surface', () => {
     expect(result).toStrictEqual(success('Cannot divide by zero'.length));
   });
 
-  it('keeps zero-arg lazy recovery callbacks arg-free on Failure', () => {
+  it('passes the stored error even to zero-arg lazy recovery callbacks on Failure', () => {
     let receivedArgumentCount = -1;
+    let receivedError: unknown;
 
-    const result = divide(10, 0).orElse(function legacyFallback() {
-      receivedArgumentCount = arguments.length;
+    const result = divide(10, 0).orElse(function legacyFallback(
+      ...receivedArguments: readonly unknown[]
+    ) {
+      receivedArgumentCount = receivedArguments.length;
+      [receivedError] = receivedArguments;
 
       return 'fallback';
     });
 
-    expect(receivedArgumentCount).toBe(0);
+    expect(receivedArgumentCount).toBe(1);
+    expect(receivedError).toBe('Cannot divide by zero');
     expect(result).toStrictEqual(success('fallback'));
   });
 
@@ -361,16 +366,21 @@ describe('public surface', () => {
     expect(value).toBe('CANNOT DIVIDE BY ZERO');
   });
 
-  it('keeps zero-arg lazy fallback callbacks arg-free on Failure', () => {
+  it('passes the stored error even to zero-arg lazy fallback callbacks on Failure', () => {
     let receivedArgumentCount = -1;
+    let receivedError: unknown;
 
-    const value = divide(10, 0).getOrElse(function legacyFallback() {
-      receivedArgumentCount = arguments.length;
+    const value = divide(10, 0).getOrElse(function legacyFallback(
+      ...receivedArguments: readonly unknown[]
+    ) {
+      receivedArgumentCount = receivedArguments.length;
+      [receivedError] = receivedArguments;
 
       return 'fallback';
     });
 
-    expect(receivedArgumentCount).toBe(0);
+    expect(receivedArgumentCount).toBe(1);
+    expect(receivedError).toBe('Cannot divide by zero');
     expect(value).toBe('fallback');
   });
 

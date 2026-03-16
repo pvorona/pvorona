@@ -196,8 +196,6 @@ const BASE_FAILABLE = {
 } as const;
 
 function resolveLazyFallback<U, E>(getValue: () => U, error: E): U {
-  if (getValue.length === 0) return getValue();
-
   return (getValue as unknown as (error: E) => U)(error);
 }
 

@@ -566,19 +566,23 @@ describe('orElse()', () => {
       expect(getFallback).toHaveBeenCalledTimes(1);
     });
 
-    it('invokes zero-arg `orElse(...)` callbacks with no arguments on Failure', () => {
+    it('passes the stored error even to zero-arg `orElse(...)` callbacks on Failure', () => {
+      const error = new Error(faker.string.uuid());
       const fallback = faker.string.uuid();
       let receivedArgumentCount = -1;
+      let receivedError: unknown;
 
-      const result = failure(new Error(faker.string.uuid())).orElse(
-        function legacyFallback() {
-          receivedArgumentCount = arguments.length;
+      const result = failure(error).orElse(function legacyFallback(
+        ...receivedArguments: readonly unknown[]
+      ) {
+        receivedArgumentCount = receivedArguments.length;
+        [receivedError] = receivedArguments;
 
-          return fallback;
-        }
-      );
+        return fallback;
+      });
 
-      expect(receivedArgumentCount).toBe(0);
+      expect(receivedArgumentCount).toBe(1);
+      expect(receivedError).toBe(error);
       expect(result).toStrictEqual(success(fallback));
     });
 
@@ -716,19 +720,23 @@ describe('getOrElse()', () => {
       expect(getFallback).toHaveBeenCalledTimes(1);
     });
 
-    it('invokes zero-arg `getOrElse(...)` callbacks with no arguments on Failure', () => {
+    it('passes the stored error even to zero-arg `getOrElse(...)` callbacks on Failure', () => {
+      const error = new Error(faker.string.uuid());
       const fallback = faker.string.uuid();
       let receivedArgumentCount = -1;
+      let receivedError: unknown;
 
-      const result = failure(new Error(faker.string.uuid())).getOrElse(
-        function legacyFallback() {
-          receivedArgumentCount = arguments.length;
+      const result = failure(error).getOrElse(function legacyFallback(
+        ...receivedArguments: readonly unknown[]
+      ) {
+        receivedArgumentCount = receivedArguments.length;
+        [receivedError] = receivedArguments;
 
-          return fallback;
-        }
-      );
+        return fallback;
+      });
 
-      expect(receivedArgumentCount).toBe(0);
+      expect(receivedArgumentCount).toBe(1);
+      expect(receivedError).toBe(error);
       expect(result).toBe(fallback);
     });
 

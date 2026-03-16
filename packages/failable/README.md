@@ -88,8 +88,9 @@ you want something shorter, use the helper that matches the job:
 - `result.getOrThrow()`: return the success value or throw `result.error`
 - `throwIfError(result)`: throw `result.error` and narrow the same variable
 
-Use the lazy forms when the fallback is expensive or has side effects. Use the
-`(error) => ...` form when the fallback depends on the failure value:
+Use the lazy forms when the fallback is expensive or has side effects. Failure
+callbacks always receive the stored error, so `() => ...` can ignore it and
+`(error) => ...` can use it:
 
 ```ts
 const port = result.getOrElse((error) => {
