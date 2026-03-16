@@ -33,16 +33,22 @@ type FailableNormalizeErrorInput =
   | typeof NormalizedErrors
   | FailableNormalizeErrorOptions;
 
+type LazyFallback<U, E> = (() => U) | ((error: E) => U);
+
 type Match<T, E> = <U>(
   onSuccess: (data: T) => U,
   onFailure: (error: E) => U
 ) => U;
 
 export type Failable<T, E> =
-  ((Success<T> & {
+  ((Omit<Success<T>, 'orElse' | 'getOrElse'> & {
+    readonly orElse: <U>(getValue: LazyFallback<U, E>) => Success<T>;
+    readonly getOrElse: <U>(getValue: LazyFallback<U, E>) => T;
     readonly match: Match<T, E>;
   }) |
-    (Failure<E> & {
+    (Omit<Failure<E>, 'orElse' | 'getOrElse'> & {
+      readonly orElse: <U>(getValue: LazyFallback<U, E>) => Success<U>;
+      readonly getOrElse: <U>(getValue: LazyFallback<U, E>) => U;
       readonly match: Match<T, E>;
     }));
 
@@ -118,9 +124,9 @@ export type Success<T> = {
   readonly data: T;
   readonly error: null;
   readonly or: <U>(value: U) => Success<T>;
-  readonly orElse: <U>(getValue: () => U) => Success<T>;
+  readonly orElse: <U>(getValue: LazyFallback<U, never>) => Success<T>;
   readonly getOr: <U>(value: U) => T;
-  readonly getOrElse: <U>(getValue: () => U) => T;
+  readonly getOrElse: <U>(getValue: LazyFallback<U, never>) => T;
   readonly getOrThrow: () => T;
   readonly match: SuccessMatch<T>;
 };
@@ -132,21 +138,25 @@ export type Failure<E> = {
   readonly error: E;
   readonly data: null;
   readonly or: <U>(value: U) => Success<U>;
-  readonly orElse: <U>(getValue: () => U) => Success<U>;
+  readonly orElse: <U>(getValue: LazyFallback<U, E>) => Success<U>;
   readonly getOr: <U>(value: U) => U;
-  readonly getOrElse: <U>(getValue: () => U) => U;
+  readonly getOrElse: <U>(getValue: LazyFallback<U, E>) => U;
   readonly getOrThrow: () => never;
   readonly match: FailureMatch<E>;
 };
 
-type InternalSuccess<T> = Success<T> & {
+type InternalSuccess<T> = Omit<Success<T>, 'orElse' | 'getOrElse'> & {
   readonly [FAILABLE_TAG]: true;
   readonly [SUCCESS_TAG]: true;
+  readonly orElse: <U>(getValue: () => U) => Success<T>;
+  readonly getOrElse: <U>(getValue: () => U) => T;
 };
 
-type InternalFailure<E> = Failure<E> & {
+type InternalFailure<E> = Omit<Failure<E>, 'orElse' | 'getOrElse'> & {
   readonly [FAILABLE_TAG]: true;
   readonly [FAILURE_TAG]: true;
+  readonly orElse: <U>(getValue: () => U) => Success<U>;
+  readonly getOrElse: <U>(getValue: () => U) => U;
 };
 
 const BASE_FAILABLE = {
@@ -163,16 +173,22 @@ const BASE_FAILABLE = {
   match: notImplemented,
 } as const;
 
+function resolveLazyFallback<U, E>(getValue: () => U, error: E): U {
+  if (getValue.length === 0) return getValue();
+
+  return (getValue as unknown as (error: E) => U)(error);
+}
+
 const BASE_SUCCESS = (() => {
   const node: Mutable<InternalSuccess<unknown>> = Object.create(BASE_FAILABLE);
   node[SUCCESS_TAG] = true;
   node.status = FailableStatus.Success;
   node.isSuccess = true;
   node.or = function orSuccess() {
-    return this;
+    return this as Success<unknown>;
   };
   node.orElse = function orElseSuccess() {
-    return this;
+    return this as Success<unknown>;
   };
   node.getOr = function getOrSuccess() {
     return this.data;
@@ -200,14 +216,14 @@ const BASE_FAILURE = (() => {
   node.or = function orFailure(value) {
     return success(value);
   };
-  node.orElse = function orElseFailure(getValue) {
-    return success(getValue());
+  node.orElse = function orElseFailure<U>(getValue: () => U) {
+    return success(resolveLazyFallback(getValue, this.error));
   };
   node.getOr = function getOrFailure(value) {
     return value;
   };
-  node.getOrElse = function getOrElseFailure(getValue) {
-    return getValue();
+  node.getOrElse = function getOrElseFailure<U>(getValue: () => U) {
+    return resolveLazyFallback(getValue, this.error);
   };
   node.getOrThrow = function getOrThrowFailure() {
     if (this.error === undefined) {
@@ -327,7 +343,7 @@ export function success<T>(data: T): Success<T>;
 export function success<T>(data?: T): Success<T | void> {
   const node: Mutable<InternalSuccess<T | void>> = Object.create(BASE_SUCCESS);
   node.data = data;
-  return Object.freeze(node);
+  return Object.freeze(node) as Success<T | void>;
 }
 
 export function failure(): Failure<void>;
@@ -335,7 +351,7 @@ export function failure<E>(error: E): Failure<E>;
 export function failure<E>(error?: E): Failure<E | void> {
   const node: Mutable<InternalFailure<E | void>> = Object.create(BASE_FAILURE);
   node.error = error;
-  return Object.freeze(node);
+  return Object.freeze(node) as Failure<E | void>;
 }
 
 /**

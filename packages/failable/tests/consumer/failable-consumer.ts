@@ -127,8 +127,14 @@ failure<number>();
 const problemOrElse = problem.orElse(() => 123);
 expectType<Equal<typeof problemOrElse, Success<number>>>(true);
 
+const problemOrElseFromError = problem.orElse((error) => error.length);
+expectType<Equal<typeof problemOrElseFromError, Success<number>>>(true);
+
 const problemGetOrElse = problem.getOrElse(() => 123);
 expectType<Equal<typeof problemGetOrElse, number>>(true);
+
+const problemGetOrElseFromError = problem.getOrElse((error) => error.length);
+expectType<Equal<typeof problemGetOrElseFromError, number>>(true);
 
 const problemGetOrThrow = () => problem.getOrThrow();
 expectType<Equal<ReturnType<typeof problemGetOrThrow>, never>>(true);
@@ -182,8 +188,21 @@ expectType<
   Equal<typeof unionOrElse, Success<number> | Success<{ a: number }>>
 >(true);
 
+const unionOrElseFromError = union.orElse((error) => ({ reason: error }));
+expectType<
+  Equal<
+    typeof unionOrElseFromError,
+    Success<number> | Success<{ reason: string }>
+  >
+>(true);
+
 const unionGetOrElse = union.getOrElse(() => ({ b: 'b' }));
 expectType<Equal<typeof unionGetOrElse, number | { b: string }>>(true);
+
+const unionGetOrElseFromError = union.getOrElse((error) => ({ reason: error }));
+expectType<
+  Equal<typeof unionGetOrElseFromError, number | { reason: string }>
+>(true);
 
 const unionMatch = union.match(
   (value) => value.toString(),
@@ -439,12 +458,20 @@ void okOrElse;
 void okGetOrElse;
 void okGetOrThrow;
 void okMatch;
+void explicitUndefinedOk;
+void voidOk;
 void problemOrElse;
+void problemOrElseFromError;
 void problemGetOrElse;
+void problemGetOrElseFromError;
 void problemGetOrThrow;
 void problemMatch;
+void explicitUndefinedProblem;
+void voidProblem;
 void unionOrElse;
+void unionOrElseFromError;
 void unionGetOrElse;
+void unionGetOrElseFromError;
 void unionMatch;
 void readOkData;
 void ensureProblem;

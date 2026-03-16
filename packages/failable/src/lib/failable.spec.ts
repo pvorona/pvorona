@@ -566,6 +566,34 @@ describe('orElse()', () => {
       expect(getFallback).toHaveBeenCalledTimes(1);
     });
 
+    it('invokes zero-arg `orElse(...)` callbacks with no arguments on Failure', () => {
+      const fallback = faker.string.uuid();
+      let receivedArgumentCount = -1;
+
+      const result = failure(new Error(faker.string.uuid())).orElse(
+        function legacyFallback() {
+          receivedArgumentCount = arguments.length;
+
+          return fallback;
+        }
+      );
+
+      expect(receivedArgumentCount).toBe(0);
+      expect(result).toStrictEqual(success(fallback));
+    });
+
+    it('passes the stored error to `orElse(...)` on Failure', () => {
+      const error = { code: 'boom' } as const;
+      const getFallback = vi.fn(
+        (receivedError: typeof error) => receivedError.code
+      );
+
+      const result = failure(error).orElse(getFallback);
+
+      expect(getFallback).toHaveBeenCalledWith(error);
+      expect(result).toStrictEqual(success('boom'));
+    });
+
     it('infers the callback success type', () => {
       type FallbackType = { readonly recovered: true };
 
@@ -686,6 +714,34 @@ describe('getOrElse()', () => {
       failure(new Error(faker.string.uuid())).getOrElse(getFallback);
 
       expect(getFallback).toHaveBeenCalledTimes(1);
+    });
+
+    it('invokes zero-arg `getOrElse(...)` callbacks with no arguments on Failure', () => {
+      const fallback = faker.string.uuid();
+      let receivedArgumentCount = -1;
+
+      const result = failure(new Error(faker.string.uuid())).getOrElse(
+        function legacyFallback() {
+          receivedArgumentCount = arguments.length;
+
+          return fallback;
+        }
+      );
+
+      expect(receivedArgumentCount).toBe(0);
+      expect(result).toBe(fallback);
+    });
+
+    it('passes the stored error to `getOrElse(...)` on Failure', () => {
+      const error = { code: 'boom' } as const;
+      const getFallback = vi.fn(
+        (receivedError: typeof error) => receivedError.code
+      );
+
+      const result = failure(error).getOrElse(getFallback);
+
+      expect(getFallback).toHaveBeenCalledWith(error);
+      expect(result).toBe('boom');
     });
 
     it('preserves the callback return type', () => {
