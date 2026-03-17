@@ -1562,6 +1562,47 @@ describe('run()', () => {
       expect(result).toStrictEqual(err1);
     });
 
+    it('allSettled() returns Success of tuple when all sources succeed', async () => {
+      const result = await run(async function* ({ allSettled }) {
+        const [a, b] = yield* allSettled(
+          Promise.resolve(success(1 as const)),
+          Promise.resolve(success(2 as const)),
+        );
+        if (a.status !== 'success' || b.status !== 'success') return failure('unexpected');
+        return success(a.data + b.data);
+      });
+      expect(result).toStrictEqual(success(3));
+    });
+
+    it('allSettled() returns Success of tuple when one fails', async () => {
+      const err = failure('e1' as const);
+      const result = await run(async function* ({ allSettled }) {
+        const [r1, r2] = yield* allSettled(
+          Promise.resolve(success(1)),
+          Promise.resolve(err),
+        );
+        expect(r1.status).toBe('success');
+        expect((r1 as Success<number>).data).toBe(1);
+        expect(r2.status).toBe('failure');
+        expect((r2 as Failure<'e1'>).error).toBe('e1');
+        return success('ok' as const);
+      });
+      expect(result).toStrictEqual(success('ok'));
+    });
+
+    it('allSettled() returns Success of tuple when all fail', async () => {
+      const result = await run(async function* ({ allSettled }) {
+        const [a, b] = yield* allSettled(
+          Promise.resolve(failure('a' as const)),
+          Promise.resolve(failure('b' as const)),
+        );
+        expect(a.status).toBe('failure');
+        expect(b.status).toBe('failure');
+        return success([(a as Failure<'a'>).error, (b as Failure<'b'>).error]);
+      });
+      expect(result).toStrictEqual(success(['a', 'b']));
+    });
+
     it('returns Success<void> for empty generators', () => {
       const result = run(function* () {
         return;
