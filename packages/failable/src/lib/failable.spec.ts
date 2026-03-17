@@ -1454,12 +1454,37 @@ describe('run()', () => {
       void buildResult;
     });
 
+    it('infers single Failable data/error union from race() in async builders', () => {
+      const buildResult = () =>
+        run(async function* ({ race }) {
+          const x = yield* race(
+            Promise.resolve(success(1 as const)),
+            Promise.resolve(success('two' as const)),
+          );
+          expectTypeOf(x).toEqualTypeOf<1 | 'two'>();
+          return success(x);
+        });
+
+      void buildResult;
+    });
+
     it('all() is not available in sync builders', () => {
       const buildResult = () =>
         // @ts-expect-error sync builders receive RunNoHelpers which lacks `all`.
         run(function* ({ all }) {
           // @ts-expect-error sync generators cannot yield* async iterators.
           const [a] = yield* all(Promise.resolve(success(1)));
+          return success(a);
+        });
+
+      void buildResult;
+    });
+
+    it('race() is not available in sync builders', () => {
+      const buildResult = () =>
+        // @ts-expect-error sync builders receive RunNoHelpers which lacks `race`.
+        run(function* ({ race }) {
+          const a = yield* race(Promise.resolve(success(1)));
           return success(a);
         });
 
