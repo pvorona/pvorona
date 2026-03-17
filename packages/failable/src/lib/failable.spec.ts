@@ -2736,7 +2736,7 @@ describe('E2E', () => {
       );
     }
 
-    const getUserId = () => success('10');
+    const getUserId = (): Failable<string, 'missing-user-id'> => success('10');
 
     async function withoutRun() {
       const getUserIdResult = getUserId();
@@ -2769,9 +2769,12 @@ describe('E2E', () => {
     async function withRun() {
       return run(async function* () {
         const userId = yield* getUserId();
-        const user = yield* await getUser(userId);
-        const profile = yield* await getUserProfile(userId);
-
+        const [userResult, profileResult] = await Promise.all([
+          getUser(userId),
+          getUserProfile(userId),
+        ]);
+        const user = yield* userResult;
+        const profile = yield* profileResult;
         return success({ user, profile });
       });
     }
