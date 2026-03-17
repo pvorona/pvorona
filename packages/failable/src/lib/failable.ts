@@ -646,6 +646,12 @@ type RunAllTupleData<T> = {
     : never;
 };
 
+type RunAllSettledTuple<T> = {
+  readonly [K in keyof T]: T[K] extends Promise<Failable<infer D, infer E>>
+    ? Failable<D, E>
+    : never;
+};
+
 function runAll<
   T extends readonly (Promise<Failable<unknown, unknown>>)[],
 >(
@@ -680,11 +686,41 @@ function runAll<
   >;
 }
 
+function runAllSettled<
+  T extends readonly (Promise<Failable<unknown, unknown>>)[],
+>(
+  ...promises: T
+): AsyncRunGetIterator<
+  RunAllSettledTuple<T>,
+  never,
+  Failable<RunAllSettledTuple<T>, never>
+> {
+  async function* impl(): AsyncGenerator<
+    RunGet<RunAllSettledTuple<T>, never, Failable<RunAllSettledTuple<T>, never>>,
+    RunAllSettledTuple<T>,
+    unknown
+  > {
+    const results = await Promise.all(promises);
+    const tuple = results as unknown as RunAllSettledTuple<T>;
+    yield RunGet.create(success(tuple));
+    return tuple;
+  }
+  return impl() as AsyncRunGetIterator<
+    RunAllSettledTuple<T>,
+    never,
+    Failable<RunAllSettledTuple<T>, never>
+  >;
+}
+
 type RunAsyncHelpers = {
   readonly all: typeof runAll;
+  readonly allSettled: typeof runAllSettled;
 };
 
-const RUN_ASYNC_HELPERS: RunAsyncHelpers = Object.freeze({ all: runAll });
+const RUN_ASYNC_HELPERS: RunAsyncHelpers = Object.freeze({
+  all: runAll,
+  allSettled: runAllSettled,
+});
 
 type AsyncRunBuilder<
   TYield extends RunGet<unknown, unknown, unknown> = never,
