@@ -652,6 +652,18 @@ type RunAllSettledTuple<T> = {
     : never;
 };
 
+type RunRaceData<T> = T extends readonly (infer P)[]
+  ? P extends Promise<Failable<infer D, unknown>>
+    ? D
+    : never
+  : never;
+
+type RunRaceError<T> = T extends readonly (infer P)[]
+  ? P extends Promise<Failable<unknown, infer E>>
+    ? E
+    : never
+  : never;
+
 function runAll<
   T extends readonly (Promise<Failable<unknown, unknown>>)[],
 >(
@@ -712,14 +724,50 @@ function runAllSettled<
   >;
 }
 
+function runRace<T extends readonly (Promise<Failable<unknown, unknown>>)[]>(
+  ...promises: T
+): AsyncRunGetIterator<
+  RunRaceData<T>,
+  RunRaceError<T>,
+  Failable<RunRaceData<T>, RunRaceError<T>>
+> {
+  async function* impl(): AsyncGenerator<
+    RunGet<RunRaceData<T>, RunRaceError<T>, Failable<unknown, unknown>>,
+    RunRaceData<T>,
+    unknown
+  > {
+    const result = await Promise.race(promises);
+    if (!isFailable(result)) {
+      return (yield RunGet.create(
+        failure(result) as Failure<RunRaceError<T>>
+      )) as never;
+    }
+    if (result.status === FailableStatus.Failure) {
+      return (yield RunGet.create(
+        result as Failure<RunRaceError<T>>
+      )) as never;
+    }
+    return (yield RunGet.create(
+      success(result.data) as Success<RunRaceData<T>>
+    )) as never;
+  }
+  return impl() as AsyncRunGetIterator<
+    RunRaceData<T>,
+    RunRaceError<T>,
+    Failable<RunRaceData<T>, RunRaceError<T>>
+  >;
+}
+
 type RunAsyncHelpers = {
   readonly all: typeof runAll;
   readonly allSettled: typeof runAllSettled;
+  readonly race: typeof runRace;
 };
 
 const RUN_ASYNC_HELPERS: RunAsyncHelpers = Object.freeze({
   all: runAll,
   allSettled: runAllSettled,
+  race: runRace,
 });
 
 type AsyncRunBuilder<
