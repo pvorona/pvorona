@@ -1642,6 +1642,38 @@ describe('run()', () => {
       expect(result).toStrictEqual(success(['a', 'b']));
     });
 
+    it('race() returns first success when it settles first', async () => {
+      const slow = new Promise<Success<1>>((resolve) => {
+        setTimeout(() => resolve(success(1 as const)), 20);
+      });
+      const fast = Promise.resolve(success(2 as const));
+      const result = await run(async function* ({ race }) {
+        const a = yield* race(slow, fast);
+        return success(a);
+      });
+      expect(result).toStrictEqual(success(2));
+    });
+
+    it('race() returns first failure when it settles first', async () => {
+      const err = failure('first-error' as const);
+      const slow = new Promise<Success<number>>((resolve) => {
+        setTimeout(() => resolve(success(1)), 20);
+      });
+      const result = await run(async function* ({ race }) {
+        yield* race(slow, Promise.resolve(err));
+        return success(0);
+      });
+      expect(result).toStrictEqual(err);
+    });
+
+    it('race() with one promise returns that result', async () => {
+      const result = await run(async function* ({ race }) {
+        const a = yield* race(Promise.resolve(success(42 as const)));
+        return success(a);
+      });
+      expect(result).toStrictEqual(success(42));
+    });
+
     it('returns Success<void> for empty generators', () => {
       const result = run(function* () {
         return;
