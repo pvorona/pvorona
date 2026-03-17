@@ -1539,7 +1539,7 @@ describe('run()', () => {
     it('all() returns first failure when one source fails', async () => {
       const err = failure('first-error' as const);
       const result = await run(async function* ({ all }) {
-        const [_a, _b] = yield* all(
+        yield* all(
           Promise.resolve(success(1)),
           Promise.resolve(err),
         );
@@ -1552,7 +1552,7 @@ describe('run()', () => {
       const err1 = failure('error-1' as const);
       const err2 = failure('error-2' as const);
       const result = await run(async function* ({ all }) {
-        const [_a, _b, _c] = yield* all(
+        yield* all(
           Promise.resolve(success(1)),
           Promise.resolve(err1),
           Promise.resolve(err2),
