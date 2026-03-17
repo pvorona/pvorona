@@ -1440,6 +1440,20 @@ describe('run()', () => {
       void buildResult;
     });
 
+    it('infers tuple of Failable from allSettled() in async builders', () => {
+      const buildResult = () =>
+        run(async function* ({ allSettled }) {
+          const [r1, r2] = yield* allSettled(
+            Promise.resolve(success(1 as const)),
+            Promise.resolve(success('two' as const)),
+          );
+          expectTypeOf(r1).toEqualTypeOf<Failable<1, null>>();
+          expectTypeOf(r2).toEqualTypeOf<Failable<'two', null>>();
+          return success([r1, r2]);
+        });
+      void buildResult;
+    });
+
     it('all() is not available in sync builders', () => {
       const buildResult = () =>
         // @ts-expect-error sync builders receive RunNoHelpers which lacks `all`.
