@@ -301,6 +301,7 @@ async function loadUserPage(
 - sync hydrated `Failable` helpers can use direct `yield* helper()` in both sync
   and async builders
 - promised sources in async builders use `yield* await promisedHelper()`
+- in async builders, use `all(...)` to run multiple promised sources in parallel and get a success tuple or the first failure; use `allSettled(...)` to wait for all to settle and get a Success tuple of each result (no short-circuit)
 - rejected promised sources follow normal async `await` / `try` / `finally`
   semantics rather than a helper-managed rejection path
 - `run(...)` does not capture thrown values or rejected promises into `Failure`;
