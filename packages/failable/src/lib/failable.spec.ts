@@ -1424,6 +1424,33 @@ describe('run()', () => {
 
       void buildResult;
     });
+
+    it('infers tuple element types from all() in async builders', () => {
+      const buildResult = () =>
+        run(async function* ({ all }) {
+          const [a, b] = yield* all(
+            Promise.resolve(success(1 as const)),
+            Promise.resolve(success('two' as const)),
+          );
+          expectTypeOf(a).toEqualTypeOf<1>();
+          expectTypeOf(b).toEqualTypeOf<'two'>();
+          return success([a, b]);
+        });
+
+      void buildResult;
+    });
+
+    it('all() is not available in sync builders', () => {
+      const buildResult = () =>
+        // @ts-expect-error sync builders receive RunNoHelpers which lacks `all`.
+        run(function* ({ all }) {
+          // @ts-expect-error sync generators cannot yield* async iterators.
+          const [a] = yield* all(Promise.resolve(success(1)));
+          return success(a);
+        });
+
+      void buildResult;
+    });
   });
 
   describe('runtime', () => {
@@ -1496,6 +1523,43 @@ describe('run()', () => {
       });
 
       expect(result).toStrictEqual(success(42));
+    });
+
+    it('all() resolves promised Failable sources in parallel and returns tuple on success', async () => {
+      const result = await run(async function* ({ all }) {
+        const [a, b] = yield* all(
+          Promise.resolve(success(1 as const)),
+          Promise.resolve(success(2 as const)),
+        );
+        return success(a + b);
+      });
+      expect(result).toStrictEqual(success(3));
+    });
+
+    it('all() returns first failure when one source fails', async () => {
+      const err = failure('first-error' as const);
+      const result = await run(async function* ({ all }) {
+        const [_a, _b] = yield* all(
+          Promise.resolve(success(1)),
+          Promise.resolve(err),
+        );
+        return success(0);
+      });
+      expect(result).toStrictEqual(err);
+    });
+
+    it('all() returns first failure in input order when multiple fail', async () => {
+      const err1 = failure('error-1' as const);
+      const err2 = failure('error-2' as const);
+      const result = await run(async function* ({ all }) {
+        const [_a, _b, _c] = yield* all(
+          Promise.resolve(success(1)),
+          Promise.resolve(err1),
+          Promise.resolve(err2),
+        );
+        return success(0);
+      });
+      expect(result).toStrictEqual(err1);
     });
 
     it('returns Success<void> for empty generators', () => {
@@ -2779,10 +2843,23 @@ describe('E2E', () => {
       });
     }
 
+    async function withRunAll() {
+      return run(async function* ({ all }) {
+        const userId = yield* getUserId();
+        const [user, profile] = yield* all(
+          getUser(userId),
+          getUserProfile(userId),
+        );
+        return success({ user, profile });
+      });
+    }
+
     const result1 = await withoutRun();
     const result2 = await withRun();
+    const result3 = await withRunAll();
 
     expect(result1).toStrictEqual(result2);
+    expect(result1).toStrictEqual(result3);
     } finally {
       globalThis.fetch = originalFetch;
     }
