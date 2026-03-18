@@ -1,11 +1,14 @@
 import { readFile } from 'node:fs/promises';
 import {
+  all,
+  allSettled,
   failable,
   failure,
   FailableStatus,
   isFailure,
   isFailableLike,
   NormalizedErrors,
+  race,
   run,
   success,
   throwIfError,
@@ -14,6 +17,8 @@ import {
 } from '@pvorona/failable';
 
 const EXPECTED_RUNTIME_EXPORTS = [
+  'all',
+  'allSettled',
   'FailableStatus',
   'NormalizedErrors',
   'failable',
@@ -22,6 +27,7 @@ const EXPECTED_RUNTIME_EXPORTS = [
   'isFailableLike',
   'isFailure',
   'isSuccess',
+  'race',
   'run',
   'success',
   'throwIfError',
@@ -324,6 +330,39 @@ describe('public surface', () => {
       balanceCents: 4500,
       attemptedCents: 10000,
     });
+  });
+
+  it('supports top-level all() for sync or promised sources', async () => {
+    const syncResult = all(success(1 as const), success(2 as const));
+    expect(syncResult).toStrictEqual(success([1, 2]));
+
+    const asyncResult = await all(
+      success('user' as const),
+      Promise.resolve(success('profile' as const))
+    );
+    expect(asyncResult).toStrictEqual(success(['user', 'profile']));
+  });
+
+  it('supports top-level allSettled() for promised sources', async () => {
+    const result = await allSettled(
+      Promise.resolve(success(1 as const)),
+      Promise.resolve(failure('missing-profile' as const))
+    );
+
+    expect(result).toStrictEqual(
+      success([success(1 as const), failure('missing-profile' as const)])
+    );
+  });
+
+  it('supports top-level race() for promised sources', async () => {
+    const result = await race(
+      Promise.resolve(success('fast' as const)),
+      new Promise<ReturnType<typeof success<'slow'>>>((resolve) => {
+        setTimeout(() => resolve(success('slow' as const)), 10);
+      })
+    );
+
+    expect(result).toStrictEqual(success('fast'));
   });
 
   it('supports guard-based validation for hydrated unknown values', () => {

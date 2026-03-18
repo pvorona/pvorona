@@ -636,170 +636,216 @@ type RunNoHelpers = {
   readonly __runNoHelpers?: never;
 };
 
-type RunAllTupleError<T> = T extends readonly (infer P)[]
-  ? P extends Promise<Failable<unknown, infer E>>
+const RUN_NO_HELPERS: RunNoHelpers = Object.freeze({});
+
+type FailableSource<T, E> = Failable<T, E> | PromiseLike<Failable<T, E>>;
+
+type FailableSourceError<T> = T extends Success<unknown>
+  ? never
+  : T extends Failure<infer E>
     ? E
-    : never
+    : T extends Failable<unknown, infer E>
+      ? E
+      : T extends PromiseLike<Success<unknown>>
+        ? never
+        : T extends PromiseLike<Failure<infer E>>
+          ? E
+          : T extends PromiseLike<Failable<unknown, infer E>>
+            ? E
+            : never;
+
+type FailableSourceData<T> = T extends Success<infer D>
+  ? D
+  : T extends Failure<unknown>
+    ? never
+    : T extends Failable<infer D, unknown>
+      ? D
+      : T extends PromiseLike<Success<infer D>>
+        ? D
+        : T extends PromiseLike<Failure<unknown>>
+          ? never
+          : T extends PromiseLike<Failable<infer D, unknown>>
+            ? D
+            : never;
+
+type AllTupleError<T> = T extends readonly (infer P)[]
+  ? FailableSourceError<P>
   : never;
 
-type RunAllTupleData<T> = {
-  readonly [K in keyof T]: T[K] extends Promise<Failable<infer D, unknown>>
-    ? D
-    : never;
+type AllTupleData<T> = {
+  readonly [K in keyof T]: FailableSourceData<T[K]>;
 };
 
-/** True when at least one element of T is Promise<Failure<...>>; then all() never yields success. */
-type RunAllTupleHasFailure<T> = T extends readonly [
-  infer First,
-  ...infer Rest
-]
-  ? First extends Promise<Failure<unknown>>
+type FailableSourceSettled<T> = T extends Success<infer D>
+  ? Success<D>
+  : T extends Failure<infer E>
+    ? Failure<E>
+    : T extends Failable<infer D, infer E>
+      ? Failable<D, E>
+      : T extends PromiseLike<Success<infer D>>
+        ? Success<D>
+        : T extends PromiseLike<Failure<infer E>>
+          ? Failure<E>
+          : T extends PromiseLike<Failable<infer D, infer E>>
+            ? Failable<D, E>
+            : never;
+
+type FailableSourceIsAsync<T> =
+  T extends PromiseLike<Failable<unknown, unknown>> ? true : false;
+
+type FailableSourceHasGuaranteedFailure<T> =
+  T extends Failure<unknown> | PromiseLike<Failure<unknown>> ? true : false;
+
+type TupleHasAsync<T> = T extends readonly [infer First, ...infer Rest]
+  ? FailableSourceIsAsync<First> extends true
     ? true
     : Rest extends readonly unknown[]
-      ? RunAllTupleHasFailure<Rest>
+      ? TupleHasAsync<Rest>
       : false
   : false;
 
-type RunAllReturnData<T> = RunAllTupleHasFailure<T> extends true
+/** True when at least one element of T is Failure<...> or PromiseLike<Failure<...>>. */
+type AllTupleHasGuaranteedFailure<T> = T extends readonly [
+  infer First,
+  ...infer Rest
+]
+  ? FailableSourceHasGuaranteedFailure<First> extends true
+    ? true
+    : Rest extends readonly unknown[]
+      ? AllTupleHasGuaranteedFailure<Rest>
+      : false
+  : false;
+
+type AllReturnData<T> = AllTupleHasGuaranteedFailure<T> extends true
   ? never
-  : RunAllTupleData<T>;
+  : AllTupleData<T>;
 
-type RunAllSettledTuple<T> = {
-  readonly [K in keyof T]: T[K] extends Promise<Success<infer D>>
-    ? Success<D>
-    : T[K] extends Promise<Failure<infer E>>
-      ? Failure<E>
-      : T[K] extends Promise<Failable<infer D, infer E>>
-        ? Failable<D, E>
-        : never;
+type AllSettledTuple<T> = {
+  readonly [K in keyof T]: FailableSourceSettled<T[K]>;
 };
 
-type RunRaceData<T> = T extends readonly (infer P)[]
-  ? P extends Promise<Failable<infer D, unknown>>
-    ? D
-    : never
+type RaceData<T> = T extends readonly (infer P)[]
+  ? FailableSourceData<P>
   : never;
 
-type RunRaceError<T> = T extends readonly (infer P)[]
-  ? P extends Promise<Failable<unknown, infer E>>
-    ? E
-    : never
+type RaceError<T> = T extends readonly (infer P)[]
+  ? FailableSourceError<P>
   : never;
 
-function runAll<T extends readonly Promise<Failable<unknown, unknown>>[]>(
-  ...promises: T
-): AsyncRunGetIterator<
-  RunAllReturnData<T>,
-  RunAllTupleError<T>,
-  Failable<RunAllReturnData<T>, RunAllTupleError<T>>
-> {
-  async function* impl(): AsyncGenerator<
-    RunGet<RunAllReturnData<T>, RunAllTupleError<T>, Failable<unknown, unknown>>,
-    RunAllReturnData<T>,
-    unknown
-  > {
-    const results = await Promise.all(promises);
-    for (let i = 0; i < results.length; i++) {
-      const r = results[i];
-      if (!isFailable(r)) return (yield RunGet.create(failure(r))) as never;
-      if (r.status === FailableStatus.Failure) {
-        return (yield RunGet.create(
-          r as Failure<RunAllTupleError<T>>
-        )) as never;
-      }
-    }
-    const tuple = results.map(
-      (r) => (r as Success<unknown>).data
-    ) as RunAllTupleData<T>;
-    return (yield RunGet.create(
-      success(tuple) as Failable<RunAllReturnData<T>, RunAllTupleError<T>>
-    )) as never;
-  }
-  return impl() as AsyncRunGetIterator<
-    RunAllReturnData<T>,
-    RunAllTupleError<T>,
-    Failable<RunAllReturnData<T>, RunAllTupleError<T>>
-  >;
+function toValidatedFailable(source: unknown): Failable<unknown, unknown> {
+  if (isFailable(source)) return source;
+
+  return failure(source);
 }
 
-function runAllSettled<
-  T extends readonly Promise<Failable<unknown, unknown>>[]
->(
-  ...promises: T
-): AsyncRunGetIterator<
-  RunAllSettledTuple<T>,
-  never,
-  Failable<RunAllSettledTuple<T>, never>
-> {
-  async function* impl(): AsyncGenerator<
-    RunGet<
-      RunAllSettledTuple<T>,
-      never,
-      Failable<RunAllSettledTuple<T>, never>
-    >,
-    RunAllSettledTuple<T>,
-    unknown
-  > {
-    const results = await Promise.all(promises);
-    const tuple = results as unknown as RunAllSettledTuple<T>;
-    yield RunGet.create(success(tuple));
-    return tuple;
+function hasPromiseLikeSources(sources: readonly unknown[]): boolean {
+  for (const source of sources) {
+    if (isPromiseLike(source)) return true;
   }
-  return impl() as AsyncRunGetIterator<
-    RunAllSettledTuple<T>,
-    never,
-    Failable<RunAllSettledTuple<T>, never>
-  >;
+
+  return false;
 }
 
-function runRace<T extends readonly Promise<Failable<unknown, unknown>>[]>(
-  ...promises: T
-): AsyncRunGetIterator<
-  RunRaceData<T>,
-  RunRaceError<T>,
-  Failable<RunRaceData<T>, RunRaceError<T>>
-> {
-  async function* impl(): AsyncGenerator<
-    RunGet<RunRaceData<T>, RunRaceError<T>, Failable<unknown, unknown>>,
-    RunRaceData<T>,
-    unknown
-  > {
-    const result = await Promise.race(promises);
-    if (!isFailable(result)) {
-      return (yield RunGet.create(
-        failure(result) as Failure<RunRaceError<T>>
-      )) as never;
-    }
+async function resolveFailableSources(
+  sources: readonly unknown[]
+): Promise<readonly Failable<unknown, unknown>[]> {
+  const results = await Promise.all(
+    sources.map((source) => Promise.resolve(source))
+  );
+
+  return results.map((result) => toValidatedFailable(result));
+}
+
+function combineAllResults<T extends readonly unknown[]>(
+  results: readonly Failable<unknown, unknown>[]
+): Failable<AllReturnData<T>, AllTupleError<T>> {
+  for (const result of results) {
     if (result.status === FailableStatus.Failure) {
-      return (yield RunGet.create(result as Failure<RunRaceError<T>>)) as never;
+      return result as Failure<AllTupleError<T>>;
     }
-    return (yield RunGet.create(
-      success(result.data) as Success<RunRaceData<T>>
-    )) as never;
   }
-  return impl() as AsyncRunGetIterator<
-    RunRaceData<T>,
-    RunRaceError<T>,
-    Failable<RunRaceData<T>, RunRaceError<T>>
-  >;
+
+  const tuple = results.map(
+    (result) => (result as Success<unknown>).data
+  ) as AllTupleData<T>;
+
+  return success(tuple) as Failable<AllReturnData<T>, AllTupleError<T>>;
 }
 
-type RunAsyncHelpers = {
-  readonly all: typeof runAll;
-  readonly allSettled: typeof runAllSettled;
-  readonly race: typeof runRace;
-};
+function combineAllSettledResults<T extends readonly unknown[]>(
+  results: readonly Failable<unknown, unknown>[]
+): Success<AllSettledTuple<T>> {
+  return success(results as AllSettledTuple<T>);
+}
 
-const RUN_ASYNC_HELPERS: RunAsyncHelpers = Object.freeze({
-  all: runAll,
-  allSettled: runAllSettled,
-  race: runRace,
-});
+export function all<const T extends readonly FailableSource<unknown, unknown>[]>(
+  ...sources: T
+): TupleHasAsync<T> extends true
+  ? Promise<Failable<AllReturnData<T>, AllTupleError<T>>>
+  : Failable<AllReturnData<T>, AllTupleError<T>> {
+  if (!hasPromiseLikeSources(sources)) {
+    return combineAllResults<T>(
+      sources.map((source) => toValidatedFailable(source))
+    ) as TupleHasAsync<T> extends true
+      ? Promise<Failable<AllReturnData<T>, AllTupleError<T>>>
+      : Failable<AllReturnData<T>, AllTupleError<T>>;
+  }
+
+  return resolveFailableSources(sources).then((results) =>
+    combineAllResults<T>(results)
+  ) as TupleHasAsync<T> extends true
+    ? Promise<Failable<AllReturnData<T>, AllTupleError<T>>>
+    : Failable<AllReturnData<T>, AllTupleError<T>>;
+}
+
+export function allSettled<
+  const T extends readonly FailableSource<unknown, unknown>[]
+>(
+  ...sources: T
+): TupleHasAsync<T> extends true
+  ? Promise<Success<AllSettledTuple<T>>>
+  : Success<AllSettledTuple<T>> {
+  if (!hasPromiseLikeSources(sources)) {
+    return combineAllSettledResults<T>(
+      sources.map((source) => toValidatedFailable(source))
+    ) as TupleHasAsync<T> extends true
+      ? Promise<Success<AllSettledTuple<T>>>
+      : Success<AllSettledTuple<T>>;
+  }
+
+  return resolveFailableSources(sources).then((results) =>
+    combineAllSettledResults<T>(results)
+  ) as TupleHasAsync<T> extends true
+    ? Promise<Success<AllSettledTuple<T>>>
+    : Success<AllSettledTuple<T>>;
+}
+
+export function race<
+  const T extends readonly PromiseLike<Failable<unknown, unknown>>[]
+>(...sources: T): Promise<Failable<RaceData<T>, RaceError<T>>> {
+  if (sources.length === 0) {
+    return Promise.reject(
+      new Error('`race()` requires at least one promised `Failable` source.')
+    ) as Promise<Failable<RaceData<T>, RaceError<T>>>;
+  }
+
+  for (const source of sources) {
+    if (!isPromiseLike(source)) {
+      return Promise.reject(
+        new Error('`race()` only accepts promised `Failable` sources.')
+      ) as Promise<Failable<RaceData<T>, RaceError<T>>>;
+    }
+  }
+
+  return Promise.race(sources.map((source) => Promise.resolve(source))).then(
+    (result) => toValidatedFailable(result) as Failable<RaceData<T>, RaceError<T>>
+  );
+}
 
 type AsyncRunBuilder<
   TYield extends RunGet<unknown, unknown, unknown> = never,
   TResult extends RunReturn = RunReturn
-> = (_helpers: RunAsyncHelpers) => AsyncGenerator<TYield, TResult, unknown>;
+> = (_helpers: RunNoHelpers) => AsyncGenerator<TYield, TResult, unknown>;
 
 function readRunGetSource(yielded: unknown): Failable<unknown, unknown> {
   if (!(yielded instanceof RunGet)) {
@@ -934,7 +980,7 @@ export function run<
   TResult extends RunReturn = RunReturn
 >(
   builder: (
-    _helpers: RunAsyncHelpers
+    _helpers: RunNoHelpers
   ) => AsyncGenerator<TYield, TResult, unknown>
 ): Promise<InferRunResult<TYield, TResult>>;
 export function run<
@@ -950,11 +996,11 @@ export function run(
 ): unknown {
   const iterator = (
     builder as (
-      _helpers: RunNoHelpers | RunAsyncHelpers
+      _helpers: RunNoHelpers
     ) =>
       | Generator<RunYield, RunReturn, unknown>
       | AsyncGenerator<RunGet<unknown, unknown, unknown>, RunReturn, unknown>
-  )(RUN_ASYNC_HELPERS as RunNoHelpers & RunAsyncHelpers);
+  )(RUN_NO_HELPERS);
 
   if (isAsyncRunIterator(iterator)) {
     return runAsyncIterator(iterator);

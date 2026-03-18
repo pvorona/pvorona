@@ -1,6 +1,8 @@
 import { faker } from '@faker-js/faker';
 import { expectTypeOf } from 'expect-type';
 import {
+  all,
+  allSettled,
   failable,
   failure,
   FailableStatus,
@@ -9,6 +11,7 @@ import {
   isFailure,
   isSuccess,
   NormalizedErrors,
+  race,
   run,
   success,
   throwIfError,
@@ -1431,10 +1434,26 @@ describe('run()', () => {
       void buildResult;
     });
 
+    it('rejects async helper injection at type level', () => {
+      const buildResult = () =>
+        run(
+          async function* (
+            // @ts-expect-error `run(...)` no longer injects combinator helpers.
+            { all: runAll }
+          ) {
+            const [a] = yield* await runAll(Promise.resolve(success(1 as const)));
+
+            return success(a);
+          }
+        );
+
+      void buildResult;
+    });
+
     it('infers tuple data types from all() when only Promise<Success> is passed', () => {
       const buildResult = () =>
-        run(async function* ({ all }) {
-          const [a, b] = yield* all(
+        run(async function* () {
+          const [a, b] = yield* await all(
             Promise.resolve(success(1 as const)),
             Promise.resolve(success('two' as const))
           );
@@ -1448,8 +1467,8 @@ describe('run()', () => {
 
     it('infers run() result as Failure when only Promise<Failure> is passed to all()', () => {
       const buildResult = () =>
-        run(async function* ({ all }) {
-          const result = yield* all(
+        run(async function* () {
+          const result = yield* await all(
             Promise.resolve(failure('e1' as const)),
             Promise.resolve(failure(42 as const))
           );
@@ -1461,12 +1480,12 @@ describe('run()', () => {
 
     it('infers tuple data types from all() when Success and Failable (no Failure) are passed', () => {
       const buildResult = () =>
-        run(async function* ({ all }) {
+        run(async function* () {
           const p2: Promise<Failable<boolean, string>> = Promise.resolve(
             success(true)
           );
-          const [a, b] = yield* all(
-            Promise.resolve(success(1 as const)),
+          const [a, b] = yield* await all(
+            success(1 as const),
             p2
           );
           expectTypeOf(a).toEqualTypeOf<1>();
@@ -1478,8 +1497,8 @@ describe('run()', () => {
 
     it('infers Success when Promise<Success> is passed to allSettled()', () => {
       const buildResult = () =>
-        run(async function* ({ allSettled }) {
-          const [r1, r2] = yield* allSettled(
+        run(async function* () {
+          const [r1, r2] = yield* await allSettled(
             Promise.resolve(success(1 as const)),
             Promise.resolve(success('two' as const))
           );
@@ -1492,8 +1511,8 @@ describe('run()', () => {
 
     it('infers Failure when Promise<Failure> is passed to allSettled()', () => {
       const buildResult = () =>
-        run(async function* ({ allSettled }) {
-          const [r1, r2] = yield* allSettled(
+        run(async function* () {
+          const [r1, r2] = yield* await allSettled(
             Promise.resolve(failure('err1' as const)),
             Promise.resolve(failure(42 as const))
           );
@@ -1506,14 +1525,14 @@ describe('run()', () => {
 
     it('infers Failable when Promise<Failable> is passed to allSettled()', () => {
       const buildResult = () =>
-        run(async function* ({ allSettled }) {
+        run(async function* () {
           const p1: Promise<Failable<number, string>> = Promise.resolve(
             success(1)
           );
           const p2: Promise<Failable<boolean, string>> = Promise.resolve(
             failure('x')
           );
-          const [r1, r2] = yield* allSettled(p1, p2);
+          const [r1, r2] = yield* await allSettled(p1, p2);
           expectTypeOf(r1).toEqualTypeOf<Failable<number, string>>();
           expectTypeOf(r2).toEqualTypeOf<Failable<boolean, string>>();
           return success([r1, r2]);
@@ -1523,11 +1542,11 @@ describe('run()', () => {
 
     it('infers Success, Failure, and Failable from allSettled() when all three are passed', () => {
       const buildResult = () =>
-        run(async function* ({ allSettled }) {
+        run(async function* () {
           const p3: Promise<Failable<boolean, string>> = Promise.resolve(
             failure('f')
           );
-          const [r1, r2, r3] = yield* allSettled(
+          const [r1, r2, r3] = yield* await allSettled(
             Promise.resolve(success(1 as const)),
             Promise.resolve(failure('err' as const)),
             p3
@@ -1542,8 +1561,8 @@ describe('run()', () => {
 
     it('infers data union from race() when only Promise<Success> is passed', () => {
       const buildResult = () =>
-        run(async function* ({ race }) {
-          const x = yield* race(
+        run(async function* () {
+          const x = yield* await race(
             Promise.resolve(success(1 as const)),
             Promise.resolve(success('two' as const))
           );
@@ -1556,23 +1575,26 @@ describe('run()', () => {
 
     it('infers run() result as Failure when only Promise<Failure> is passed to race()', () => {
       const buildResult = () =>
-        run(async function* ({ race }) {
-          const result = yield* race(
+        run(async function* () {
+          const result = yield* await race(
             Promise.resolve(failure('e1' as const)),
             Promise.resolve(failure(42 as const))
           );
           return success(result);
         });
       void buildResult;
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Promise<Failure<'e1' | 42>>
+      >();
     });
 
     it('infers data/error union from race() when Success, Failure, and Failable are passed', () => {
       const buildResult = () =>
-        run(async function* ({ race }) {
+        run(async function* () {
           const p3: Promise<Failable<boolean, string>> = Promise.resolve(
             success(false)
           );
-          const x = yield* race(
+          const x = yield* await race(
             Promise.resolve(success(1 as const)),
             Promise.resolve(failure('err' as const)),
             p3
@@ -1580,28 +1602,47 @@ describe('run()', () => {
           return success(x);
         });
       void buildResult;
+      expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
+        Promise<Failable<1 | boolean, 'err' | string>>
+      >();
     });
 
-    it('all() is not available in sync builders', () => {
+    it('supports sync all() in sync builders', () => {
       const buildResult = () =>
-        // @ts-expect-error sync builders receive RunNoHelpers which lacks `all`.
-        run(function* ({ all }) {
-          // @ts-expect-error sync generators cannot yield* async iterators.
-          const [a] = yield* all(Promise.resolve(success(1)));
-          return success(a);
+        run(function* () {
+          const [a, b] = yield* all(success(1 as const), success('two' as const));
+
+          expectTypeOf(a).toEqualTypeOf<1>();
+          expectTypeOf(b).toEqualTypeOf<'two'>();
+
+          return success([a, b]);
         });
 
       void buildResult;
     });
 
-    it('race() is not available in sync builders', () => {
-      const buildResult = () =>
-        // @ts-expect-error sync builders receive RunNoHelpers which lacks `race`.
-        run(function* ({ race }) {
-          // @ts-expect-error sync generators cannot yield* async iterators.
-          const a = yield* race(Promise.resolve(success(1)));
+    it('rejects promised all() in sync builders at type level', () => {
+      const buildResult = () => {
+        const promised = all(Promise.resolve(success(1 as const)));
+
+        return run(function* () {
+          // @ts-expect-error sync generators cannot yield* promised sources.
+          const [a] = yield* promised;
+
           return success(a);
         });
+      };
+
+      void buildResult;
+    });
+
+    it('rejects sync sources passed to race() at type level', () => {
+      const buildResult = () => {
+        // @ts-expect-error `race()` only accepts promised `Failable` sources.
+        const result = race(success(1 as const));
+
+        return result;
+      };
 
       void buildResult;
     });
@@ -1681,9 +1722,15 @@ describe('run()', () => {
       expect(result).toStrictEqual(success(42));
     });
 
+    it('all() returns tuple data for direct sync sources', () => {
+      const result = all(success(1 as const), success(2 as const));
+
+      expect(result).toStrictEqual(success([1, 2]));
+    });
+
     it('all() resolves promised Failable sources in parallel and returns tuple on success', async () => {
-      const result = await run(async function* ({ all }) {
-        const [a, b] = yield* all(
+      const result = await run(async function* () {
+        const [a, b] = yield* await all(
           Promise.resolve(success(1 as const)),
           Promise.resolve(success(2 as const))
         );
@@ -1694,8 +1741,8 @@ describe('run()', () => {
 
     it('all() returns first failure when one source fails', async () => {
       const err = failure('first-error' as const);
-      const result = await run(async function* ({ all }) {
-        yield* all(Promise.resolve(success(1)), Promise.resolve(err));
+      const result = await run(async function* () {
+        yield* await all(Promise.resolve(success(1)), Promise.resolve(err));
         return success(0);
       });
       expect(result).toStrictEqual(err);
@@ -1704,8 +1751,8 @@ describe('run()', () => {
     it('all() returns first failure in input order when multiple fail', async () => {
       const err1 = failure('error-1' as const);
       const err2 = failure('error-2' as const);
-      const result = await run(async function* ({ all }) {
-        yield* all(
+      const result = await run(async function* () {
+        yield* await all(
           Promise.resolve(success(1)),
           Promise.resolve(err1),
           Promise.resolve(err2)
@@ -1715,9 +1762,17 @@ describe('run()', () => {
       expect(result).toStrictEqual(err1);
     });
 
+    it('allSettled() returns Success of tuple for direct sync sources', () => {
+      const result = allSettled(success(1 as const), failure('e2' as const));
+
+      expect(result).toStrictEqual(
+        success([success(1 as const), failure('e2' as const)])
+      );
+    });
+
     it('allSettled() returns Success of tuple when all sources succeed', async () => {
-      const result = await run(async function* ({ allSettled }) {
-        const [a, b] = yield* allSettled(
+      const result = await run(async function* () {
+        const [a, b] = yield* await allSettled(
           Promise.resolve(success(1 as const)),
           Promise.resolve(success(2 as const))
         );
@@ -1730,8 +1785,8 @@ describe('run()', () => {
 
     it('allSettled() returns Success of tuple when one fails', async () => {
       const err = failure('e1' as const);
-      const result = await run(async function* ({ allSettled }) {
-        const [r1, r2] = yield* allSettled(
+      const result = await run(async function* () {
+        const [r1, r2] = yield* await allSettled(
           Promise.resolve(success(1)),
           Promise.resolve(err)
         );
@@ -1745,8 +1800,8 @@ describe('run()', () => {
     });
 
     it('allSettled() returns Success of tuple when all fail', async () => {
-      const result = await run(async function* ({ allSettled }) {
-        const [a, b] = yield* allSettled(
+      const result = await run(async function* () {
+        const [a, b] = yield* await allSettled(
           Promise.resolve(failure('a' as const)),
           Promise.resolve(failure('b' as const))
         );
@@ -1762,8 +1817,9 @@ describe('run()', () => {
         setTimeout(() => resolve(success(1 as const)), 20);
       });
       const fast = Promise.resolve(success(2 as const));
-      const result = await run(async function* ({ race }) {
-        const a = yield* race(slow, fast);
+
+      const result = await run(async function* () {
+        const a = yield* await race(slow, fast);
         return success(a);
       });
       expect(result).toStrictEqual(success(2));
@@ -1774,16 +1830,22 @@ describe('run()', () => {
       const slow = new Promise<Success<number>>((resolve) => {
         setTimeout(() => resolve(success(1)), 20);
       });
-      const result = await run(async function* ({ race }) {
-        yield* race(slow, Promise.resolve(err));
+      const result = await run(async function* () {
+        yield* await race(slow, Promise.resolve(err));
         return success(0);
       });
       expect(result).toStrictEqual(err);
     });
 
+    it('race() rejects zero promised sources with a clear error', async () => {
+      await expect(race()).rejects.toThrow(
+        '`race()` requires at least one promised `Failable` source.'
+      );
+    });
+
     it('race() with one promise returns that result', async () => {
-      const result = await run(async function* ({ race }) {
-        const a = yield* race(Promise.resolve(success(42 as const)));
+      const result = await run(async function* () {
+        const a = yield* await race(Promise.resolve(success(42 as const)));
         return success(a);
       });
       expect(result).toStrictEqual(success(42));
@@ -3088,9 +3150,9 @@ describe('E2E', () => {
       }
 
       async function withRunAll() {
-        return run(async function* ({ all }) {
+        return run(async function* () {
           const userId = yield* getUserId();
-          const [user, profile] = yield* all(
+          const [user, profile] = yield* await all(
             getUser(userId),
             getUserProfile(userId)
           );

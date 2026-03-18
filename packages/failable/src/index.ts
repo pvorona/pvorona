@@ -1,4 +1,6 @@
 export {
+  all,
+  allSettled,
   FailableStatus,
   NormalizedErrors,
   failable,
@@ -7,6 +9,7 @@ export {
   isFailableLike,
   isFailure,
   isSuccess,
+  race,
   run,
   success,
   throwIfError,
