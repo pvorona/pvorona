@@ -1484,6 +1484,7 @@ describe('run()', () => {
       const buildResult = () =>
         // @ts-expect-error sync builders receive RunNoHelpers which lacks `race`.
         run(function* ({ race }) {
+          // @ts-expect-error sync generators cannot yield* async iterators.
           const a = yield* race(Promise.resolve(success(1)));
           return success(a);
         });
