@@ -1147,7 +1147,9 @@ describe('run()', () => {
       const buildResult = () =>
         run(function* () {
           const maybeValue = yield* source;
-          const guaranteedValue = yield* failure('inline-source-error' as const);
+          const guaranteedValue = yield* failure(
+            'inline-source-error' as const
+          );
 
           void maybeValue;
           void guaranteedValue;
@@ -1293,7 +1295,9 @@ describe('run()', () => {
         });
 
       expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
-        Promise<Failable<readonly ['helper-data', 'async-value'], 'helper-error'>>
+        Promise<
+          Failable<readonly ['helper-data', 'async-value'], 'helper-error'>
+        >
       >();
       void buildResult;
     });
@@ -1321,7 +1325,9 @@ describe('run()', () => {
 
       expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
         Promise<
-          Failure<'first-source-error' | 'second-source-error' | 'builder-error'>
+          Failure<
+            'first-source-error' | 'second-source-error' | 'builder-error'
+          >
         >
       >();
       void buildResult;
@@ -1425,12 +1431,12 @@ describe('run()', () => {
       void buildResult;
     });
 
-    it('infers tuple element types from all() in async builders', () => {
+    it('infers tuple data types from all() when only Promise<Success> is passed', () => {
       const buildResult = () =>
         run(async function* ({ all }) {
           const [a, b] = yield* all(
             Promise.resolve(success(1 as const)),
-            Promise.resolve(success('two' as const)),
+            Promise.resolve(success('two' as const))
           );
           expectTypeOf(a).toEqualTypeOf<1>();
           expectTypeOf(b).toEqualTypeOf<'two'>();
@@ -1440,31 +1446,139 @@ describe('run()', () => {
       void buildResult;
     });
 
-    it('infers tuple of Failable from allSettled() in async builders', () => {
+    it('infers run() result as Failure when only Promise<Failure> is passed to all()', () => {
+      const buildResult = () =>
+        run(async function* ({ all }) {
+          const result = yield* all(
+            Promise.resolve(failure('e1' as const)),
+            Promise.resolve(failure(42 as const))
+          );
+          return success(result);
+        });
+      // When all args are Failure, all() never yields success → return type is never; run() returns Failure.
+      void buildResult;
+    });
+
+    it('infers tuple data types from all() when Success and Failable (no Failure) are passed', () => {
+      const buildResult = () =>
+        run(async function* ({ all }) {
+          const p2: Promise<Failable<boolean, string>> = Promise.resolve(
+            success(true)
+          );
+          const [a, b] = yield* all(
+            Promise.resolve(success(1 as const)),
+            p2
+          );
+          expectTypeOf(a).toEqualTypeOf<1>();
+          expectTypeOf(b).toEqualTypeOf<boolean>();
+          return success([a, b]);
+        });
+      void buildResult;
+    });
+
+    it('infers Success when Promise<Success> is passed to allSettled()', () => {
       const buildResult = () =>
         run(async function* ({ allSettled }) {
           const [r1, r2] = yield* allSettled(
             Promise.resolve(success(1 as const)),
-            Promise.resolve(success('two' as const)),
+            Promise.resolve(success('two' as const))
           );
-          expectTypeOf(r1).toEqualTypeOf<Failable<1, null>>();
-          expectTypeOf(r2).toEqualTypeOf<Failable<'two', null>>();
+          expectTypeOf(r1).toEqualTypeOf<Success<1>>();
+          expectTypeOf(r2).toEqualTypeOf<Success<'two'>>();
           return success([r1, r2]);
         });
       void buildResult;
     });
 
-    it('infers single Failable data/error union from race() in async builders', () => {
+    it('infers Failure when Promise<Failure> is passed to allSettled()', () => {
+      const buildResult = () =>
+        run(async function* ({ allSettled }) {
+          const [r1, r2] = yield* allSettled(
+            Promise.resolve(failure('err1' as const)),
+            Promise.resolve(failure(42 as const))
+          );
+          expectTypeOf(r1).toEqualTypeOf<Failure<'err1'>>();
+          expectTypeOf(r2).toEqualTypeOf<Failure<42>>();
+          return success([r1, r2]);
+        });
+      void buildResult;
+    });
+
+    it('infers Failable when Promise<Failable> is passed to allSettled()', () => {
+      const buildResult = () =>
+        run(async function* ({ allSettled }) {
+          const p1: Promise<Failable<number, string>> = Promise.resolve(
+            success(1)
+          );
+          const p2: Promise<Failable<boolean, string>> = Promise.resolve(
+            failure('x')
+          );
+          const [r1, r2] = yield* allSettled(p1, p2);
+          expectTypeOf(r1).toEqualTypeOf<Failable<number, string>>();
+          expectTypeOf(r2).toEqualTypeOf<Failable<boolean, string>>();
+          return success([r1, r2]);
+        });
+      void buildResult;
+    });
+
+    it('infers Success, Failure, and Failable from allSettled() when all three are passed', () => {
+      const buildResult = () =>
+        run(async function* ({ allSettled }) {
+          const p3: Promise<Failable<boolean, string>> = Promise.resolve(
+            failure('f')
+          );
+          const [r1, r2, r3] = yield* allSettled(
+            Promise.resolve(success(1 as const)),
+            Promise.resolve(failure('err' as const)),
+            p3
+          );
+          expectTypeOf(r1).toEqualTypeOf<Success<1>>();
+          expectTypeOf(r2).toEqualTypeOf<Failure<'err'>>();
+          expectTypeOf(r3).toEqualTypeOf<Failable<boolean, string>>();
+          return success([r1, r2, r3]);
+        });
+      void buildResult;
+    });
+
+    it('infers data union from race() when only Promise<Success> is passed', () => {
       const buildResult = () =>
         run(async function* ({ race }) {
           const x = yield* race(
             Promise.resolve(success(1 as const)),
-            Promise.resolve(success('two' as const)),
+            Promise.resolve(success('two' as const))
           );
           expectTypeOf(x).toEqualTypeOf<1 | 'two'>();
           return success(x);
         });
 
+      void buildResult;
+    });
+
+    it('infers run() result as Failure when only Promise<Failure> is passed to race()', () => {
+      const buildResult = () =>
+        run(async function* ({ race }) {
+          const result = yield* race(
+            Promise.resolve(failure('e1' as const)),
+            Promise.resolve(failure(42 as const))
+          );
+          return success(result);
+        });
+      void buildResult;
+    });
+
+    it('infers data/error union from race() when Success, Failure, and Failable are passed', () => {
+      const buildResult = () =>
+        run(async function* ({ race }) {
+          const p3: Promise<Failable<boolean, string>> = Promise.resolve(
+            success(false)
+          );
+          const x = yield* race(
+            Promise.resolve(success(1 as const)),
+            Promise.resolve(failure('err' as const)),
+            p3
+          );
+          return success(x);
+        });
       void buildResult;
     });
 
@@ -1557,7 +1671,9 @@ describe('run()', () => {
     it('supports custom PromiseLike success sources in async builders', async () => {
       const result = await run(async function* () {
         const left = yield* success(20 as const);
-        const right = yield* await createResolvingThenable(success(22 as const));
+        const right = yield* await createResolvingThenable(
+          success(22 as const)
+        );
 
         return success(left + right);
       });
@@ -1569,7 +1685,7 @@ describe('run()', () => {
       const result = await run(async function* ({ all }) {
         const [a, b] = yield* all(
           Promise.resolve(success(1 as const)),
-          Promise.resolve(success(2 as const)),
+          Promise.resolve(success(2 as const))
         );
         return success(a + b);
       });
@@ -1579,10 +1695,7 @@ describe('run()', () => {
     it('all() returns first failure when one source fails', async () => {
       const err = failure('first-error' as const);
       const result = await run(async function* ({ all }) {
-        yield* all(
-          Promise.resolve(success(1)),
-          Promise.resolve(err),
-        );
+        yield* all(Promise.resolve(success(1)), Promise.resolve(err));
         return success(0);
       });
       expect(result).toStrictEqual(err);
@@ -1595,7 +1708,7 @@ describe('run()', () => {
         yield* all(
           Promise.resolve(success(1)),
           Promise.resolve(err1),
-          Promise.resolve(err2),
+          Promise.resolve(err2)
         );
         return success(0);
       });
@@ -1606,9 +1719,10 @@ describe('run()', () => {
       const result = await run(async function* ({ allSettled }) {
         const [a, b] = yield* allSettled(
           Promise.resolve(success(1 as const)),
-          Promise.resolve(success(2 as const)),
+          Promise.resolve(success(2 as const))
         );
-        if (a.status !== 'success' || b.status !== 'success') return failure('unexpected');
+        if (a.status !== 'success' || b.status !== 'success')
+          return failure('unexpected');
         return success(a.data + b.data);
       });
       expect(result).toStrictEqual(success(3));
@@ -1619,7 +1733,7 @@ describe('run()', () => {
       const result = await run(async function* ({ allSettled }) {
         const [r1, r2] = yield* allSettled(
           Promise.resolve(success(1)),
-          Promise.resolve(err),
+          Promise.resolve(err)
         );
         expect(r1.status).toBe('success');
         expect((r1 as Success<number>).data).toBe(1);
@@ -1634,7 +1748,7 @@ describe('run()', () => {
       const result = await run(async function* ({ allSettled }) {
         const [a, b] = yield* allSettled(
           Promise.resolve(failure('a' as const)),
-          Promise.resolve(failure('b' as const)),
+          Promise.resolve(failure('b' as const))
         );
         expect(a.status).toBe('failure');
         expect(b.status).toBe('failure');
@@ -1863,7 +1977,9 @@ describe('run()', () => {
 
       await expect(
         run(async function* () {
-          yield* await createRejectingThenable<Failable<never, never>>(rejection);
+          yield* await createRejectingThenable<
+            Failable<never, never>
+          >(rejection);
 
           return success('unreachable' as const);
         })
@@ -1877,7 +1993,9 @@ describe('run()', () => {
       await expect(
         run(async function* () {
           try {
-            yield* await createRejectingThenable<Failable<never, never>>(rejection);
+            yield* await createRejectingThenable<
+              Failable<never, never>
+            >(rejection);
 
             return success('unreachable' as const);
           } finally {
@@ -1895,7 +2013,9 @@ describe('run()', () => {
       await expect(
         run(async function* () {
           try {
-            yield* await createRejectingThenable<Failable<never, never>>(rejection);
+            yield* await createRejectingThenable<
+              Failable<never, never>
+            >(rejection);
 
             return success('unreachable' as const);
           } finally {
@@ -1914,13 +2034,15 @@ describe('run()', () => {
       await expect(
         run(async function* () {
           try {
-            yield* await createRejectingThenable<Failable<never, never>>(rejection);
+            yield* await createRejectingThenable<
+              Failable<never, never>
+            >(rejection);
 
             return success('unreachable' as const);
           } finally {
-            yield* await createRejectingThenable<Failable<never, never>>(
-              cleanupRejection
-            );
+            yield* await createRejectingThenable<
+              Failable<never, never>
+            >(cleanupRejection);
           }
         })
       ).rejects.toBe(cleanupRejection);
@@ -1933,7 +2055,9 @@ describe('run()', () => {
       await expect(
         run(async function* () {
           try {
-            yield* await createRejectingThenable<Failable<never, never>>(rejection);
+            yield* await createRejectingThenable<
+              Failable<never, never>
+            >(rejection);
 
             return success('unreachable' as const);
           } finally {
@@ -1952,9 +2076,9 @@ describe('run()', () => {
         run(async function* () {
           try {
             try {
-              yield* await createRejectingThenable<Failable<never, never>>(
-                rejection
-              );
+              yield* await createRejectingThenable<
+                Failable<never, never>
+              >(rejection);
 
               return success('unreachable' as const);
             } finally {
@@ -1977,15 +2101,15 @@ describe('run()', () => {
         run(async function* () {
           try {
             try {
-              yield* await createRejectingThenable<Failable<never, never>>(
-                rejection
-              );
+              yield* await createRejectingThenable<
+                Failable<never, never>
+              >(rejection);
 
               return success('unreachable' as const);
             } finally {
-              yield* await createRejectingThenable<Failable<never, never>>(
-                cleanupRejection
-              );
+              yield* await createRejectingThenable<
+                Failable<never, never>
+              >(cleanupRejection);
             }
           } finally {
             outerCleanedUp = true;
@@ -2006,7 +2130,9 @@ describe('run()', () => {
 
             return success('unreachable' as const);
           } finally {
-            yield* await createRejectingThenable<Failable<never, never>>(rejection);
+            yield* await createRejectingThenable<
+              Failable<never, never>
+            >(rejection);
           }
         })
       ).rejects.toBe(rejection);
@@ -2025,9 +2151,9 @@ describe('run()', () => {
 
               return success('unreachable' as const);
             } finally {
-              yield* await createRejectingThenable<Failable<never, never>>(
-                rejection
-              );
+              yield* await createRejectingThenable<
+                Failable<never, never>
+              >(rejection);
             }
           } finally {
             outerCleanedUp = true;
@@ -2849,130 +2975,135 @@ describe('E2E', () => {
     globalThis.fetch = fetchMock as typeof fetch;
 
     try {
-    async function getUser(userId: string) {
-      const fetchResult = await failable(
-        fetch(`https://api.example.com/users/${userId}`)
-      );
+      async function getUser(userId: string) {
+        const fetchResult = await failable(
+          fetch(`https://api.example.com/users/${userId}`)
+        );
 
-      if (fetchResult.isFailure) {
-        return failure({
-          reason: 'network_error',
-          cause: fetchResult.error,
-        } as const);
+        if (fetchResult.isFailure) {
+          return failure({
+            reason: 'network_error',
+            cause: fetchResult.error,
+          } as const);
+        }
+
+        if (!fetchResult.data.ok) {
+          return failure({
+            reason: 'http_error',
+            cause: fetchResult.data,
+          } as const);
+        }
+
+        const parseJsonResult = await failable(fetchResult.data.json());
+
+        if (parseJsonResult.isFailure) {
+          return failure({
+            reason: 'json_parse_error',
+            cause: parseJsonResult.error,
+          } as const);
+        }
+
+        return success(parseJsonResult.data as { id: string; email: string });
       }
 
-      if (!fetchResult.data.ok) {
-        return failure({
-          reason: 'http_error',
-          cause: fetchResult.data,
-        } as const);
+      async function getUserProfile(userId: string) {
+        const fetchResult = await failable(
+          fetch(`https://api.example.com/users/${userId}/profile`)
+        );
+
+        if (fetchResult.isFailure) {
+          return failure({
+            reason: 'network_error',
+            cause: fetchResult.error,
+          } as const);
+        }
+
+        if (!fetchResult.data.ok) {
+          return failure({
+            reason: 'http_error',
+            cause: fetchResult.data,
+          } as const);
+        }
+
+        const parseJsonResult = await failable(fetchResult.data.json());
+
+        if (parseJsonResult.isFailure) {
+          return failure({
+            reason: 'json_parse_error',
+            cause: parseJsonResult.error,
+          } as const);
+        }
+
+        return success(
+          parseJsonResult.data as {
+            id: string;
+            name: string;
+            pictureUrl: string;
+          }
+        );
       }
 
-      const parseJsonResult = await failable(fetchResult.data.json());
+      const getUserId = (): Failable<string, 'missing-user-id'> =>
+        success('10');
 
-      if (parseJsonResult.isFailure) {
-        return failure({
-          reason: 'json_parse_error',
-          cause: parseJsonResult.error,
-        } as const);
-      }
+      async function withoutRun() {
+        const getUserIdResult = getUserId();
 
-      return success(parseJsonResult.data as { id: string; email: string });
-    }
+        if (getUserIdResult.isFailure) {
+          return getUserIdResult;
+        }
 
-    async function getUserProfile(userId: string) {
-      const fetchResult = await failable(
-        fetch(`https://api.example.com/users/${userId}/profile`)
-      );
+        const userId = getUserIdResult.data;
 
-      if (fetchResult.isFailure) {
-        return failure({
-          reason: 'network_error',
-          cause: fetchResult.error,
-        } as const);
-      }
-
-      if (!fetchResult.data.ok) {
-        return failure({
-          reason: 'http_error',
-          cause: fetchResult.data,
-        } as const);
-      }
-
-      const parseJsonResult = await failable(fetchResult.data.json());
-
-      if (parseJsonResult.isFailure) {
-        return failure({
-          reason: 'json_parse_error',
-          cause: parseJsonResult.error,
-        } as const);
-      }
-
-      return success(
-        parseJsonResult.data as { id: string; name: string; pictureUrl: string }
-      );
-    }
-
-    const getUserId = (): Failable<string, 'missing-user-id'> => success('10');
-
-    async function withoutRun() {
-      const getUserIdResult = getUserId();
-
-      if (getUserIdResult.isFailure) {
-        return getUserIdResult;
-      }
-
-      const userId = getUserIdResult.data;
-
-      const [getUserResult, getProfileResult] = await Promise.all([
-        getUser(userId),
-        getUserProfile(userId),
-      ]);
-
-      if (getUserResult.isFailure) {
-        return getUserResult;
-      }
-
-      if (getProfileResult.isFailure) {
-        return getProfileResult;
-      }
-
-      return success({
-        user: getUserResult.data,
-        profile: getProfileResult.data,
-      });
-    }
-
-    async function withRun() {
-      return run(async function* () {
-        const userId = yield* getUserId();
-        const [userResult, profileResult] = await Promise.all([
+        const [getUserResult, getProfileResult] = await Promise.all([
           getUser(userId),
           getUserProfile(userId),
         ]);
-        const user = yield* userResult;
-        const profile = yield* profileResult;
-        return success({ user, profile });
-      });
-    }
 
-    async function withRunAll() {
-      return run(async function* ({ all }) {
-        const userId = yield* getUserId();
-        const [user, profile] = yield* all(
-          getUser(userId),
-          getUserProfile(userId),
-        );
-        return success({ user, profile });
-      });
-    }
+        if (getUserResult.isFailure) {
+          return getUserResult;
+        }
 
-    const result1 = await withoutRun();
-    const result2 = await withRun();
-    const result3 = await withRunAll();
+        if (getProfileResult.isFailure) {
+          return getProfileResult;
+        }
 
-    expect(result1).toStrictEqual(result2);
-    expect(result1).toStrictEqual(result3);
+        return success({
+          user: getUserResult.data,
+          profile: getProfileResult.data,
+        });
+      }
+
+      async function withRun() {
+        return run(async function* () {
+          const userId = yield* getUserId();
+          const [userResult, profileResult] = await Promise.all([
+            getUser(userId),
+            getUserProfile(userId),
+          ]);
+          const user = yield* userResult;
+          const profile = yield* profileResult;
+          return success({ user, profile });
+        });
+      }
+
+      async function withRunAll() {
+        return run(async function* ({ all }) {
+          const userId = yield* getUserId();
+          const [user, profile] = yield* all(
+            getUser(userId),
+            getUserProfile(userId)
+          );
+          return success({ user, profile });
+        });
+      }
+
+      const result1 = await withoutRun();
+      const result2 = await withRun();
+      const result3 = await withRunAll();
+
+      expect(result1).toStrictEqual(result2);
+      expect(result1).toStrictEqual(result3);
     } finally {
       globalThis.fetch = originalFetch;
     }

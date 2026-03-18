@@ -39,12 +39,12 @@ type Match<T, E> = <U>(
 ) => U;
 
 export type Failable<T, E> =
-  ((Success<T> & {
-    readonly match: Match<T, E>;
-  }) |
-    (Failure<E> & {
+  | (Success<T> & {
       readonly match: Match<T, E>;
-    }));
+    })
+  | (Failure<E> & {
+      readonly match: Match<T, E>;
+    });
 
 /**
  * Structured-clone-friendly representation of {@link Failable}.
@@ -233,7 +233,9 @@ const BASE_FAILURE = (() => {
   };
   node.getOrThrow = function getOrThrowFailure() {
     if (this.error === undefined) {
-      throw new Error('getOrThrow() called on Failure<void> with no error value');
+      throw new Error(
+        'getOrThrow() called on Failure<void> with no error value'
+      );
     }
     throw this.error;
   };
@@ -376,7 +378,9 @@ export function throwIfError<T, E>(
 export function toFailableLike<T>(value: Success<T>): FailableLikeSuccess<T>;
 export function toFailableLike<E>(value: Failure<E>): FailableLikeFailure<E>;
 export function toFailableLike<T, E>(value: Failable<T, E>): FailableLike<T, E>;
-export function toFailableLike<T, E>(value: Failable<T, E>): FailableLike<T, E> {
+export function toFailableLike<T, E>(
+  value: Failable<T, E>
+): FailableLike<T, E> {
   if (value.status === FailableStatus.Failure) {
     return { status: FailableStatus.Failure, error: value.error };
   }
@@ -459,7 +463,9 @@ type FailableInput =
 
 const FAILABLE_PROMISE_CALLBACK_MESSAGE =
   '`failable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await failable(promise)`.';
-const FAILABLE_PROMISE_CALLBACK_GUARD_TAG = Symbol('FailablePromiseCallbackGuard');
+const FAILABLE_PROMISE_CALLBACK_GUARD_TAG = Symbol(
+  'FailablePromiseCallbackGuard'
+);
 
 type FailablePromiseCallbackGuardError = Error & {
   readonly [FAILABLE_PROMISE_CALLBACK_GUARD_TAG]: true;
@@ -467,11 +473,7 @@ type FailablePromiseCallbackGuardError = Error & {
 
 const RUN_GET_TAG = Symbol('RunGet');
 
-class RunGet<
-  T,
-  E,
-  TSource = Failable<T, E>,
-> {
+class RunGet<T, E, TSource = Failable<T, E>> {
   readonly [RUN_GET_TAG] = true;
   public readonly source: TSource;
 
@@ -479,11 +481,7 @@ class RunGet<
     this.source = source;
   }
 
-  static create<
-    T,
-    E,
-    TSource extends Failable<T, E>,
-  >(
+  static create<T, E, TSource extends Failable<T, E>>(
     source: TSource
   ): RunGet<T, E, TSource> {
     return new RunGet<T, E, TSource>(source);
@@ -493,13 +491,13 @@ class RunGet<
 type RunGetIterator<
   T,
   E,
-  TSource extends Failable<T, E> = Failable<T, E>,
+  TSource extends Failable<T, E> = Failable<T, E>
 > = Generator<RunGet<T, E, TSource>, T, unknown>;
 
 type AsyncRunGetIterator<
   T,
   E,
-  TSource extends Failable<T, E> = Failable<T, E>,
+  TSource extends Failable<T, E> = Failable<T, E>
 > = AsyncGenerator<RunGet<T, E, TSource>, T, unknown>;
 
 type RunYield = RunGet<unknown, unknown, unknown>;
@@ -537,14 +535,14 @@ type InferRunGuaranteedFailureError<TYield> = TYield extends RunGet<
 
 type MergeRunErrors<TYield, TError> = InferRunYieldError<TYield> | TError;
 
-type InferRunSuccessResult<TYield, TData> = [InferRunYieldError<TYield>] extends [
-  never,
-]
+type InferRunSuccessResult<TYield, TData> = [
+  InferRunYieldError<TYield>
+] extends [never]
   ? Success<TData>
   : Failable<TData, InferRunYieldError<TYield>>;
 
 type InferRunNeverSuccessResult<TYield> = [InferRunYieldError<TYield>] extends [
-  never,
+  never
 ]
   ? Success<never>
   : [InferRunGuaranteedFailureError<TYield>] extends [never]
@@ -553,14 +551,18 @@ type InferRunNeverSuccessResult<TYield> = [InferRunYieldError<TYield>] extends [
 
 type InferRunUnionReturnData<TResult> =
   | ([Extract<TResult, void>] extends [never] ? never : void)
-  | (Extract<TResult, RunReturnSuccessLike> extends { readonly data: infer TData }
+  | (Extract<TResult, RunReturnSuccessLike> extends {
+      readonly data: infer TData;
+    }
       ? TData
       : never);
 
-type InferRunUnionReturnError<TResult> =
-  Extract<TResult, RunReturnFailureLike> extends { readonly error: infer TError }
-    ? TError
-    : never;
+type InferRunUnionReturnError<TResult> = Extract<
+  TResult,
+  RunReturnFailureLike
+> extends { readonly error: infer TError }
+  ? TError
+  : never;
 
 type InferRunResult<TYield, TResult> = [TResult] extends [never]
   ? [InferRunYieldError<TYield>] extends [never]
@@ -627,7 +629,7 @@ function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
 
 type SyncRunBuilder<
   TYield extends RunYield = never,
-  TResult extends RunReturn = RunReturn,
+  TResult extends RunReturn = RunReturn
 > = (_helpers: RunNoHelpers) => Generator<TYield, TResult, unknown>;
 
 type RunNoHelpers = {
@@ -646,10 +648,30 @@ type RunAllTupleData<T> = {
     : never;
 };
 
+/** True when at least one element of T is Promise<Failure<...>>; then all() never yields success. */
+type RunAllTupleHasFailure<T> = T extends readonly [
+  infer First,
+  ...infer Rest
+]
+  ? First extends Promise<Failure<unknown>>
+    ? true
+    : Rest extends readonly unknown[]
+      ? RunAllTupleHasFailure<Rest>
+      : false
+  : false;
+
+type RunAllReturnData<T> = RunAllTupleHasFailure<T> extends true
+  ? never
+  : RunAllTupleData<T>;
+
 type RunAllSettledTuple<T> = {
-  readonly [K in keyof T]: T[K] extends Promise<Failable<infer D, infer E>>
-    ? Failable<D, E>
-    : never;
+  readonly [K in keyof T]: T[K] extends Promise<Success<infer D>>
+    ? Success<D>
+    : T[K] extends Promise<Failure<infer E>>
+      ? Failure<E>
+      : T[K] extends Promise<Failable<infer D, infer E>>
+        ? Failable<D, E>
+        : never;
 };
 
 type RunRaceData<T> = T extends readonly (infer P)[]
@@ -664,18 +686,16 @@ type RunRaceError<T> = T extends readonly (infer P)[]
     : never
   : never;
 
-function runAll<
-  T extends readonly (Promise<Failable<unknown, unknown>>)[],
->(
+function runAll<T extends readonly Promise<Failable<unknown, unknown>>[]>(
   ...promises: T
 ): AsyncRunGetIterator<
-  RunAllTupleData<T>,
+  RunAllReturnData<T>,
   RunAllTupleError<T>,
-  Failable<RunAllTupleData<T>, RunAllTupleError<T>>
+  Failable<RunAllReturnData<T>, RunAllTupleError<T>>
 > {
   async function* impl(): AsyncGenerator<
-    RunGet<RunAllTupleData<T>, RunAllTupleError<T>, Failable<unknown, unknown>>,
-    RunAllTupleData<T>,
+    RunGet<RunAllReturnData<T>, RunAllTupleError<T>, Failable<unknown, unknown>>,
+    RunAllReturnData<T>,
     unknown
   > {
     const results = await Promise.all(promises);
@@ -688,18 +708,22 @@ function runAll<
         )) as never;
       }
     }
-    const tuple = results.map((r) => (r as Success<unknown>).data) as RunAllTupleData<T>;
-    return (yield RunGet.create(success(tuple))) as never;
+    const tuple = results.map(
+      (r) => (r as Success<unknown>).data
+    ) as RunAllTupleData<T>;
+    return (yield RunGet.create(
+      success(tuple) as Failable<RunAllReturnData<T>, RunAllTupleError<T>>
+    )) as never;
   }
   return impl() as AsyncRunGetIterator<
-    RunAllTupleData<T>,
+    RunAllReturnData<T>,
     RunAllTupleError<T>,
-    Failable<RunAllTupleData<T>, RunAllTupleError<T>>
+    Failable<RunAllReturnData<T>, RunAllTupleError<T>>
   >;
 }
 
 function runAllSettled<
-  T extends readonly (Promise<Failable<unknown, unknown>>)[],
+  T extends readonly Promise<Failable<unknown, unknown>>[]
 >(
   ...promises: T
 ): AsyncRunGetIterator<
@@ -708,7 +732,11 @@ function runAllSettled<
   Failable<RunAllSettledTuple<T>, never>
 > {
   async function* impl(): AsyncGenerator<
-    RunGet<RunAllSettledTuple<T>, never, Failable<RunAllSettledTuple<T>, never>>,
+    RunGet<
+      RunAllSettledTuple<T>,
+      never,
+      Failable<RunAllSettledTuple<T>, never>
+    >,
     RunAllSettledTuple<T>,
     unknown
   > {
@@ -724,7 +752,7 @@ function runAllSettled<
   >;
 }
 
-function runRace<T extends readonly (Promise<Failable<unknown, unknown>>)[]>(
+function runRace<T extends readonly Promise<Failable<unknown, unknown>>[]>(
   ...promises: T
 ): AsyncRunGetIterator<
   RunRaceData<T>,
@@ -743,9 +771,7 @@ function runRace<T extends readonly (Promise<Failable<unknown, unknown>>)[]>(
       )) as never;
     }
     if (result.status === FailableStatus.Failure) {
-      return (yield RunGet.create(
-        result as Failure<RunRaceError<T>>
-      )) as never;
+      return (yield RunGet.create(result as Failure<RunRaceError<T>>)) as never;
     }
     return (yield RunGet.create(
       success(result.data) as Success<RunRaceData<T>>
@@ -772,7 +798,7 @@ const RUN_ASYNC_HELPERS: RunAsyncHelpers = Object.freeze({
 
 type AsyncRunBuilder<
   TYield extends RunGet<unknown, unknown, unknown> = never,
-  TResult extends RunReturn = RunReturn,
+  TResult extends RunReturn = RunReturn
 > = (_helpers: RunAsyncHelpers) => AsyncGenerator<TYield, TResult, unknown>;
 
 function readRunGetSource(yielded: unknown): Failable<unknown, unknown> {
@@ -822,7 +848,7 @@ function closeRunIterator<TYield extends RunYield, TResult extends RunReturn>(
 
 async function closeAsyncRunIterator<
   TYield extends RunGet<unknown, unknown, unknown>,
-  TResult extends RunReturn,
+  TResult extends RunReturn
 >(
   iterator: AsyncGenerator<TYield, TResult, unknown>,
   result: Failure<unknown>
@@ -856,7 +882,11 @@ function finalizeRunResult<TYield, TResult extends RunReturn>(
 
 function isAsyncRunIterator(
   iterator: Generator<RunYield, RunReturn, unknown> | AsyncGenerator<unknown>
-): iterator is AsyncGenerator<RunGet<unknown, unknown, unknown>, RunReturn, unknown> {
+): iterator is AsyncGenerator<
+  RunGet<unknown, unknown, unknown>,
+  RunReturn,
+  unknown
+> {
   return Symbol.asyncIterator in iterator;
 }
 
@@ -880,7 +910,7 @@ function runSyncIterator<TYield extends RunYield, TResult extends RunReturn>(
 
 async function runAsyncIterator<
   TYield extends RunGet<unknown, unknown, unknown>,
-  TResult extends RunReturn,
+  TResult extends RunReturn
 >(
   iterator: AsyncGenerator<TYield, TResult, unknown>
 ): Promise<InferRunResult<TYield, TResult>> {
@@ -901,13 +931,15 @@ async function runAsyncIterator<
 
 export function run<
   TYield extends RunGet<unknown, unknown, unknown> = never,
-  TResult extends RunReturn = RunReturn,
+  TResult extends RunReturn = RunReturn
 >(
-  builder: (_helpers: RunAsyncHelpers) => AsyncGenerator<TYield, TResult, unknown>
+  builder: (
+    _helpers: RunAsyncHelpers
+  ) => AsyncGenerator<TYield, TResult, unknown>
 ): Promise<InferRunResult<TYield, TResult>>;
 export function run<
   TYield extends RunYield = never,
-  TResult extends RunReturn = RunReturn,
+  TResult extends RunReturn = RunReturn
 >(
   builder: (_helpers: RunNoHelpers) => Generator<TYield, TResult, unknown>
 ): InferRunResult<TYield, TResult>;
@@ -928,9 +960,7 @@ export function run(
     return runAsyncIterator(iterator);
   }
 
-  return runSyncIterator(
-    iterator as Generator<RunYield, RunReturn, unknown>
-  );
+  return runSyncIterator(iterator as Generator<RunYield, RunReturn, unknown>);
 }
 
 export function failable<T>(value: Success<T>): Success<T>;
@@ -1041,10 +1071,8 @@ function isPromiseReturningCallbackGuardError(
   if (!(error instanceof Error)) return false;
 
   return (
-    Object.getOwnPropertyDescriptor(
-      error,
-      FAILABLE_PROMISE_CALLBACK_GUARD_TAG
-    )?.value === true
+    Object.getOwnPropertyDescriptor(error, FAILABLE_PROMISE_CALLBACK_GUARD_TAG)
+      ?.value === true
   );
 }
 
@@ -1121,9 +1149,7 @@ function normalizeFailableResult<T, E>(
   return failure(normalizeError(result.error));
 }
 
-function resolveNormalizeError(
-  normalizeOption?: FailableNormalizeErrorInput
-) {
+function resolveNormalizeError(normalizeOption?: FailableNormalizeErrorInput) {
   if (normalizeOption === undefined) return null;
   if (isNormalizedErrorsPreset(normalizeOption)) return normalizeUnknownError;
   if (!isFailableNormalizeErrorOptions(normalizeOption)) return null;
@@ -1137,8 +1163,10 @@ function isNormalizedErrorsPreset(
   if (!isObject(value)) return false;
   if (Object.keys(value).length !== 1) return false;
 
-  return Object.getOwnPropertyDescriptor(value, 'mode')?.value ===
-    NormalizedErrors.mode;
+  return (
+    Object.getOwnPropertyDescriptor(value, 'mode')?.value ===
+    NormalizedErrors.mode
+  );
 }
 
 function isFailableNormalizeErrorOptions(
