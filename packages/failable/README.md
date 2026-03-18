@@ -11,6 +11,7 @@ A `Failable<T, E>` is either `Success<T>` or `Failure<E>`.
 - `success()` / `success(data)` / `failure()` / `failure(error)` create results
 - `failable(...)` captures thrown or rejected boundaries
 - `run(...)` composes multiple `Failable` steps
+- `all(...)`, `allSettled(...)`, and `race(...)` combine multiple sources
 
 ## Install
 
@@ -70,6 +71,7 @@ if (result.isFailure) {
 | Throw the stored failure unchanged | `getOrThrow()` / `throwIfError(result)` |
 | Capture a throwing or rejecting boundary | `failable(...)` |
 | Compose multiple `Failable` steps | `run(...)` |
+| Combine multiple `Failable` sources | `all(...)`, `allSettled(...)`, `race(...)` |
 | Cross a structured-clone boundary | `toFailableLike(...)` + `failable(...)` |
 | Validate `unknown` input | `isFailable(...)`, `isSuccess(...)`, `isFailure(...)`, `isFailableLike(...)` |
 
@@ -247,12 +249,16 @@ When a helper already returns a hydrated `Failable`, yield it directly with
 `yield* helper()`. For promised sources in async builders, await them first and
 then yield the hydrated result with `yield* await promisedHelper()`.
 
+`run(...)` does not inject helper arguments. Import the top-level combinators
+you need and use them directly inside the builder.
+
 For async flows, switch to `run(async function* ...)`. Sync hydrated helpers
 still work with direct `yield* helper()`, and promised sources compose with
 `yield* await ...`:
 
 ```ts
 import {
+  all,
   failable,
   failure,
   run,
@@ -299,8 +305,10 @@ async function loadUserPage(
   userId: string,
 ): Promise<Failable<{ user: User; profile: Profile }, ApiError>> {
   return await run(async function* () {
-    const user = yield* await getUser(userId);
-    const profile = yield* await getUserProfile(userId);
+    const [user, profile] = yield* await all(
+      getUser(userId),
+      getUserProfile(userId)
+    );
 
     return success({ user, profile });
   });
@@ -311,10 +319,58 @@ async function loadUserPage(
 - sync hydrated `Failable` helpers can use direct `yield* helper()` in both sync
   and async builders
 - promised sources in async builders use `yield* await promisedHelper()`
+- in async builders, use `yield* await all(...)` to run multiple sources in
+  parallel and get a success tuple or the first failure
+- use `yield* all(...)` in sync builders when every source is already a hydrated
+  `Failable`
+- use `yield* await allSettled(...)` to wait for all sources to resolve and get
+  a `Success` tuple of each `Failable` result
+- use `yield* await race(...)` to take the first promised `Failable` to settle
 - rejected promised sources follow normal async `await` / `try` / `finally`
   semantics rather than a helper-managed rejection path
 - `run(...)` does not capture thrown values or rejected promises into `Failure`;
   wrap throwing boundaries with `failable(...)` before they enter `run(...)`
+
+## Parallel Combinators
+
+Import `all(...)`, `allSettled(...)`, and `race(...)` from the package root when
+you want to combine multiple sources outside `run(...)` or inside async
+builders.
+
+```ts
+import {
+  all,
+  allSettled,
+  race,
+  success,
+  type Failable,
+} from '@pvorona/failable';
+
+const syncTuple = all(success(1 as const), success('two' as const));
+const mixedTuple = await all(
+  success(1 as const),
+  Promise.resolve(success('two' as const))
+);
+
+const settled = await allSettled(
+  Promise.resolve(success(1 as const)),
+  Promise.resolve<Failable<number, 'missing'>>(success(2))
+);
+
+const winner = await race(
+  Promise.resolve(success('fast' as const)),
+  Promise.resolve(success('slow' as const))
+);
+```
+
+Key semantics:
+
+- `all(...)` returns the first failure in input order
+- `allSettled(...)` preserves `Failure` values in the returned success tuple
+- async `allSettled(...)` still rejects if a promise rejects; it is not
+  `Promise.allSettled(...)`
+- `race(...)` accepts promised `Failable` sources only
+- `race()` with zero sources rejects with a clear error instead of hanging
 
 ## Transport And Runtime Validation
 

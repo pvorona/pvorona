@@ -41,16 +41,16 @@ type Match<T, E> = <U>(
 ) => U;
 
 export type Failable<T, E> =
-  ((Omit<Success<T>, 'orElse' | 'getOrElse'> & {
-    readonly orElse: <U>(getValue: LazyFallback<U, E>) => Success<T>;
-    readonly getOrElse: <U>(getValue: LazyFallback<U, E>) => T;
-    readonly match: Match<T, E>;
-  }) |
-    (Omit<Failure<E>, 'orElse' | 'getOrElse'> & {
+  | (Omit<Success<T>, 'orElse' | 'getOrElse'> & {
+      readonly orElse: <U>(getValue: LazyFallback<U, E>) => Success<T>;
+      readonly getOrElse: <U>(getValue: LazyFallback<U, E>) => T;
+      readonly match: Match<T, E>;
+    })
+  | (Omit<Failure<E>, 'orElse' | 'getOrElse'> & {
       readonly orElse: <U>(getValue: LazyFallback<U, E>) => Success<U>;
       readonly getOrElse: <U>(getValue: LazyFallback<U, E>) => U;
       readonly match: Match<T, E>;
-    }));
+    });
 
 /**
  * Structured-clone-friendly representation of {@link Failable}.
@@ -247,7 +247,9 @@ const BASE_FAILURE = (() => {
   };
   node.getOrThrow = function getOrThrowFailure() {
     if (this.error === undefined) {
-      throw new Error('getOrThrow() called on Failure<void> with no error value');
+      throw new Error(
+        'getOrThrow() called on Failure<void> with no error value'
+      );
     }
     throw this.error;
   };
@@ -390,7 +392,9 @@ export function throwIfError<T, E>(
 export function toFailableLike<T>(value: Success<T>): FailableLikeSuccess<T>;
 export function toFailableLike<E>(value: Failure<E>): FailableLikeFailure<E>;
 export function toFailableLike<T, E>(value: Failable<T, E>): FailableLike<T, E>;
-export function toFailableLike<T, E>(value: Failable<T, E>): FailableLike<T, E> {
+export function toFailableLike<T, E>(
+  value: Failable<T, E>
+): FailableLike<T, E> {
   if (value.status === FailableStatus.Failure) {
     return { status: FailableStatus.Failure, error: value.error };
   }
@@ -473,7 +477,9 @@ type FailableInput =
 
 const FAILABLE_PROMISE_CALLBACK_MESSAGE =
   '`failable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await failable(promise)`.';
-const FAILABLE_PROMISE_CALLBACK_GUARD_TAG = Symbol('FailablePromiseCallbackGuard');
+const FAILABLE_PROMISE_CALLBACK_GUARD_TAG = Symbol(
+  'FailablePromiseCallbackGuard'
+);
 
 type FailablePromiseCallbackGuardError = Error & {
   readonly [FAILABLE_PROMISE_CALLBACK_GUARD_TAG]: true;
@@ -481,11 +487,7 @@ type FailablePromiseCallbackGuardError = Error & {
 
 const RUN_GET_TAG = Symbol('RunGet');
 
-class RunGet<
-  T,
-  E,
-  TSource = Failable<T, E>,
-> {
+class RunGet<T, E, TSource = Failable<T, E>> {
   readonly [RUN_GET_TAG] = true;
   public readonly source: TSource;
 
@@ -493,11 +495,7 @@ class RunGet<
     this.source = source;
   }
 
-  static create<
-    T,
-    E,
-    TSource extends Failable<T, E>,
-  >(
+  static create<T, E, TSource extends Failable<T, E>>(
     source: TSource
   ): RunGet<T, E, TSource> {
     return new RunGet<T, E, TSource>(source);
@@ -507,13 +505,13 @@ class RunGet<
 type RunGetIterator<
   T,
   E,
-  TSource extends Failable<T, E> = Failable<T, E>,
+  TSource extends Failable<T, E> = Failable<T, E>
 > = Generator<RunGet<T, E, TSource>, T, unknown>;
 
 type AsyncRunGetIterator<
   T,
   E,
-  TSource extends Failable<T, E> = Failable<T, E>,
+  TSource extends Failable<T, E> = Failable<T, E>
 > = AsyncGenerator<RunGet<T, E, TSource>, T, unknown>;
 
 type RunYield = RunGet<unknown, unknown, unknown>;
@@ -551,14 +549,14 @@ type InferRunGuaranteedFailureError<TYield> = TYield extends RunGet<
 
 type MergeRunErrors<TYield, TError> = InferRunYieldError<TYield> | TError;
 
-type InferRunSuccessResult<TYield, TData> = [InferRunYieldError<TYield>] extends [
-  never,
-]
+type InferRunSuccessResult<TYield, TData> = [
+  InferRunYieldError<TYield>
+] extends [never]
   ? Success<TData>
   : Failable<TData, InferRunYieldError<TYield>>;
 
 type InferRunNeverSuccessResult<TYield> = [InferRunYieldError<TYield>] extends [
-  never,
+  never
 ]
   ? Success<never>
   : [InferRunGuaranteedFailureError<TYield>] extends [never]
@@ -567,14 +565,18 @@ type InferRunNeverSuccessResult<TYield> = [InferRunYieldError<TYield>] extends [
 
 type InferRunUnionReturnData<TResult> =
   | ([Extract<TResult, void>] extends [never] ? never : void)
-  | (Extract<TResult, RunReturnSuccessLike> extends { readonly data: infer TData }
+  | (Extract<TResult, RunReturnSuccessLike> extends {
+      readonly data: infer TData;
+    }
       ? TData
       : never);
 
-type InferRunUnionReturnError<TResult> =
-  Extract<TResult, RunReturnFailureLike> extends { readonly error: infer TError }
-    ? TError
-    : never;
+type InferRunUnionReturnError<TResult> = Extract<
+  TResult,
+  RunReturnFailureLike
+> extends { readonly error: infer TError }
+  ? TError
+  : never;
 
 type InferRunResult<TYield, TResult> = [TResult] extends [never]
   ? [InferRunYieldError<TYield>] extends [never]
@@ -641,19 +643,232 @@ function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
 
 type SyncRunBuilder<
   TYield extends RunYield = never,
-  TResult extends RunReturn = RunReturn,
+  TResult extends RunReturn = RunReturn
 > = (_helpers: RunNoHelpers) => Generator<TYield, TResult, unknown>;
-
-type AsyncRunBuilder<
-  TYield extends RunGet<unknown, unknown, unknown> = never,
-  TResult extends RunReturn = RunReturn,
-> = (_helpers: RunNoHelpers) => AsyncGenerator<TYield, TResult, unknown>;
 
 type RunNoHelpers = {
   readonly __runNoHelpers?: never;
 };
 
 const RUN_NO_HELPERS: RunNoHelpers = Object.freeze({});
+
+type FailableSource<T, E> = Failable<T, E> | PromiseLike<Failable<T, E>>;
+
+type FailableSourceError<T> = T extends Success<unknown>
+  ? never
+  : T extends Failure<infer E>
+  ? E
+  : T extends Failable<unknown, infer E>
+  ? E
+  : T extends PromiseLike<Success<unknown>>
+  ? never
+  : T extends PromiseLike<Failure<infer E>>
+  ? E
+  : T extends PromiseLike<Failable<unknown, infer E>>
+  ? E
+  : never;
+
+type FailableSourceData<T> = T extends Success<infer D>
+  ? D
+  : T extends Failure<unknown>
+  ? never
+  : T extends Failable<infer D, unknown>
+  ? D
+  : T extends PromiseLike<Success<infer D>>
+  ? D
+  : T extends PromiseLike<Failure<unknown>>
+  ? never
+  : T extends PromiseLike<Failable<infer D, unknown>>
+  ? D
+  : never;
+
+type AllTupleError<T> = T extends readonly (infer P)[]
+  ? FailableSourceError<P>
+  : never;
+
+type AllTupleData<T> = {
+  readonly [K in keyof T]: FailableSourceData<T[K]>;
+};
+
+type FailableSourceSettled<T> = T extends Success<infer D>
+  ? Success<D>
+  : T extends Failure<infer E>
+  ? Failure<E>
+  : T extends Failable<infer D, infer E>
+  ? Failable<D, E>
+  : T extends PromiseLike<Success<infer D>>
+  ? Success<D>
+  : T extends PromiseLike<Failure<infer E>>
+  ? Failure<E>
+  : T extends PromiseLike<Failable<infer D, infer E>>
+  ? Failable<D, E>
+  : never;
+
+type FailableSourceIsAsync<T> = T extends PromiseLike<
+  Failable<unknown, unknown>
+>
+  ? true
+  : false;
+
+type FailableSourceHasGuaranteedFailure<T> = T extends
+  | Failure<unknown>
+  | PromiseLike<Failure<unknown>>
+  ? true
+  : false;
+
+type TupleHasAsync<T> = T extends readonly [infer First, ...infer Rest]
+  ? FailableSourceIsAsync<First> extends true
+    ? true
+    : Rest extends readonly unknown[]
+    ? TupleHasAsync<Rest>
+    : false
+  : false;
+
+/** True when at least one element of T is Failure<...> or PromiseLike<Failure<...>>. */
+type AllTupleHasGuaranteedFailure<T> = T extends readonly [
+  infer First,
+  ...infer Rest
+]
+  ? FailableSourceHasGuaranteedFailure<First> extends true
+    ? true
+    : Rest extends readonly unknown[]
+    ? AllTupleHasGuaranteedFailure<Rest>
+    : false
+  : false;
+
+type AllReturnData<T> = AllTupleHasGuaranteedFailure<T> extends true
+  ? never
+  : AllTupleData<T>;
+
+type AllSettledTuple<T> = {
+  readonly [K in keyof T]: FailableSourceSettled<T[K]>;
+};
+
+type RaceData<T> = T extends readonly (infer P)[]
+  ? FailableSourceData<P>
+  : never;
+
+type RaceError<T> = T extends readonly (infer P)[]
+  ? FailableSourceError<P>
+  : never;
+
+function toValidatedFailable(source: unknown): Failable<unknown, unknown> {
+  if (isFailable(source)) return source;
+
+  return failure(source);
+}
+
+function hasPromiseLikeSources(sources: readonly unknown[]): boolean {
+  for (const source of sources) {
+    if (isPromiseLike(source)) return true;
+  }
+
+  return false;
+}
+
+async function resolveFailableSources(
+  sources: readonly unknown[]
+): Promise<readonly Failable<unknown, unknown>[]> {
+  const results = await Promise.all(
+    sources.map((source) => Promise.resolve(source))
+  );
+
+  return results.map((result) => toValidatedFailable(result));
+}
+
+function combineAllResults<T extends readonly unknown[]>(
+  results: readonly Failable<unknown, unknown>[]
+): Failable<AllReturnData<T>, AllTupleError<T>> {
+  for (const result of results) {
+    if (result.status === FailableStatus.Failure) {
+      return result as Failure<AllTupleError<T>>;
+    }
+  }
+
+  const tuple = results.map(
+    (result) => (result as Success<unknown>).data
+  ) as AllTupleData<T>;
+
+  return success(tuple) as Failable<AllReturnData<T>, AllTupleError<T>>;
+}
+
+function combineAllSettledResults<T extends readonly unknown[]>(
+  results: readonly Failable<unknown, unknown>[]
+): Success<AllSettledTuple<T>> {
+  return success(results as AllSettledTuple<T>);
+}
+
+export function all<
+  const T extends readonly FailableSource<unknown, unknown>[]
+>(
+  ...sources: T
+): TupleHasAsync<T> extends true
+  ? Promise<Failable<AllReturnData<T>, AllTupleError<T>>>
+  : Failable<AllReturnData<T>, AllTupleError<T>> {
+  if (!hasPromiseLikeSources(sources)) {
+    return combineAllResults<T>(
+      sources.map((source) => toValidatedFailable(source))
+    ) as TupleHasAsync<T> extends true
+      ? Promise<Failable<AllReturnData<T>, AllTupleError<T>>>
+      : Failable<AllReturnData<T>, AllTupleError<T>>;
+  }
+
+  return resolveFailableSources(sources).then((results) =>
+    combineAllResults<T>(results)
+  ) as TupleHasAsync<T> extends true
+    ? Promise<Failable<AllReturnData<T>, AllTupleError<T>>>
+    : Failable<AllReturnData<T>, AllTupleError<T>>;
+}
+
+export function allSettled<
+  const T extends readonly FailableSource<unknown, unknown>[]
+>(
+  ...sources: T
+): TupleHasAsync<T> extends true
+  ? Promise<Success<AllSettledTuple<T>>>
+  : Success<AllSettledTuple<T>> {
+  if (!hasPromiseLikeSources(sources)) {
+    return combineAllSettledResults<T>(
+      sources.map((source) => toValidatedFailable(source))
+    ) as TupleHasAsync<T> extends true
+      ? Promise<Success<AllSettledTuple<T>>>
+      : Success<AllSettledTuple<T>>;
+  }
+
+  return resolveFailableSources(sources).then((results) =>
+    combineAllSettledResults<T>(results)
+  ) as TupleHasAsync<T> extends true
+    ? Promise<Success<AllSettledTuple<T>>>
+    : Success<AllSettledTuple<T>>;
+}
+
+export function race<
+  const T extends readonly PromiseLike<Failable<unknown, unknown>>[]
+>(...sources: T): Promise<Failable<RaceData<T>, RaceError<T>>> {
+  if (sources.length === 0) {
+    return Promise.reject(
+      new Error('`race()` requires at least one promised `Failable` source.')
+    ) as Promise<Failable<RaceData<T>, RaceError<T>>>;
+  }
+
+  for (const source of sources) {
+    if (!isPromiseLike(source)) {
+      return Promise.reject(
+        new Error('`race()` only accepts promised `Failable` sources.')
+      ) as Promise<Failable<RaceData<T>, RaceError<T>>>;
+    }
+  }
+
+  return Promise.race(sources.map((source) => Promise.resolve(source))).then(
+    (result) =>
+      toValidatedFailable(result) as Failable<RaceData<T>, RaceError<T>>
+  );
+}
+
+type AsyncRunBuilder<
+  TYield extends RunGet<unknown, unknown, unknown> = never,
+  TResult extends RunReturn = RunReturn
+> = (_helpers: RunNoHelpers) => AsyncGenerator<TYield, TResult, unknown>;
 
 function readRunGetSource(yielded: unknown): Failable<unknown, unknown> {
   if (!(yielded instanceof RunGet)) {
@@ -702,7 +917,7 @@ function closeRunIterator<TYield extends RunYield, TResult extends RunReturn>(
 
 async function closeAsyncRunIterator<
   TYield extends RunGet<unknown, unknown, unknown>,
-  TResult extends RunReturn,
+  TResult extends RunReturn
 >(
   iterator: AsyncGenerator<TYield, TResult, unknown>,
   result: Failure<unknown>
@@ -736,7 +951,11 @@ function finalizeRunResult<TYield, TResult extends RunReturn>(
 
 function isAsyncRunIterator(
   iterator: Generator<RunYield, RunReturn, unknown> | AsyncGenerator<unknown>
-): iterator is AsyncGenerator<RunGet<unknown, unknown, unknown>, RunReturn, unknown> {
+): iterator is AsyncGenerator<
+  RunGet<unknown, unknown, unknown>,
+  RunReturn,
+  unknown
+> {
   return Symbol.asyncIterator in iterator;
 }
 
@@ -760,7 +979,7 @@ function runSyncIterator<TYield extends RunYield, TResult extends RunReturn>(
 
 async function runAsyncIterator<
   TYield extends RunGet<unknown, unknown, unknown>,
-  TResult extends RunReturn,
+  TResult extends RunReturn
 >(
   iterator: AsyncGenerator<TYield, TResult, unknown>
 ): Promise<InferRunResult<TYield, TResult>> {
@@ -781,13 +1000,13 @@ async function runAsyncIterator<
 
 export function run<
   TYield extends RunGet<unknown, unknown, unknown> = never,
-  TResult extends RunReturn = RunReturn,
+  TResult extends RunReturn = RunReturn
 >(
   builder: (_helpers: RunNoHelpers) => AsyncGenerator<TYield, TResult, unknown>
 ): Promise<InferRunResult<TYield, TResult>>;
 export function run<
   TYield extends RunYield = never,
-  TResult extends RunReturn = RunReturn,
+  TResult extends RunReturn = RunReturn
 >(
   builder: (_helpers: RunNoHelpers) => Generator<TYield, TResult, unknown>
 ): InferRunResult<TYield, TResult>;
@@ -796,17 +1015,19 @@ export function run(
     | SyncRunBuilder<RunYield, RunReturn>
     | AsyncRunBuilder<RunGet<unknown, unknown, unknown>, RunReturn>
 ): unknown {
-  const probeIterator = (
-    builder as (_helpers: RunNoHelpers) =>
+  const iterator = (
+    builder as (
+      _helpers: RunNoHelpers
+    ) =>
       | Generator<RunYield, RunReturn, unknown>
       | AsyncGenerator<RunGet<unknown, unknown, unknown>, RunReturn, unknown>
   )(RUN_NO_HELPERS);
 
-  if (isAsyncRunIterator(probeIterator)) {
-    return runAsyncIterator(probeIterator);
+  if (isAsyncRunIterator(iterator)) {
+    return runAsyncIterator(iterator);
   }
 
-  return runSyncIterator(probeIterator);
+  return runSyncIterator(iterator as Generator<RunYield, RunReturn, unknown>);
 }
 
 export function failable<T>(value: Success<T>): Success<T>;
@@ -917,10 +1138,8 @@ function isPromiseReturningCallbackGuardError(
   if (!(error instanceof Error)) return false;
 
   return (
-    Object.getOwnPropertyDescriptor(
-      error,
-      FAILABLE_PROMISE_CALLBACK_GUARD_TAG
-    )?.value === true
+    Object.getOwnPropertyDescriptor(error, FAILABLE_PROMISE_CALLBACK_GUARD_TAG)
+      ?.value === true
   );
 }
 
@@ -997,9 +1216,7 @@ function normalizeFailableResult<T, E>(
   return failure(normalizeError(result.error));
 }
 
-function resolveNormalizeError(
-  normalizeOption?: FailableNormalizeErrorInput
-) {
+function resolveNormalizeError(normalizeOption?: FailableNormalizeErrorInput) {
   if (normalizeOption === undefined) return null;
   if (isNormalizedErrorsPreset(normalizeOption)) return normalizeUnknownError;
   if (!isFailableNormalizeErrorOptions(normalizeOption)) return null;
@@ -1013,8 +1230,10 @@ function isNormalizedErrorsPreset(
   if (!isObject(value)) return false;
   if (Object.keys(value).length !== 1) return false;
 
-  return Object.getOwnPropertyDescriptor(value, 'mode')?.value ===
-    NormalizedErrors.mode;
+  return (
+    Object.getOwnPropertyDescriptor(value, 'mode')?.value ===
+    NormalizedErrors.mode
+  );
 }
 
 function isFailableNormalizeErrorOptions(

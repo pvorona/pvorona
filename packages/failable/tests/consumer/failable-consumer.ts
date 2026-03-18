@@ -1,4 +1,6 @@
 import {
+  all,
+  allSettled,
   failable,
   failure,
   FailableStatus,
@@ -7,6 +9,7 @@ import {
   isFailure,
   isSuccess,
   NormalizedErrors,
+  race,
   run,
   success,
   throwIfError,
@@ -35,6 +38,8 @@ function expectType<Condition extends true>(condition: Condition): void {
 
 type ConsumerModule = typeof import('@pvorona/failable');
 type ExpectedRuntimeExportName =
+  | 'all'
+  | 'allSettled'
   | 'FailableStatus'
   | 'NormalizedErrors'
   | 'failable'
@@ -43,6 +48,7 @@ type ExpectedRuntimeExportName =
   | 'isFailableLike'
   | 'isFailure'
   | 'isSuccess'
+  | 'race'
   | 'run'
   | 'success'
   | 'throwIfError'
@@ -471,6 +477,33 @@ expectType<
 >(true);
 void runAsyncPromisedSourceUnion;
 
+const syncAll = all(success(1 as const), success('two' as const));
+const syncAllAsFailable: Failable<readonly [1, 'two'], never> = syncAll;
+void syncAllAsFailable;
+
+const mixedAll = all(
+  success(1 as const),
+  Promise.resolve(success('two' as const))
+);
+const mixedAllAsPromise: Promise<Failable<readonly [1, 'two'], never>> = mixedAll;
+void mixedAllAsPromise;
+
+const settledAll = allSettled(
+  Promise.resolve(success(1 as const)),
+  Promise.resolve(failure('boom' as const))
+);
+const settledAllAsPromise: Promise<
+  Success<readonly [Success<1>, Failure<'boom'>]>
+> = settledAll;
+void settledAllAsPromise;
+
+const racedResult = race(
+  Promise.resolve(success(1 as const)),
+  Promise.resolve(failure('boom' as const))
+);
+const racedResultAsPromise: Promise<Failable<1, 'boom'>> = racedResult;
+void racedResultAsPromise;
+
 const runAsyncHelperReturn = run(async function* () {
   return helperResult();
 });
@@ -485,6 +518,13 @@ const runAsyncThrowOnly = run(async function* () {
   throw new Error('boom');
 });
 expectType<Equal<typeof runAsyncThrowOnly, Promise<never>>>(true);
+
+// @ts-expect-error `run(...)` async builders no longer receive combinator helpers.
+run(async function* ({ all: runAll }) {
+  const [value] = yield* await runAll(Promise.resolve(success(123 as const)));
+
+  return success(value);
+});
 
 run(function* () {
   // @ts-expect-error sync `run(...)` builders only accept hydrated `Failable` values.
@@ -504,6 +544,9 @@ run(async function* () {
 run(function* () {
   return 123 as const;
 });
+
+// @ts-expect-error `race(...)` accepts promised `Failable` sources only.
+race(success(123 as const));
 
 const runEmpty = run(function* () {
   return;
@@ -554,5 +597,9 @@ void runAsyncSuccess;
 void runAsyncDirectHelper;
 void runAsyncNeverSuccess;
 void runAsyncFailure;
+void syncAll;
+void mixedAll;
+void settledAll;
+void racedResult;
 void runAsyncHelperReturn;
 void runAsyncThrowOnly;
