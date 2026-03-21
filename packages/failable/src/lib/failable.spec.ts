@@ -836,6 +836,80 @@ describe('getOrThrow()', () => {
   });
 });
 
+describe('map()', () => {
+  describe('Success receiver', () => {
+    it('returns Success with transformed data', () => {
+      const source = success(123);
+
+      const result = source.map((value) => value.toString());
+
+      expect(result).toStrictEqual(success('123'));
+    });
+
+    it('rethrows callback errors unchanged', () => {
+      const thrown = new Error('map boom');
+
+      try {
+        success(123).map(() => {
+          throw thrown;
+        });
+      } catch (error) {
+        expect(error).toBe(thrown);
+        return;
+      }
+
+      throw new Error('Expected `map()` to rethrow the callback error');
+    });
+  });
+
+  describe('Failure receiver', () => {
+    it('returns the original Failure unchanged', () => {
+      const source = failure('boom' as const);
+
+      const result = source.map(() => 123);
+
+      expect(result).toBe(source);
+    });
+  });
+});
+
+describe('flatMap()', () => {
+  describe('Success receiver', () => {
+    it('returns the callback result unchanged', () => {
+      const expected = success('123');
+
+      const result = success(123).flatMap(() => expected);
+
+      expect(result).toBe(expected);
+    });
+
+    it('rethrows callback errors unchanged', () => {
+      const thrown = new Error('flatMap boom');
+
+      try {
+        success(123).flatMap(() => {
+          throw thrown;
+        });
+      } catch (error) {
+        expect(error).toBe(thrown);
+        return;
+      }
+
+      throw new Error('Expected `flatMap()` to rethrow the callback error');
+    });
+  });
+
+  describe('Failure receiver', () => {
+    it('returns the original Failure unchanged', () => {
+      const source = failure('boom' as const);
+
+      const result = source.flatMap(() => success(123));
+
+      expect(result).toBe(source);
+    });
+  });
+});
+
 describe('throwIfError()', () => {
   it('returns without throwing for success input', () => {
     expect(throwIfError(success(123 as const))).toBeUndefined();
