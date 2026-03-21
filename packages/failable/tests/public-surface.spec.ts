@@ -49,6 +49,40 @@ function divide(a: number, b: number): Failable<number, string> {
   return success(a / b);
 }
 
+function expectThrowBoundaryToNormalizeFailure(
+  runThrowBoundary: () => unknown,
+  rawError: unknown,
+): void {
+  const normalized = failable(failure(rawError), NormalizedErrors);
+
+  if (!isFailure(normalized)) {
+    throw new Error('Expected normalized failure result');
+  }
+
+  try {
+    runThrowBoundary();
+  } catch (error) {
+    expect(error).toBeInstanceOf(Error);
+
+    if (rawError instanceof Error) {
+      expect(error).toBe(rawError);
+      return;
+    }
+
+    const thrown = error as Error & { cause?: unknown };
+    expect(thrown.message).toBe(normalized.error.message);
+    expect(thrown.cause).toBe(normalized.error.cause);
+
+    if (normalized.error instanceof AggregateError) {
+      expect(error).toBeInstanceOf(AggregateError);
+    }
+
+    return;
+  }
+
+  throw new Error('Expected throw boundary to throw');
+}
+
 type ReadPortError =
   | { readonly code: 'missing' }
   | { readonly code: 'invalid'; readonly raw: string };
@@ -495,17 +529,13 @@ describe('public surface', () => {
     });
   });
 
-  it('throws the stored failure unchanged with `throwIfFailure(...)`', () => {
+  it('normalizes string failures into Error values with `throwIfFailure(...)`', () => {
     const result = divide(10, 0);
 
-    try {
-      throwIfFailure(result);
-    } catch (error) {
-      expect(error).toBe('Cannot divide by zero');
-      return;
-    }
-
-    throw new Error('Expected throwIfFailure(...) to throw the stored error');
+    expectThrowBoundaryToNormalizeFailure(
+      () => throwIfFailure(result),
+      'Cannot divide by zero',
+    );
   });
 
   it('supports the README `getOrThrow()` example', () => {
@@ -516,22 +546,19 @@ describe('public surface', () => {
     expect(value).toBe(5);
   });
 
-  it('throws the stored failure unchanged with `getOrThrow()`', () => {
+  it('normalizes string failures into Error values with `getOrThrow()`', () => {
     const result = divide(10, 0);
 
-    try {
-      result.getOrThrow();
-    } catch (error) {
-      expect(error).toBe('Cannot divide by zero');
-      return;
-    }
-
-    throw new Error('Expected getOrThrow() to throw the stored error');
+    expectThrowBoundaryToNormalizeFailure(
+      () => result.getOrThrow(),
+      'Cannot divide by zero',
+    );
   });
 
-  it('throws a descriptive Error for `failure().getOrThrow()`', () => {
-    expect(() => failure().getOrThrow()).toThrow(
-      'getOrThrow() called on Failure<void> with no error value'
+  it('normalizes `failure().getOrThrow()` into an Error value', () => {
+    expectThrowBoundaryToNormalizeFailure(
+      () => failure().getOrThrow(),
+      undefined,
     );
   });
 

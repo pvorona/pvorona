@@ -169,6 +169,38 @@ function createNullPrototypeObject<T extends Record<string, unknown>>(
   ) as T;
 }
 
+function expectThrowBoundaryToNormalizeFailure(
+  runThrowBoundary: () => unknown,
+  rawError: unknown
+): void {
+  const normalized = failable(failure(rawError), NormalizedErrors);
+  ensureFailure(normalized);
+
+  try {
+    runThrowBoundary();
+  } catch (thrown) {
+    expect(thrown).toBeInstanceOf(Error);
+
+    if (rawError instanceof Error) {
+      expect(thrown).toBe(rawError);
+      return;
+    }
+
+    const actual = thrown as Error & { cause?: unknown };
+    expect(actual.message).toBe(normalized.error.message);
+    expect(actual.cause).toBe(normalized.error.cause);
+    expect(thrown).not.toBe(rawError);
+
+    if (normalized.error instanceof AggregateError) {
+      expect(thrown).toBeInstanceOf(AggregateError);
+    }
+
+    return;
+  }
+
+  throw new Error('Expected throw boundary to throw');
+}
+
 function throwDirectly(error: unknown): never {
   throw error;
 }
@@ -834,16 +866,24 @@ describe('getOrThrow()', () => {
   });
 
   describe('Failure receiver', () => {
-    it('throws the stored error', () => {
+    it('preserves existing Error instances', () => {
       const error = new Error(faker.string.uuid());
 
       expect(() => failure(error).getOrThrow()).toThrow(error);
     });
 
-    it('throws a descriptive Error for void failures without an error value', () => {
-      expect(() => failure().getOrThrow()).toThrow(
-        'getOrThrow() called on Failure<void> with no error value'
-      );
+    it.each(RAW_ERROR_CASES)(
+      'normalizes non-Error failure values into Error objects ($label)',
+      ({ error }) => {
+        expectThrowBoundaryToNormalizeFailure(
+          () => failure(error).getOrThrow(),
+          error
+        );
+      }
+    );
+
+    it('normalizes void failures into Error objects', () => {
+      expectThrowBoundaryToNormalizeFailure(() => failure().getOrThrow(), undefined);
     });
 
     it('returns never for failure types', () => {
@@ -950,11 +990,8 @@ describe('throwIfFailure()', () => {
     expect(throwIfFailure(success(123 as const))).toBeUndefined();
   });
 
-  it('throws the stored error unchanged for failure input', () => {
-    const error = {
-      code: faker.string.uuid(),
-      retryable: faker.datatype.boolean(),
-    };
+  it('preserves existing Error instances for failure input', () => {
+    const error = new Error(faker.string.uuid());
 
     try {
       throwIfFailure(failure(error));
@@ -964,6 +1001,23 @@ describe('throwIfFailure()', () => {
     }
 
     throw new Error('Expected throwIfFailure() to throw the stored error');
+  });
+
+  it.each(RAW_ERROR_CASES)(
+    'normalizes non-Error failure values into Error objects ($label)',
+    ({ error }) => {
+      expectThrowBoundaryToNormalizeFailure(
+        () => throwIfFailure(failure(error)),
+        error
+      );
+    }
+  );
+
+  it('normalizes void failures into Error objects', () => {
+    expectThrowBoundaryToNormalizeFailure(
+      () => throwIfFailure(failure()),
+      undefined
+    );
   });
 
   it('narrows the same union variable after the helper returns', () => {

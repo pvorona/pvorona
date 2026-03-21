@@ -69,7 +69,7 @@ if (result.isFailure) {
 | Read the value or provide a fallback | `getOr(...)` / `getOrElse(...)` |
 | Recover to `Success<T>` | `or(...)` / `orElse(...)` |
 | Map both branches to one output | `match(onSuccess, onFailure)` |
-| Throw the stored failure unchanged | `getOrThrow()` / `throwIfFailure(result)` |
+| Throw an `Error` from a failure | `getOrThrow()` / `throwIfFailure(result)` |
 | Capture a throwing or rejecting boundary | `failable(...)` |
 | Compose multiple `Failable` steps | `run(...)` |
 | Combine multiple `Failable` sources | `all(...)`, `allSettled(...)`, `race(...)` |
@@ -90,8 +90,15 @@ you want something shorter, use the helper that matches the job:
 - `result.orElse(() => fallback)`: lazy recovery to `Success<T>`
 - `result.orElse((error) => fallback)`: lazy recovery to `Success<T>` derived from the failure
 - `result.match(onSuccess, onFailure)`: map both branches to one output
-- `result.getOrThrow()`: return the success value or throw `result.error`
-- `throwIfFailure(result)`: throw `result.error` and narrow the same variable
+- `result.getOrThrow()`: return the success value or throw an `Error` derived from the failure
+- `throwIfFailure(result)`: throw an `Error` derived from the failure and narrow the same variable
+
+Both throw helpers preserve existing `Error` instances unchanged. Other
+failure values are normalized with the built-in rules: arrays become
+`AggregateError`; plain objects become `Error` with `cause`; primitives and
+`undefined` become `Error(String(value), { cause: value })`. Use
+`failable(..., NormalizedErrors)` or a custom `normalizeError(...)` earlier
+when you need a specific normalized `Error` shape before the throw boundary.
 
 Use the lazy forms when the fallback is expensive or has side effects. Failure
 callbacks always receive the stored error, so `() => ...` can ignore it and
@@ -503,8 +510,8 @@ if (isFailable(candidate) && candidate.isFailure) {
 - `type Success<T>` / `type Failure<E>`: hydrated result variants
 - `type FailableLike<T, E>`: structured-clone-friendly wire shape
 - `success()` / `success(data)` / `failure()` / `failure(error)`: create hydrated results
-- `throwIfFailure(result)` / `result.getOrThrow()`: throw the stored failure
-  unchanged
+- `throwIfFailure(result)` / `result.getOrThrow()`: throw an `Error`,
+  preserving existing `Error` instances unchanged
 - `failable(...)`: preserve, rehydrate, capture, or normalize failures at
   a boundary
 - `run(...)`: compose `Failable` steps without nested branching

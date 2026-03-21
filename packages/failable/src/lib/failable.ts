@@ -247,6 +247,10 @@ function resolveLazyFallback<U, E>(getValue: () => U, error: E): U {
   return (getValue as unknown as (error: E) => U)(error);
 }
 
+function throwNormalizedFailure(error: unknown): never {
+  throw normalizeUnknownError(error);
+}
+
 const BASE_SUCCESS = (() => {
   const node: Mutable<InternalSuccess<unknown>> = Object.create(BASE_FAILABLE);
   node[SUCCESS_TAG] = true;
@@ -306,12 +310,7 @@ const BASE_FAILURE = (() => {
     return resolveLazyFallback(getValue, this.error);
   };
   node.getOrThrow = function getOrThrowFailure() {
-    if (this.error === undefined) {
-      throw new Error(
-        'getOrThrow() called on Failure<void> with no error value'
-      );
-    }
-    throw this.error;
+    throwNormalizedFailure(this.error);
   };
   node.match = function matchFailure(
     this: InternalFailure<unknown>,
@@ -390,8 +389,10 @@ const BASE_FAILURE = (() => {
  * - `or(...)` and `getOr(...)` are eager (fallback is evaluated before the call). Use branching for
  *   lazy fallbacks.
  * - Without normalization options, whatever you throw/reject becomes `.error` unchanged.
- * - `throwIfFailure(result)` also throws `.error` unchanged. Normalize earlier with
- *   `failable(..., NormalizedErrors)` or a custom `normalizeError` if you need `Error` values.
+ * - `getOrThrow()` and `throwIfFailure(result)` always throw `Error` values. Existing `Error`
+ *   instances are preserved unchanged; other failure values use the built-in normalization rules.
+ * - Normalize earlier with `failable(..., NormalizedErrors)` or a custom `normalizeError`
+ *   if you need a specific `Error` shape before the throw boundary.
  * - Callback typing follows runtime branches: purely synchronous callbacks return `Failable<...>`;
  *   purely `PromiseLike`-returning callbacks (including `async` functions) return
  *   `Promise<Failable<...>>`.
@@ -452,16 +453,19 @@ export function failure<const E>(error?: E): Failure<E | void> {
 }
 
 /**
- * Throw `result.error` unchanged on failure, or narrow the same result to {@link Success} on return.
+ * Throw an `Error` on failure, or narrow the same result to {@link Success} on return.
  *
  * Use this when you want control-flow narrowing without replacing the original variable.
  * Use `result.getOrThrow()` when you need the success value itself in expression or return position.
- * If you need `Error`-shaped failures, normalize earlier with `failable(...)`.
+ * Existing `Error` instances are thrown unchanged. Other failure values are normalized with the
+ * built-in rules. Normalize earlier with `failable(...)` when you need a specific `Error` shape.
  */
 export function throwIfFailure<T, E>(
   result: Failable<T, E>
 ): asserts result is Success<T> {
-  if (result.status === FailableStatus.Failure) throw result.error;
+  if (result.status === FailableStatus.Failure) {
+    throwNormalizedFailure(result.error);
+  }
 }
 
 export function toFailableLike<T>(value: Success<T>): FailableLikeSuccess<T>;
