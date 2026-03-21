@@ -1064,7 +1064,7 @@ describe('match()', () => {
         },
         (error) => {
           expectTypeOf(error).toEqualTypeOf<{
-            code: 'pricing_unavailable';
+            readonly code: 'pricing_unavailable';
           }>();
           return `Cannot quote fee: ${error.code}`;
         }
