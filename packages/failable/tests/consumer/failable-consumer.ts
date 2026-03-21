@@ -216,6 +216,43 @@ const unionMatch = union.match(
 );
 expectType<Equal<typeof unionMatch, string>>(true);
 
+const okMapped = ok.map((value) => value.toString());
+expectType<Equal<typeof okMapped, Success<string>>>(true);
+
+const problemMapped = problem.map(() => 123);
+expectType<Equal<typeof problemMapped, Failure<string>>>(true);
+
+const unionMapped = union.map((value) => value.toString());
+expectType<Equal<typeof unionMapped, Failable<string, string>>>(true);
+
+const okFlatMapped = ok.flatMap((value) => success(value.toString()));
+expectType<Equal<typeof okFlatMapped, Success<string>>>(true);
+
+const okFlatMappedToFailure = ok.flatMap((value) =>
+  failure({ code: 'mapped-error' as const, value })
+);
+expectType<
+  Equal<
+    typeof okFlatMappedToFailure,
+    Failure<{ readonly code: 'mapped-error'; readonly value: number }>
+  >
+>(true);
+
+const problemFlatMapped = problem.flatMap(() => success(123));
+expectType<Equal<typeof problemFlatMapped, Failure<string>>>(true);
+
+const unionFlatMapped = union.flatMap((value) =>
+  value > 0
+    ? success(value.toString())
+    : failure({ code: 'mapped-error' as const })
+);
+expectType<
+  Equal<
+    typeof unionFlatMapped,
+    Failable<string, string | { readonly code: 'mapped-error' }>
+  >
+>(true);
+
 const readOkData = () => {
   throwIfError(ok);
 
@@ -572,6 +609,13 @@ void unionOrElseFromError;
 void unionGetOrElse;
 void unionGetOrElseFromError;
 void unionMatch;
+void okMapped;
+void problemMapped;
+void unionMapped;
+void okFlatMapped;
+void okFlatMappedToFailure;
+void problemFlatMapped;
+void unionFlatMapped;
 void readOkData;
 void ensureProblem;
 void readEnsuredUnionData;
