@@ -229,7 +229,7 @@ const okFlatMapped = ok.flatMap((value) => success(value.toString()));
 expectType<Equal<typeof okFlatMapped, Success<string>>>(true);
 
 const okFlatMappedToFailure = ok.flatMap((value) =>
-  failure({ code: 'mapped-error' as const, value })
+  failure({ code: 'mapped-error', value })
 );
 expectType<
   Equal<
@@ -351,25 +351,25 @@ const normalizedRejectedValue = failable(
 expectType<Equal<typeof normalizedRejectedValue, Promise<Failure<Error>>>>(true);
 
 const helperResult = (): Failable<'helper-data', 'helper-error'> =>
-  success('helper-data' as const);
+  success('helper-data');
 const typedNeverSuccess: Success<never> = success(undefined as never);
 
 // @ts-expect-error `run(...)` builders no longer receive helper arguments.
 run(function* ({ get }) {
   void get;
 
-  return success(123 as const);
+  return success(123);
 });
 
 const runSuccess = run(function* () {
-  const value = yield* success(123 as const);
+  const value = yield* success(123);
 
   return success(value);
 });
 expectType<Equal<typeof runSuccess, Success<123>>>(true);
 
 const runNoYieldSuccess = run(function* () {
-  return success(42 as const);
+  return success(42);
 });
 expectType<Equal<typeof runNoYieldSuccess, Success<42>>>(true);
 
@@ -379,7 +379,7 @@ const runNeverSuccess = run(function* () {
 expectType<Equal<typeof runNeverSuccess, Success<never>>>(true);
 
 const runInlineFailure = run(function* () {
-  const value = yield* failure('inline-error' as const);
+  const value = yield* failure('inline-error');
 
   return success(value);
 });
@@ -387,7 +387,7 @@ expectType<Equal<typeof runInlineFailure, Failure<'inline-error'>>>(true);
 
 const runNeverSuccessWithYieldedError = run(function* () {
   const value = yield* (
-    success(123 as const) as Failable<123, 'source-error'>
+    success(123) as Failable<123, 'source-error'>
   );
 
   void value;
@@ -401,9 +401,9 @@ void runNeverSuccessWithYieldedErrorAsFailable;
 
 const runNeverSuccessWithGuaranteedFailureInYieldSet = run(function* () {
   const maybeValue = yield* (
-    success(123 as const) as Failable<123, 'source-error'>
+    success(123) as Failable<123, 'source-error'>
   );
-  const guaranteedValue = yield* failure('inline-error' as const);
+  const guaranteedValue = yield* failure('inline-error');
 
   void maybeValue;
   void guaranteedValue;
@@ -434,14 +434,14 @@ const shouldUseString = true as boolean;
 
 const runDistributed = run(function* () {
   const wrapper = shouldUseString
-    ? (success('wrapped-string' as const) as Failable<
+    ? (success('wrapped-string') as Failable<
         'wrapped-string',
         'wrapped-string-error'
       >)
-    : (success(123 as const) as Failable<123, 'wrapped-number-error'>);
+    : (success(123) as Failable<123, 'wrapped-number-error'>);
   const value = yield* wrapper;
 
-  return shouldUseString ? success(value) : failure('builder-error' as const);
+  return shouldUseString ? success(value) : failure('builder-error');
 });
 const runDistributedAsFailable: Failable<
   'wrapped-string' | 123,
@@ -450,8 +450,8 @@ const runDistributedAsFailable: Failable<
 void runDistributedAsFailable;
 
 const runAsyncSuccess = run(async function* () {
-  const first = yield* success(123 as const);
-  const second = yield* await Promise.resolve(success('ready' as const));
+  const first = yield* success(123);
+  const second = yield* await Promise.resolve(success('ready'));
 
   return success([first, second] as const);
 });
@@ -461,7 +461,7 @@ expectType<
 
 const runAsyncDirectHelper = run(async function* () {
   const first = yield* helperResult();
-  const second = yield* await Promise.resolve(success('ready' as const));
+  const second = yield* await Promise.resolve(success('ready'));
 
   return success([first, second] as const);
 });
@@ -476,7 +476,7 @@ const runAsyncNeverSuccess = run(async function* () {
 expectType<Equal<typeof runAsyncNeverSuccess, Promise<Success<never>>>>(true);
 
 const runAsyncFailure = run(async function* () {
-  const value = yield* await Promise.resolve(failure('async-error' as const));
+  const value = yield* await Promise.resolve(failure('async-error'));
 
   return success(value);
 });

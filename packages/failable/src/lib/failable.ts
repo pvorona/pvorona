@@ -117,7 +117,10 @@ type FailableMap<T, E> = {
 
 type FailableFlatMap<T, E> = {
   <Next>(fn: (data: T) => Success<Next>): Failable<Next, E>;
-  <Next, E2>(fn: (data: T) => Failure<E2>): Failable<Next, E | E2>;
+  <E2>(fn: (data: T) => Failure<E2>): Failure<E | E2>;
+  <Next, E2>(
+    fn: (data: T) => Success<Next> | Failure<E2>
+  ): Failable<Next, E | E2>;
   <Next, E2>(fn: (data: T) => Failable<Next, E2>): Failable<Next, E | E2>;
 };
 

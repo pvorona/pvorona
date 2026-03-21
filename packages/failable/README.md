@@ -445,7 +445,7 @@ import {
   toFailableLike,
 } from '@pvorona/failable';
 
-const result = failure({ code: 'missing' as const });
+const result = failure({ code: 'missing' });
 
 const wire = toFailableLike(result);
 const hydrated = failable(wire);
