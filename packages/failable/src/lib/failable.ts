@@ -41,15 +41,19 @@ type Match<T, E> = <U>(
 ) => U;
 
 export type Failable<T, E> =
-  | (Omit<Success<T>, 'orElse' | 'getOrElse'> & {
+  | (Omit<Success<T>, 'orElse' | 'getOrElse' | 'map' | 'flatMap'> & {
       readonly orElse: <U>(getValue: LazyFallback<U, E>) => Success<T>;
       readonly getOrElse: <U>(getValue: LazyFallback<U, E>) => T;
       readonly match: Match<T, E>;
+      readonly map: FailableMap<T, E>;
+      readonly flatMap: FailableFlatMap<T, E>;
     })
-  | (Omit<Failure<E>, 'orElse' | 'getOrElse'> & {
+  | (Omit<Failure<E>, 'orElse' | 'getOrElse' | 'map' | 'flatMap'> & {
       readonly orElse: <U>(getValue: LazyFallback<U, E>) => Success<U>;
       readonly getOrElse: <U>(getValue: LazyFallback<U, E>) => U;
       readonly match: Match<T, E>;
+      readonly map: FailableMap<T, E>;
+      readonly flatMap: FailableFlatMap<T, E>;
     });
 
 /**
@@ -87,6 +91,34 @@ type SuccessMatch<T> = {
 
 type FailureMatch<E> = {
   <U>(onSuccess: (data: never) => U, onFailure: (error: E) => U): U;
+};
+
+type SuccessMap<T> = {
+  <U>(fn: (data: T) => U): Success<U>;
+};
+
+type FailureMap<E> = {
+  <U>(fn: (data: never) => U): Failure<E>;
+};
+
+type SuccessFlatMap<T> = {
+  <Next>(fn: (data: T) => Success<Next>): Success<Next>;
+  <E2>(fn: (data: T) => Failure<E2>): Failure<E2>;
+  <Next, E2>(fn: (data: T) => Failable<Next, E2>): Failable<Next, E2>;
+};
+
+type FailureFlatMap<E> = {
+  <Next, E2>(fn: (data: never) => Failable<Next, E2>): Failure<E>;
+};
+
+type FailableMap<T, E> = {
+  <U>(fn: (data: T) => U): Failable<U, E>;
+};
+
+type FailableFlatMap<T, E> = {
+  <Next>(fn: (data: T) => Success<Next>): Failable<Next, E>;
+  <Next, E2>(fn: (data: T) => Failure<E2>): Failable<Next, E | E2>;
+  <Next, E2>(fn: (data: T) => Failable<Next, E2>): Failable<Next, E | E2>;
 };
 
 function isFailableLikeSuccess(
@@ -129,6 +161,8 @@ export type Success<T> = {
   readonly getOrElse: <U>(getValue: LazyFallback<U, never>) => T;
   readonly getOrThrow: () => T;
   readonly match: SuccessMatch<T>;
+  readonly map: SuccessMap<T>;
+  readonly flatMap: SuccessFlatMap<T>;
   readonly [Symbol.iterator]: () => RunGetIterator<T, never, Success<T>>;
   readonly [Symbol.asyncIterator]: () => AsyncRunGetIterator<
     T,
@@ -149,6 +183,8 @@ export type Failure<E> = {
   readonly getOrElse: <U>(getValue: LazyFallback<U, E>) => U;
   readonly getOrThrow: () => never;
   readonly match: FailureMatch<E>;
+  readonly map: FailureMap<E>;
+  readonly flatMap: FailureFlatMap<E>;
   readonly [Symbol.iterator]: () => RunGetIterator<never, E, Failure<E>>;
   readonly [Symbol.asyncIterator]: () => AsyncRunGetIterator<
     never,
@@ -183,6 +219,8 @@ const BASE_FAILABLE = {
   getOrElse: notImplemented,
   getOrThrow: notImplemented,
   match: notImplemented,
+  map: notImplemented,
+  flatMap: notImplemented,
   [Symbol.iterator]: function failableIterator(
     this: Failable<unknown, unknown>
   ) {
@@ -225,6 +263,18 @@ const BASE_SUCCESS = (() => {
   ) {
     return onSuccess(this.data);
   } as SuccessMatch<unknown>;
+  node.map = function mapSuccess(
+    this: InternalSuccess<unknown>,
+    fn: (data: unknown) => unknown
+  ) {
+    return success(fn(this.data));
+  } as SuccessMap<unknown>;
+  node.flatMap = function flatMapSuccess(
+    this: InternalSuccess<unknown>,
+    fn: (data: unknown) => unknown
+  ) {
+    return fn(this.data);
+  } as SuccessFlatMap<unknown>;
   return Object.freeze(node);
 })();
 
@@ -260,6 +310,12 @@ const BASE_FAILURE = (() => {
   ) {
     return onFailure(this.error);
   } as FailureMatch<unknown>;
+  node.map = function mapFailure(this: InternalFailure<unknown>) {
+    return this;
+  } as FailureMap<unknown>;
+  node.flatMap = function flatMapFailure(this: InternalFailure<unknown>) {
+    return this;
+  } as FailureFlatMap<unknown>;
   return Object.freeze(node);
 })();
 
@@ -361,16 +417,16 @@ export function isFailure(value: unknown): value is Failure<unknown> {
 }
 
 export function success(): Success<void>;
-export function success<T>(data: T): Success<T>;
-export function success<T>(data?: T): Success<T | void> {
+export function success<const T>(data: T): Success<T>;
+export function success<const T>(data?: T): Success<T | void> {
   const node: Mutable<InternalSuccess<T | void>> = Object.create(BASE_SUCCESS);
   node.data = data;
   return Object.freeze(node) as Success<T | void>;
 }
 
 export function failure(): Failure<void>;
-export function failure<E>(error: E): Failure<E>;
-export function failure<E>(error?: E): Failure<E | void> {
+export function failure<const E>(error: E): Failure<E>;
+export function failure<const E>(error?: E): Failure<E | void> {
   const node: Mutable<InternalFailure<E | void>> = Object.create(BASE_FAILURE);
   node.error = error;
   return Object.freeze(node) as Failure<E | void>;
@@ -789,7 +845,10 @@ function combineAllResults<T extends readonly unknown[]>(
     (result) => (result as Success<unknown>).data
   ) as AllTupleData<T>;
 
-  return success(tuple) as Failable<AllReturnData<T>, AllTupleError<T>>;
+  return success(tuple) as unknown as Failable<
+    AllReturnData<T>,
+    AllTupleError<T>
+  >;
 }
 
 function combineAllSettledResults<T extends readonly unknown[]>(
@@ -900,7 +959,7 @@ async function readAsyncRunGetSource(
 
 function closeRunIterator<TYield extends RunYield, TResult extends RunReturn>(
   iterator: Generator<TYield, TResult, unknown>,
-  result: Failure<unknown>
+  result: Failable<unknown, unknown>
 ) {
   let closing = iterator.return(result as never);
 
@@ -920,7 +979,7 @@ async function closeAsyncRunIterator<
   TResult extends RunReturn
 >(
   iterator: AsyncGenerator<TYield, TResult, unknown>,
-  result: Failure<unknown>
+  result: Failable<unknown, unknown>
 ) {
   let closing = await iterator.return(result as never);
 

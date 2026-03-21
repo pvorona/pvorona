@@ -95,13 +95,13 @@ expectType<Equal<typeof explicitUndefinedOk, Success<undefined>>>(true);
 success<number>();
 
 const okOrElse = ok.orElse(() => 456);
-expectType<Equal<typeof okOrElse, Success<number>>>(true);
+expectType<Equal<typeof okOrElse, Success<123>>>(true);
 
 const okGetOrElse = ok.getOrElse(() => 456);
-expectType<Equal<typeof okGetOrElse, number>>(true);
+expectType<Equal<typeof okGetOrElse, 123>>(true);
 
 const okGetOrThrow = ok.getOrThrow();
-expectType<Equal<typeof okGetOrThrow, number>>(true);
+expectType<Equal<typeof okGetOrThrow, 123>>(true);
 
 const okMatch = ok.match(
   (value) => value.toString(),
@@ -220,7 +220,7 @@ const okMapped = ok.map((value) => value.toString());
 expectType<Equal<typeof okMapped, Success<string>>>(true);
 
 const problemMapped = problem.map(() => 123);
-expectType<Equal<typeof problemMapped, Failure<string>>>(true);
+expectType<Equal<typeof problemMapped, Failure<'boom'>>>(true);
 
 const unionMapped = union.map((value) => value.toString());
 expectType<Equal<typeof unionMapped, Failable<string, string>>>(true);
@@ -234,12 +234,12 @@ const okFlatMappedToFailure = ok.flatMap((value) =>
 expectType<
   Equal<
     typeof okFlatMappedToFailure,
-    Failure<{ readonly code: 'mapped-error'; readonly value: number }>
+    Failure<{ readonly code: 'mapped-error'; readonly value: 123 }>
   >
 >(true);
 
 const problemFlatMapped = problem.flatMap(() => success(123));
-expectType<Equal<typeof problemFlatMapped, Failure<string>>>(true);
+expectType<Equal<typeof problemFlatMapped, Failure<'boom'>>>(true);
 
 const unionFlatMapped = union.flatMap((value) =>
   value > 0
@@ -258,7 +258,7 @@ const readOkData = () => {
 
   return ok.data;
 };
-expectType<Equal<ReturnType<typeof readOkData>, number>>(true);
+expectType<Equal<ReturnType<typeof readOkData>, 123>>(true);
 
 const ensureProblem = () => {
   throwIfError(problem);
@@ -300,7 +300,7 @@ if (!isFailableLike(successWire)) {
   throw new Error('Expected structured-clone success wire shape');
 }
 
-expectType<Equal<typeof successWire, FailableLikeSuccess<number>>>(true);
+expectType<Equal<typeof successWire, FailableLikeSuccess<123>>>(true);
 
 const successWireAsConsumerType: FailableLike<number, string> = successWire;
 void successWireAsConsumerType;
@@ -311,7 +311,7 @@ if (!isFailableLike(failureWire)) {
   throw new Error('Expected structured-clone failure wire shape');
 }
 
-expectType<Equal<typeof failureWire, FailableLikeFailure<string>>>(true);
+expectType<Equal<typeof failureWire, FailableLikeFailure<'boom'>>>(true);
 
 const failureWireAsConsumerType: FailableLike<number, string> = failureWire;
 void failureWireAsConsumerType;
