@@ -696,6 +696,50 @@ run(function* () {
   return 123 as const;
 });
 
+// @ts-expect-error `run(...)` builders must return hydrated `Failable` values only.
+run(function* () {
+  return {
+    status: FailableStatus.Success,
+    data: 123 as const,
+    error: null,
+    match: ((onSuccess: (value: 123) => 123) =>
+      onSuccess(123)) as Success<123>['match'],
+  };
+});
+
+// @ts-expect-error `run(...)` builders must return hydrated `Failable` values only.
+run(function* () {
+  return {
+    status: FailableStatus.Failure,
+    data: null,
+    error: 'boom' as const,
+    match: ((_: (value: never) => 'boom', onFailure: (value: 'boom') => 'boom') =>
+      onFailure('boom')) as Failure<'boom'>['match'],
+  };
+});
+
+// @ts-expect-error `run(...)` builders must return hydrated `Failable` values only.
+run(async function* () {
+  return {
+    status: FailableStatus.Success,
+    data: 123 as const,
+    error: null,
+    match: ((onSuccess: (value: 123) => 123) =>
+      onSuccess(123)) as Success<123>['match'],
+  };
+});
+
+// @ts-expect-error `run(...)` builders must return hydrated `Failable` values only.
+run(async function* () {
+  return {
+    status: FailableStatus.Failure,
+    data: null,
+    error: 'boom' as const,
+    match: ((_: (value: never) => 'boom', onFailure: (value: 'boom') => 'boom') =>
+      onFailure('boom')) as Failure<'boom'>['match'],
+  };
+});
+
 // @ts-expect-error `race(...)` accepts promised `Failable` sources only.
 race(success(123 as const));
 

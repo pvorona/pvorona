@@ -100,6 +100,25 @@ function createFailureLookalike<E>(error: E): unknown {
   };
 }
 
+function createRunReturnSuccessLike<T>(data: T) {
+  return {
+    status: FailableStatus.Success,
+    data,
+    error: null,
+    match: ((onSuccess: (value: T) => T) => onSuccess(data)) as Success<T>['match'],
+  };
+}
+
+function createRunReturnFailureLike<E>(error: E) {
+  return {
+    status: FailableStatus.Failure,
+    data: null,
+    error,
+    match: ((_: (value: never) => E, onFailure: (value: E) => E) =>
+      onFailure(error)) as Failure<E>['match'],
+  };
+}
+
 function createUnionFailable<T, E>(data: T, error: E): Failable<T, E> {
   return faker.helpers.arrayElement([
     success(data),
@@ -1593,6 +1612,50 @@ describe('run()', () => {
       void buildRawReturn;
     });
 
+    it('rejects success-like plain-object return values at type level', () => {
+      const buildSuccessLikeReturn = () => {
+        // @ts-expect-error `run(...)` builders must return hydrated `Failable` values only.
+        return run(function* () {
+          return createRunReturnSuccessLike(123 as const);
+        });
+      };
+
+      void buildSuccessLikeReturn;
+    });
+
+    it('rejects failure-like plain-object return values at type level', () => {
+      const buildFailureLikeReturn = () => {
+        // @ts-expect-error `run(...)` builders must return hydrated `Failable` values only.
+        return run(function* () {
+          return createRunReturnFailureLike('boom' as const);
+        });
+      };
+
+      void buildFailureLikeReturn;
+    });
+
+    it('rejects success-like plain-object return values from async builders at type level', () => {
+      const buildAsyncSuccessLikeReturn = () => {
+        // @ts-expect-error `run(...)` builders must return hydrated `Failable` values only.
+        return run(async function* () {
+          return createRunReturnSuccessLike(123 as const);
+        });
+      };
+
+      void buildAsyncSuccessLikeReturn;
+    });
+
+    it('rejects failure-like plain-object return values from async builders at type level', () => {
+      const buildAsyncFailureLikeReturn = () => {
+        // @ts-expect-error `run(...)` builders must return hydrated `Failable` values only.
+        return run(async function* () {
+          return createRunReturnFailureLike('boom' as const);
+        });
+      };
+
+      void buildAsyncFailureLikeReturn;
+    });
+
     it('treats empty generators as Success<void>', () => {
       const buildResult = () =>
         run(function* () {
@@ -2671,6 +2734,78 @@ describe('run()', () => {
       }
 
       throw new Error('Expected async `run(...)` to reject raw return values');
+    });
+
+    it('rejects success-like plain-object return values at runtime', () => {
+      try {
+        run(function* () {
+          return createRunReturnSuccessLike(123 as const);
+        } as never);
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toBe(
+          '`run()` generators must return a `Failable` or finish without returning a value.'
+        );
+        return;
+      }
+
+      throw new Error(
+        'Expected `run(...)` to reject success-like plain-object return values'
+      );
+    });
+
+    it('rejects failure-like plain-object return values at runtime', () => {
+      try {
+        run(function* () {
+          return createRunReturnFailureLike('boom' as const);
+        } as never);
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toBe(
+          '`run()` generators must return a `Failable` or finish without returning a value.'
+        );
+        return;
+      }
+
+      throw new Error(
+        'Expected `run(...)` to reject failure-like plain-object return values'
+      );
+    });
+
+    it('rejects success-like plain-object return values from async builders at runtime', async () => {
+      try {
+        await run(async function* () {
+          return createRunReturnSuccessLike(123 as const);
+        } as never);
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toBe(
+          '`run()` generators must return a `Failable` or finish without returning a value.'
+        );
+        return;
+      }
+
+      throw new Error(
+        'Expected async `run(...)` to reject success-like plain-object return values'
+      );
+    });
+
+    it('rejects failure-like plain-object return values from async builders at runtime', async () => {
+      try {
+        await run(async function* () {
+          return createRunReturnFailureLike('boom' as const);
+        } as never);
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toBe(
+          '`run()` generators must return a `Failable` or finish without returning a value.'
+        );
+        return;
+      }
+
+      throw new Error(
+        'Expected async `run(...)` to reject failure-like plain-object return values'
+      );
     });
   });
 });

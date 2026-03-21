@@ -656,19 +656,7 @@ type AsyncRunGetIterator<
 > = AsyncGenerator<RunGet<T, E, TSource>, T, unknown>;
 
 type RunYield = RunGet<unknown, unknown, unknown>;
-type RunReturnSuccessLike<TData = unknown> = Pick<
-  Success<TData>,
-  'status' | 'data' | 'error' | 'match'
->;
-type RunReturnFailureLike<TError = unknown> = Pick<
-  Failure<TError>,
-  'status' | 'data' | 'error' | 'match'
->;
-type RunReturn =
-  | void
-  | RunReturnSuccessLike<unknown>
-  | RunReturnFailureLike<unknown>
-  | Failable<unknown, unknown>;
+type RunReturn = void | Failable<unknown, unknown>;
 
 type InferRunYieldError<TYield> = TYield extends RunGet<
   unknown,
@@ -706,7 +694,13 @@ type InferRunNeverSuccessResult<TYield> = [InferRunYieldError<TYield>] extends [
 
 type InferRunUnionReturnData<TResult> =
   | ([Extract<TResult, void>] extends [never] ? never : void)
-  | (Extract<TResult, RunReturnSuccessLike> extends {
+  | (Extract<
+      TResult,
+      {
+        readonly isSuccess: true;
+        readonly data: unknown;
+      }
+    > extends {
       readonly data: infer TData;
     }
       ? TData
@@ -714,7 +708,10 @@ type InferRunUnionReturnData<TResult> =
 
 type InferRunUnionReturnError<TResult> = Extract<
   TResult,
-  RunReturnFailureLike
+  {
+    readonly isFailure: true;
+    readonly error: unknown;
+  }
 > extends { readonly error: infer TError }
   ? TError
   : never;
@@ -725,11 +722,11 @@ type InferRunResult<TYield, TResult> = [TResult] extends [never]
     : Failure<InferRunYieldError<TYield>>
   : [TResult] extends [void]
   ? InferRunSuccessResult<TYield, void>
-  : [TResult] extends [RunReturnSuccessLike<infer TData>]
+  : [TResult] extends [Success<infer TData>]
   ? [TData] extends [never]
     ? InferRunNeverSuccessResult<TYield>
     : InferRunSuccessResult<TYield, TData>
-  : [TResult] extends [RunReturnFailureLike<infer TError>]
+  : [TResult] extends [Failure<infer TError>]
   ? Failure<MergeRunErrors<TYield, TError>>
   : [MergeRunErrors<TYield, InferRunUnionReturnError<TResult>>] extends [never]
   ? Success<InferRunUnionReturnData<TResult>>
@@ -792,6 +789,9 @@ type RunNoHelpers = {
 };
 
 const RUN_NO_HELPERS: RunNoHelpers = Object.freeze({});
+type ValidateRunReturn<TResult> = [TResult] extends [RunReturn]
+  ? unknown
+  : { readonly __runInvalidReturn: never };
 
 type FailableSource<T, E> = Failable<T, E> | PromiseLike<Failable<T, E>>;
 
@@ -1144,16 +1144,22 @@ async function runAsyncIterator<
 
 export function run<
   TYield extends RunGet<unknown, unknown, unknown> = never,
-  TResult extends RunReturn = RunReturn
+  TResult = RunReturn
 >(
-  builder: (_helpers: RunNoHelpers) => AsyncGenerator<TYield, TResult, unknown>
-): Promise<InferRunResult<TYield, TResult>>;
+  builder: ((
+    _helpers: RunNoHelpers
+  ) => AsyncGenerator<TYield, TResult, unknown>) &
+    ValidateRunReturn<TResult>
+): Promise<
+  InferRunResult<TYield, Extract<TResult, RunReturn>>
+>;
 export function run<
   TYield extends RunYield = never,
-  TResult extends RunReturn = RunReturn
+  TResult = RunReturn
 >(
-  builder: (_helpers: RunNoHelpers) => Generator<TYield, TResult, unknown>
-): InferRunResult<TYield, TResult>;
+  builder: ((_helpers: RunNoHelpers) => Generator<TYield, TResult, unknown>) &
+    ValidateRunReturn<TResult>
+): InferRunResult<TYield, Extract<TResult, RunReturn>>;
 /**
  * Compose steps that already return `Failable`.
  *
