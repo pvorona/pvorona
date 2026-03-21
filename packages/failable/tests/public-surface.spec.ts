@@ -1,19 +1,24 @@
 import { readFile } from 'node:fs/promises';
 import {
+  all,
+  allSettled,
   failable,
   failure,
   FailableStatus,
   isFailure,
   isFailableLike,
   NormalizedErrors,
+  race,
   run,
   success,
-  throwIfError,
+  throwIfFailure,
   toFailableLike,
   type Failable,
 } from '@pvorona/failable';
 
 const EXPECTED_RUNTIME_EXPORTS = [
+  'all',
+  'allSettled',
   'FailableStatus',
   'NormalizedErrors',
   'failable',
@@ -22,9 +27,10 @@ const EXPECTED_RUNTIME_EXPORTS = [
   'isFailableLike',
   'isFailure',
   'isSuccess',
+  'race',
   'run',
   'success',
-  'throwIfError',
+  'throwIfFailure',
   'toFailableLike',
 ] as const;
 
@@ -41,6 +47,35 @@ function divide(a: number, b: number): Failable<number, string> {
   if (b === 0) return failure('Cannot divide by zero');
 
   return success(a / b);
+}
+
+type ReadPortError =
+  | { readonly code: 'missing' }
+  | { readonly code: 'invalid'; readonly raw: string };
+
+type ApplicationPortError =
+  | ReadPortError
+  | { readonly code: 'not_application_port'; readonly port: number };
+
+function readPort(raw: string | undefined): Failable<number, ReadPortError> {
+  if (raw === undefined) return failure({ code: 'missing' });
+
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port <= 0) {
+    return failure({ code: 'invalid', raw });
+  }
+
+  return success(port);
+}
+
+function ensureApplicationPort(
+  port: number
+): Failable<number, ApplicationPortError> {
+  if (port < 3000 || port > 3999) {
+    return failure({ code: 'not_application_port', port });
+  }
+
+  return success(port);
 }
 
 type TransferRequest = {
@@ -108,8 +143,8 @@ async function postToLedger(
 async function submitTransfer(
   plan: TransferPlan
 ): Promise<Failable<{ readonly transferId: string }, SubmitTransferError>> {
-  return await run(async function* ({ get }) {
-    const created = yield* get(postToLedger(plan));
+  return await run(async function* () {
+    const created = yield* await postToLedger(plan);
 
     return success(created);
   });
@@ -208,12 +243,12 @@ async function planTransferWithRunAsync(request: {
     TransferAsyncError
   >
 > {
-  return await run(async function* ({ get }) {
+  return await run(async function* () {
     const source = yield* readSourceAccount(request.fromAccountId);
     const destination = yield* readDestinationAccount(request.toAccountId);
     yield* ensureDifferentAccounts(source, destination);
     yield* ensureSufficientFunds(source, request.amountCents);
-    yield* get(ensureWithinDailyLimit(source.id, request.amountCents));
+    yield* await ensureWithinDailyLimit(source.id, request.amountCents);
 
     return success({ ...request, feeCents: 25 });
   });
@@ -255,7 +290,7 @@ describe('public surface', () => {
     expect(packageJson.exports).toStrictEqual(EXPECTED_PACKAGE_EXPORTS);
   });
 
-  it('supports the README quick-start branching example', () => {
+  it('supports typed error branching on hydrated results', () => {
     const okResult = planTransfer(
       {
         fromAccountId: 'checking',
@@ -326,6 +361,39 @@ describe('public surface', () => {
     });
   });
 
+  it('supports top-level all() for sync or promised sources', async () => {
+    const syncResult = all(success(1 as const), success(2 as const));
+    expect(syncResult).toStrictEqual(success([1, 2]));
+
+    const asyncResult = await all(
+      success('user' as const),
+      Promise.resolve(success('profile' as const))
+    );
+    expect(asyncResult).toStrictEqual(success(['user', 'profile']));
+  });
+
+  it('supports top-level allSettled() for promised sources', async () => {
+    const result = await allSettled(
+      Promise.resolve(success(1 as const)),
+      Promise.resolve(failure('missing-profile' as const))
+    );
+
+    expect(result).toStrictEqual(
+      success([success(1 as const), failure('missing-profile' as const)])
+    );
+  });
+
+  it('supports top-level race() for promised sources', async () => {
+    const result = await race(
+      Promise.resolve(success('fast' as const)),
+      new Promise<ReturnType<typeof success<'slow'>>>((resolve) => {
+        setTimeout(() => resolve(success('slow' as const)), 10);
+      })
+    );
+
+    expect(result).toStrictEqual(success('fast'));
+  });
+
   it('supports guard-based validation for hydrated unknown values', () => {
     const candidate: unknown = divide(10, 0);
 
@@ -336,25 +404,108 @@ describe('public surface', () => {
     expect(candidate.error).toBe('Cannot divide by zero');
   });
 
-  it('supports the README `throwIfError(...)` example', () => {
+  it('supports error-aware lazy recovery with `orElse(...)`', () => {
+    const result = divide(10, 0).orElse((error) => error.length);
+
+    expect(result).toStrictEqual(success('Cannot divide by zero'.length));
+  });
+
+  it('passes the stored error even to zero-arg lazy recovery callbacks on Failure', () => {
+    let receivedArgumentCount = -1;
+    let receivedError: unknown;
+
+    const result = divide(10, 0).orElse(function legacyFallback(
+      ...receivedArguments: readonly unknown[]
+    ) {
+      receivedArgumentCount = receivedArguments.length;
+      [receivedError] = receivedArguments;
+
+      return 'fallback';
+    });
+
+    expect(receivedArgumentCount).toBe(1);
+    expect(receivedError).toBe('Cannot divide by zero');
+    expect(result).toStrictEqual(success('fallback'));
+  });
+
+  it('supports error-aware lazy fallback values with `getOrElse(...)`', () => {
+    const value = divide(10, 0).getOrElse((error) => error.toUpperCase());
+
+    expect(value).toBe('CANNOT DIVIDE BY ZERO');
+  });
+
+  it('passes the stored error even to zero-arg lazy fallback callbacks on Failure', () => {
+    let receivedArgumentCount = -1;
+    let receivedError: unknown;
+
+    const value = divide(10, 0).getOrElse(function legacyFallback(
+      ...receivedArguments: readonly unknown[]
+    ) {
+      receivedArgumentCount = receivedArguments.length;
+      [receivedError] = receivedArguments;
+
+      return 'fallback';
+    });
+
+    expect(receivedArgumentCount).toBe(1);
+    expect(receivedError).toBe('Cannot divide by zero');
+    expect(value).toBe('fallback');
+  });
+
+  it('supports the README `throwIfFailure(...)` example', () => {
     const result = divide(10, 2);
 
-    throwIfError(result);
+    throwIfFailure(result);
 
     expect(result.data).toBe(5);
   });
 
-  it('throws the stored failure unchanged with `throwIfError(...)`', () => {
+  it('supports the README `map(...)` / `flatMap(...)` example', () => {
+    const appPortResult = readPort('3000').flatMap((port) =>
+      ensureApplicationPort(port)
+    );
+
+    if (appPortResult.isFailure) {
+      throw new Error('Expected flatMap to pass through a valid application port');
+    }
+
+    expect(appPortResult.data).toBe(3000);
+
+    const labelResult = appPortResult.map(
+      (port) => `Application listening on ${port}`
+    );
+
+    if (labelResult.isFailure) {
+      throw new Error('Expected map to transform the success value');
+    }
+
+    expect(labelResult.data).toBe('Application listening on 3000');
+
+    const invalidRange = readPort('8080').flatMap((port) =>
+      ensureApplicationPort(port)
+    );
+
+    if (!invalidRange.isFailure) {
+      throw new Error('Expected flatMap to return validation failure');
+    }
+
+    expect(invalidRange.error).toStrictEqual({
+      code: 'not_application_port',
+      port: 8080,
+    });
+  });
+
+  it('throws the stored failure unchanged with `throwIfFailure(...)`', () => {
     const result = divide(10, 0);
 
     try {
-      throwIfError(result);
+      throwIfFailure(result);
     } catch (error) {
       expect(error).toBe('Cannot divide by zero');
       return;
     }
 
-    throw new Error('Expected throwIfError(...) to throw the stored error');
+    throw new Error('Expected throwIfFailure(...) to throw the stored error');
   });
 
   it('supports the README `getOrThrow()` example', () => {
@@ -545,19 +696,29 @@ describe('public surface', () => {
     });
   });
 
+  it('exposes iterable and async-iterable hydrated results for direct `yield*` use', () => {
+    const ok = success(123);
+    const problem = failure('boom');
+
+    expect(typeof ok[Symbol.iterator]).toBe('function');
+    expect(typeof ok[Symbol.asyncIterator]).toBe('function');
+    expect(typeof problem[Symbol.iterator]).toBe('function');
+    expect(typeof problem[Symbol.asyncIterator]).toBe('function');
+  });
+
   it('returns the original Failure after draining reachable cleanup during failure unwinding', () => {
-    const original = failure('cleanup-failure' as const);
+    const original = failure('cleanup-failure');
     const cleanupSteps: string[] = [];
 
-    const result = run(function* ({ get }) {
+    const result = run(function* () {
       try {
-        yield* get(original);
+        yield* original;
 
-        return success('unreachable' as const);
+        return success('unreachable');
       } finally {
-        yield* get(success('cleanup-step-1' as const));
+        yield* success('cleanup-step-1');
         cleanupSteps.push('cleanup-step-1');
-        yield* get(success('cleanup-step-2' as const));
+        yield* success('cleanup-step-2');
         cleanupSteps.push('cleanup-step-2');
       }
     });
@@ -567,18 +728,18 @@ describe('public surface', () => {
   });
 
   it('rejects promised cleanup rejections unchanged during failure unwinding', async () => {
-    const original = failure('cleanup-base-failure' as const);
+    const original = failure('cleanup-base-failure');
     const rejection = { code: 'cleanup-rejection' } as const;
     let reachedLaterCleanup = false;
 
     await expect(
-      run(async function* ({ get }) {
+      run(async function* () {
         try {
-          yield* get(Promise.resolve(original));
+          yield* await Promise.resolve(original);
 
-          return success('unreachable' as const);
+          return success('unreachable');
         } finally {
-          yield* get(rejectFailable(rejection));
+          yield* await rejectFailable(rejection);
           reachedLaterCleanup = true;
         }
       })
@@ -587,17 +748,17 @@ describe('public surface', () => {
   });
 
   it('preserves the original Failure when managed cleanup yields Failure', async () => {
-    const original = failure('original-failure' as const);
+    const original = failure('original-failure');
     let outerCleanupRan = false;
 
-    const result = await run(async function* ({ get }) {
+    const result = await run(async function* () {
       try {
         try {
-          yield* get(Promise.resolve(original));
+          yield* await Promise.resolve(original);
 
-          return success('unreachable' as const);
+          return success('unreachable');
         } finally {
-          yield* get(failure('cleanup-failure' as const));
+          yield* failure('cleanup-failure');
         }
       } finally {
         outerCleanupRan = true;
@@ -609,15 +770,15 @@ describe('public surface', () => {
   });
 
   it('lets direct cleanup throws replace yielded Failures', () => {
-    const original = failure('original-failure' as const);
+    const original = failure('original-failure');
     const cleanupThrow = new Error('cleanup-throw');
 
     expect(() =>
-      run(function* ({ get }) {
+      run(function* () {
         try {
-          yield* get(original);
+          yield* original;
 
-          return success('unreachable' as const);
+          return success('unreachable');
         } finally {
           throwDirectly(cleanupThrow);
         }
@@ -626,15 +787,15 @@ describe('public surface', () => {
   });
 
   it('lets async direct cleanup throws replace yielded Failures', async () => {
-    const original = failure('original-failure' as const);
+    const original = failure('original-failure');
     const cleanupThrow = new Error('async-cleanup-throw');
 
     await expect(
-      run(async function* ({ get }) {
+      run(async function* () {
         try {
-          yield* get(Promise.resolve(original));
+          yield* await Promise.resolve(original);
 
-          return success('unreachable' as const);
+          return success('unreachable');
         } finally {
           throwDirectly(cleanupThrow);
         }
@@ -647,13 +808,13 @@ describe('public surface', () => {
     let managedCleanupRan = false;
 
     await expect(
-      run(async function* ({ get }) {
+      run(async function* () {
         try {
-          yield* get(rejectFailable(rejection));
+          yield* await rejectFailable(rejection);
 
-          return success('unreachable' as const);
+          return success('unreachable');
         } finally {
-          yield* get(Promise.resolve(success('cleanup-step' as const)));
+          yield* await Promise.resolve(success('cleanup-step'));
           managedCleanupRan = true;
         }
       })
@@ -663,11 +824,11 @@ describe('public surface', () => {
     const cleanupThrow = new Error('cleanup-rejection-throw');
 
     await expect(
-      run(async function* ({ get }) {
+      run(async function* () {
         try {
-          yield* get(rejectFailable(rejection));
+          yield* await rejectFailable(rejection);
 
-          return success('unreachable' as const);
+          return success('unreachable');
         } finally {
           throwDirectly(cleanupThrow);
         }
@@ -675,48 +836,49 @@ describe('public surface', () => {
     ).rejects.toBe(cleanupThrow);
   });
 
-  it('preserves main-path rejections when managed cleanup yields Failure', async () => {
+  it('returns the cleanup Failure when managed cleanup yields Failure', async () => {
     const rejection = { code: 'main-rejection' } as const;
+    const cleanupFailure = failure('cleanup-failure');
     let outerCleanupRan = false;
 
     await expect(
-      run(async function* ({ get }) {
+      run(async function* () {
         try {
           try {
-            yield* get(rejectFailable(rejection));
+            yield* await rejectFailable(rejection);
 
-            return success('unreachable' as const);
+            return success('unreachable');
           } finally {
-            yield* get(failure('cleanup-failure' as const));
+            yield* cleanupFailure;
           }
         } finally {
           outerCleanupRan = true;
         }
       })
-    ).rejects.toBe(rejection);
+    ).resolves.toBe(cleanupFailure);
     expect(outerCleanupRan).toBe(true);
   });
 
-  it('preserves main-path rejections when managed cleanup promise rejections also happen', async () => {
+  it('uses the cleanup rejection when managed cleanup promise rejections also happen', async () => {
     const rejection = { code: 'main-rejection' } as const;
     const cleanupRejection = { code: 'cleanup-rejection' } as const;
     let outerCleanupRan = false;
 
     await expect(
-      run(async function* ({ get }) {
+      run(async function* () {
         try {
           try {
-            yield* get(rejectFailable(rejection));
+            yield* await rejectFailable(rejection);
 
-            return success('unreachable' as const);
+            return success('unreachable');
           } finally {
-            yield* get(rejectFailable(cleanupRejection));
+            yield* await rejectFailable(cleanupRejection);
           }
         } finally {
           outerCleanupRan = true;
         }
       })
-    ).rejects.toBe(rejection);
+    ).rejects.toBe(cleanupRejection);
     expect(outerCleanupRan).toBe(true);
   });
 

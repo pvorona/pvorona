@@ -1,4 +1,6 @@
 import {
+  all,
+  allSettled,
   failable,
   failure,
   FailableStatus,
@@ -7,9 +9,10 @@ import {
   isFailure,
   isSuccess,
   NormalizedErrors,
+  race,
   run,
   success,
-  throwIfError,
+  throwIfFailure,
   toFailableLike,
   type FailableNormalizeErrorOptions,
   type Failable,
@@ -45,6 +48,8 @@ type HasAsyncIterator<T> = typeof Symbol.asyncIterator extends keyof T
 
 type ConsumerModule = typeof import('@pvorona/failable');
 type ExpectedRuntimeExportName =
+  | 'all'
+  | 'allSettled'
   | 'FailableStatus'
   | 'NormalizedErrors'
   | 'failable'
@@ -53,9 +58,10 @@ type ExpectedRuntimeExportName =
   | 'isFailableLike'
   | 'isFailure'
   | 'isSuccess'
+  | 'race'
   | 'run'
   | 'success'
-  | 'throwIfError'
+  | 'throwIfFailure'
   | 'toFailableLike';
 
 expectType<Equal<Exclude<keyof ConsumerModule, ExpectedRuntimeExportName>, never>>(
@@ -85,7 +91,7 @@ expectType<
     false
   >
 >(true);
-expectType<Equal<'throwIfError' extends keyof ConsumerModule ? true : false, true>>(
+expectType<Equal<'throwIfFailure' extends keyof ConsumerModule ? true : false, true>>(
   true
 );
 
@@ -98,22 +104,22 @@ expectType<Equal<typeof explicitUndefinedOk, Success<undefined>>>(true);
 void voidOk;
 void explicitUndefinedOk;
 expectType<Equal<HasIterator<Success<number>>, true>>(true);
-expectType<Equal<HasAsyncIterator<Success<number>>, false>>(true);
+expectType<Equal<HasAsyncIterator<Success<number>>, true>>(true);
 expectType<Equal<HasIterator<Failure<string>>, true>>(true);
-expectType<Equal<HasAsyncIterator<Failure<string>>, false>>(true);
+expectType<Equal<HasAsyncIterator<Failure<string>>, true>>(true);
 expectType<Equal<HasIterator<Failable<number, string>>, true>>(true);
-expectType<Equal<HasAsyncIterator<Failable<number, string>>, false>>(true);
+expectType<Equal<HasAsyncIterator<Failable<number, string>>, true>>(true);
 // @ts-expect-error `success<T>()` still requires a value when `T` is explicit.
 success<number>();
 
 const okOrElse = ok.orElse(() => 456);
-expectType<Equal<typeof okOrElse, Success<number>>>(true);
+expectType<Equal<typeof okOrElse, Success<123>>>(true);
 
 const okGetOrElse = ok.getOrElse(() => 456);
-expectType<Equal<typeof okGetOrElse, number>>(true);
+expectType<Equal<typeof okGetOrElse, 123>>(true);
 
 const okGetOrThrow = ok.getOrThrow();
-expectType<Equal<typeof okGetOrThrow, number>>(true);
+expectType<Equal<typeof okGetOrThrow, 123>>(true);
 
 const okMatch = ok.match(
   (value) => value.toString(),
@@ -147,8 +153,14 @@ failure<number>();
 const problemOrElse = problem.orElse(() => 123);
 expectType<Equal<typeof problemOrElse, Success<number>>>(true);
 
+const problemOrElseFromError = problem.orElse((error) => error.length);
+expectType<Equal<typeof problemOrElseFromError, Success<number>>>(true);
+
 const problemGetOrElse = problem.getOrElse(() => 123);
 expectType<Equal<typeof problemGetOrElse, number>>(true);
+
+const problemGetOrElseFromError = problem.getOrElse((error) => error.length);
+expectType<Equal<typeof problemGetOrElseFromError, number>>(true);
 
 const problemGetOrThrow = () => problem.getOrThrow();
 expectType<Equal<ReturnType<typeof problemGetOrThrow>, never>>(true);
@@ -202,8 +214,21 @@ expectType<
   Equal<typeof unionOrElse, Success<number> | Success<{ a: number }>>
 >(true);
 
+const unionOrElseFromError = union.orElse((error) => ({ reason: error }));
+expectType<
+  Equal<
+    typeof unionOrElseFromError,
+    Success<number> | Success<{ reason: string }>
+  >
+>(true);
+
 const unionGetOrElse = union.getOrElse(() => ({ b: 'b' }));
 expectType<Equal<typeof unionGetOrElse, number | { b: string }>>(true);
+
+const unionGetOrElseFromError = union.getOrElse((error) => ({ reason: error }));
+expectType<
+  Equal<typeof unionGetOrElseFromError, number | { reason: string }>
+>(true);
 
 const unionMatch = union.match(
   (value) => value.toString(),
@@ -211,15 +236,52 @@ const unionMatch = union.match(
 );
 expectType<Equal<typeof unionMatch, string>>(true);
 
+const okMapped = ok.map((value) => value.toString());
+expectType<Equal<typeof okMapped, Success<string>>>(true);
+
+const problemMapped = problem.map(() => 123);
+expectType<Equal<typeof problemMapped, Failure<'boom'>>>(true);
+
+const unionMapped = union.map((value) => value.toString());
+expectType<Equal<typeof unionMapped, Failable<string, string>>>(true);
+
+const okFlatMapped = ok.flatMap((value) => success(value.toString()));
+expectType<Equal<typeof okFlatMapped, Success<string>>>(true);
+
+const okFlatMappedToFailure = ok.flatMap((value) =>
+  failure({ code: 'mapped-error', value })
+);
+expectType<
+  Equal<
+    typeof okFlatMappedToFailure,
+    Failure<{ readonly code: 'mapped-error'; readonly value: 123 }>
+  >
+>(true);
+
+const problemFlatMapped = problem.flatMap(() => success(123));
+expectType<Equal<typeof problemFlatMapped, Failure<'boom'>>>(true);
+
+const unionFlatMapped = union.flatMap((value) =>
+  value > 0
+    ? success(value.toString())
+    : failure({ code: 'mapped-error' as const })
+);
+expectType<
+  Equal<
+    typeof unionFlatMapped,
+    Failable<string, string | { readonly code: 'mapped-error' }>
+  >
+>(true);
+
 const readOkData = () => {
-  throwIfError(ok);
+  throwIfFailure(ok);
 
   return ok.data;
 };
-expectType<Equal<ReturnType<typeof readOkData>, number>>(true);
+expectType<Equal<ReturnType<typeof readOkData>, 123>>(true);
 
 const ensureProblem = () => {
-  throwIfError(problem);
+  throwIfFailure(problem);
 };
 expectType<Equal<ReturnType<typeof ensureProblem>, void>>(true);
 
@@ -227,7 +289,7 @@ const readEnsuredUnionData = () => {
   const result: Failable<number, string> =
     Math.random() > 0.5 ? success(123) : failure('boom');
 
-  throwIfError(result);
+  throwIfFailure(result);
 
   const ensuredSuccess: Success<number> = result;
   void ensuredSuccess;
@@ -245,12 +307,12 @@ const readUnionValue = () => {
 expectType<Equal<ReturnType<typeof readUnionValue>, number>>(true);
 
 const normalizedArgUnion = success(123) as Failable<number, string>;
-// @ts-expect-error `throwIfError(...)` does not accept normalization options.
-throwIfError(normalizedArgUnion, NormalizedErrors);
+// @ts-expect-error `throwIfFailure(...)` does not accept normalization options.
+throwIfFailure(normalizedArgUnion, NormalizedErrors);
 
 const mappedArgUnion = success(123) as Failable<number, { readonly code: 'boom' }>;
-// @ts-expect-error `throwIfError(...)` does not accept mapper callbacks.
-throwIfError(mappedArgUnion, () => new Error('boom'));
+// @ts-expect-error `throwIfFailure(...)` does not accept mapper callbacks.
+throwIfFailure(mappedArgUnion, () => new Error('boom'));
 
 const successWire = toFailableLike(ok);
 
@@ -258,7 +320,7 @@ if (!isFailableLike(successWire)) {
   throw new Error('Expected structured-clone success wire shape');
 }
 
-expectType<Equal<typeof successWire, FailableLikeSuccess<number>>>(true);
+expectType<Equal<typeof successWire, FailableLikeSuccess<123>>>(true);
 
 const successWireAsConsumerType: FailableLike<number, string> = successWire;
 void successWireAsConsumerType;
@@ -269,7 +331,7 @@ if (!isFailableLike(failureWire)) {
   throw new Error('Expected structured-clone failure wire shape');
 }
 
-expectType<Equal<typeof failureWire, FailableLikeFailure<string>>>(true);
+expectType<Equal<typeof failureWire, FailableLikeFailure<'boom'>>>(true);
 
 const failureWireAsConsumerType: FailableLike<number, string> = failureWire;
 void failureWireAsConsumerType;
@@ -349,11 +411,18 @@ const normalizedRejectedValue = failable(
 expectType<Equal<typeof normalizedRejectedValue, Promise<Failure<Error>>>>(true);
 
 const helperResult = (): Failable<'helper-data', 'helper-error'> =>
-  success('helper-data' as const);
+  success('helper-data');
 const typedNeverSuccess: Success<never> = success(undefined as never);
 
-const runSuccess = run(function* ({ get }) {
-  const value = yield* get(success(123 as const));
+// @ts-expect-error `run(...)` builders no longer receive helper arguments.
+run(function* ({ get }) {
+  void get;
+
+  return success(123);
+});
+
+const runSuccess = run(function* () {
+  const value = yield* success(123);
 
   return success(value);
 });
@@ -367,7 +436,7 @@ const runDirectSuccess = run(function* () {
 expectType<Equal<typeof runDirectSuccess, Success<123>>>(true);
 
 const runNoYieldSuccess = run(function* () {
-  return success(42 as const);
+  return success(42);
 });
 expectType<Equal<typeof runNoYieldSuccess, Success<42>>>(true);
 
@@ -376,8 +445,8 @@ const runNeverSuccess = run(function* () {
 });
 expectType<Equal<typeof runNeverSuccess, Success<never>>>(true);
 
-const runInlineFailure = run(function* ({ get }) {
-  const value = yield* get(failure('inline-error' as const));
+const runInlineFailure = run(function* () {
+  const value = yield* failure('inline-error');
 
   return success(value);
 });
@@ -390,17 +459,19 @@ const runDirectFailure = run(function* () {
 });
 expectType<Equal<typeof runDirectFailure, Failure<'inline-error'>>>(true);
 
-const runNeverSuccessWithYieldedError = run(function* ({ get }) {
-  const value = yield* get(
-    success(123 as const) as Failable<123, 'source-error'>
+const runNeverSuccessWithYieldedError = run(function* () {
+  const value = yield* (
+    success(123) as Failable<123, 'source-error'>
   );
 
   void value;
   return typedNeverSuccess;
 });
-expectType<
-  Equal<typeof runNeverSuccessWithYieldedError, Failable<never, 'source-error'>>
->(true);
+const runNeverSuccessWithYieldedErrorAsFailable: Failable<
+  never,
+  'source-error'
+> = runNeverSuccessWithYieldedError;
+void runNeverSuccessWithYieldedErrorAsFailable;
 
 const runDirectFailable = run(function* () {
   const value = yield* (success(123 as const) as Failable<123, 'source-error'>);
@@ -409,22 +480,20 @@ const runDirectFailable = run(function* () {
 });
 expectType<Equal<typeof runDirectFailable, Failable<123, 'source-error'>>>(true);
 
-const runNeverSuccessWithGuaranteedFailureInYieldSet = run(function* ({ get }) {
-  const maybeValue = yield* get(
-    success(123 as const) as Failable<123, 'source-error'>
+const runNeverSuccessWithGuaranteedFailureInYieldSet = run(function* () {
+  const maybeValue = yield* (
+    success(123) as Failable<123, 'source-error'>
   );
-  const guaranteedValue = yield* get(failure('inline-error' as const));
+  const guaranteedValue = yield* failure('inline-error');
 
   void maybeValue;
   void guaranteedValue;
   return typedNeverSuccess;
 });
-expectType<
-  Equal<
-    typeof runNeverSuccessWithGuaranteedFailureInYieldSet,
-    Failure<'source-error' | 'inline-error'>
-  >
->(true);
+const runNeverSuccessWithGuaranteedFailureInYieldSetAsFailure: Failure<
+  'source-error' | 'inline-error'
+> = runNeverSuccessWithGuaranteedFailureInYieldSet;
+void runNeverSuccessWithGuaranteedFailureInYieldSetAsFailure;
 
 const runHelperReturn = run(function* () {
   return helperResult();
@@ -433,36 +502,37 @@ expectType<
   Equal<typeof runHelperReturn, Failable<'helper-data', 'helper-error'>>
 >(true);
 
+const runDirectHelper = run(function* () {
+  const value = yield* helperResult();
+
+  return success(value);
+});
+const runDirectHelperAsFailable: Failable<'helper-data', 'helper-error'> =
+  runDirectHelper;
+void runDirectHelperAsFailable;
+
 const shouldUseString = true as boolean;
 
-const runDistributed = run(function* ({ get }) {
+const runDistributed = run(function* () {
   const wrapper = shouldUseString
-    ? get(
-        success('wrapped-string' as const) as Failable<
-          'wrapped-string',
-          'wrapped-string-error'
-        >
-      )
-    : get(
-        success(123 as const) as Failable<123, 'wrapped-number-error'>
-      );
+    ? (success('wrapped-string') as Failable<
+        'wrapped-string',
+        'wrapped-string-error'
+      >)
+    : (success(123) as Failable<123, 'wrapped-number-error'>);
   const value = yield* wrapper;
 
-  return shouldUseString ? success(value) : failure('builder-error' as const);
+  return shouldUseString ? success(value) : failure('builder-error');
 });
-expectType<
-  Equal<
-    typeof runDistributed,
-    Failable<
-      'wrapped-string' | 123,
-      'wrapped-string-error' | 'wrapped-number-error' | 'builder-error'
-    >
-  >
->(true);
+const runDistributedAsFailable: Failable<
+  'wrapped-string' | 123,
+  'wrapped-string-error' | 'wrapped-number-error' | 'builder-error'
+> = runDistributed;
+void runDistributedAsFailable;
 
-const runAsyncSuccess = run(async function* ({ get }) {
-  const first = yield* get(success(123 as const));
-  const second = yield* get(Promise.resolve(success('ready' as const)));
+const runAsyncSuccess = run(async function* () {
+  const first = yield* success(123);
+  const second = yield* await Promise.resolve(success('ready'));
 
   return success([first, second] as const);
 });
@@ -470,13 +540,24 @@ expectType<
   Equal<typeof runAsyncSuccess, Promise<Success<readonly [123, 'ready']>>>
 >(true);
 
-const runAsyncDirectHydrated = run(async function* ({ get }) {
+const runAsyncDirectHelper = run(async function* () {
+  const first = yield* helperResult();
+  const second = yield* await Promise.resolve(success('ready'));
+
+  return success([first, second] as const);
+});
+const runAsyncDirectHelperAsPromise: Promise<
+  Failable<readonly ['helper-data', 'ready'], 'helper-error'>
+> = runAsyncDirectHelper;
+void runAsyncDirectHelperAsPromise;
+
+const runAsyncDirectHydrated = run(async function* () {
   const directValue = yield* success(123 as const);
   const directFailable = yield* (success('ready' as const) as Failable<
     'ready',
     'source-error'
   >);
-  const promisedValue = yield* get(Promise.resolve(success(true as const)));
+  const promisedValue = yield* await Promise.resolve(success(true as const));
 
   return success([directValue, directFailable, promisedValue] as const);
 });
@@ -492,8 +573,8 @@ const runAsyncNeverSuccess = run(async function* () {
 });
 expectType<Equal<typeof runAsyncNeverSuccess, Promise<Success<never>>>>(true);
 
-const runAsyncFailure = run(async function* ({ get }) {
-  const value = yield* get(Promise.resolve(failure('async-error' as const)));
+const runAsyncFailure = run(async function* () {
+  const value = yield* await Promise.resolve(failure('async-error'));
 
   return success(value);
 });
@@ -510,6 +591,63 @@ expectType<
   Equal<typeof runAsyncDirectFailure, Promise<Failure<'async-direct-error'>>>
 >(true);
 
+const getAsyncUser = async (userId: string) => {
+  if (userId === '') {
+    return failure('missing-user-id' as const);
+  }
+
+  if (userId === 'offline') {
+    return failure('network-error' as const);
+  }
+
+  return success({ id: userId } as const);
+};
+
+const runAsyncPromisedSourceUnion = run(async function* () {
+  const user = yield* await getAsyncUser('123');
+
+  return success(user);
+});
+expectType<
+  Equal<
+    typeof runAsyncPromisedSourceUnion,
+    Promise<
+      Failable<
+        { readonly id: string },
+        'missing-user-id' | 'network-error'
+      >
+    >
+  >
+>(true);
+void runAsyncPromisedSourceUnion;
+
+const syncAll = all(success(1 as const), success('two' as const));
+const syncAllAsFailable: Failable<readonly [1, 'two'], never> = syncAll;
+void syncAllAsFailable;
+
+const mixedAll = all(
+  success(1 as const),
+  Promise.resolve(success('two' as const))
+);
+const mixedAllAsPromise: Promise<Failable<readonly [1, 'two'], never>> = mixedAll;
+void mixedAllAsPromise;
+
+const settledAll = allSettled(
+  Promise.resolve(success(1 as const)),
+  Promise.resolve(failure('boom' as const))
+);
+const settledAllAsPromise: Promise<
+  Success<readonly [Success<1>, Failure<'boom'>]>
+> = settledAll;
+void settledAllAsPromise;
+
+const racedResult = race(
+  Promise.resolve(success(1 as const)),
+  Promise.resolve(failure('boom' as const))
+);
+const racedResultAsPromise: Promise<Failable<1, 'boom'>> = racedResult;
+void racedResultAsPromise;
+
 const runAsyncHelperReturn = run(async function* () {
   return helperResult();
 });
@@ -525,9 +663,23 @@ const runAsyncThrowOnly = run(async function* () {
 });
 expectType<Equal<typeof runAsyncThrowOnly, Promise<never>>>(true);
 
-run(function* ({ get }) {
-  // @ts-expect-error sync `run(...)` does not accept promised `get(...)` sources.
-  const value = yield* get(Promise.resolve(success(123 as const)));
+// @ts-expect-error `run(...)` async builders no longer receive combinator helpers.
+run(async function* ({ all: runAll }) {
+  const [value] = yield* await runAll(Promise.resolve(success(123 as const)));
+
+  return success(value);
+});
+
+run(function* () {
+  // @ts-expect-error sync `run(...)` builders only accept hydrated `Failable` values.
+  const value = yield* Promise.resolve(success(123 as const));
+
+  return success(value);
+});
+
+run(async function* () {
+  // @ts-expect-error promised sources must be awaited before `yield*`.
+  const value = yield* Promise.resolve(success(123 as const));
 
   return success(value);
 });
@@ -544,6 +696,9 @@ run(function* () {
   return 123 as const;
 });
 
+// @ts-expect-error `race(...)` accepts promised `Failable` sources only.
+race(success(123 as const));
+
 const runEmpty = run(function* () {
   return;
 });
@@ -553,13 +708,28 @@ void okOrElse;
 void okGetOrElse;
 void okGetOrThrow;
 void okMatch;
+void explicitUndefinedOk;
+void voidOk;
 void problemOrElse;
+void problemOrElseFromError;
 void problemGetOrElse;
+void problemGetOrElseFromError;
 void problemGetOrThrow;
 void problemMatch;
+void explicitUndefinedProblem;
+void voidProblem;
 void unionOrElse;
+void unionOrElseFromError;
 void unionGetOrElse;
+void unionGetOrElseFromError;
 void unionMatch;
+void okMapped;
+void problemMapped;
+void unionMapped;
+void okFlatMapped;
+void okFlatMappedToFailure;
+void problemFlatMapped;
+void unionFlatMapped;
 void readOkData;
 void ensureProblem;
 void readEnsuredUnionData;
@@ -587,11 +757,17 @@ void runNeverSuccessWithYieldedError;
 void runDirectFailable;
 void runNeverSuccessWithGuaranteedFailureInYieldSet;
 void runHelperReturn;
+void runDirectHelper;
 void runDistributed;
 void runAsyncSuccess;
+void runAsyncDirectHelper;
 void runAsyncDirectHydrated;
 void runAsyncNeverSuccess;
 void runAsyncFailure;
 void runAsyncDirectFailure;
+void syncAll;
+void mixedAll;
+void settledAll;
+void racedResult;
 void runAsyncHelperReturn;
 void runAsyncThrowOnly;

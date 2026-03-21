@@ -1,4 +1,6 @@
 export {
+  all,
+  allSettled,
   FailableStatus,
   NormalizedErrors,
   failable,
@@ -7,9 +9,10 @@ export {
   isFailableLike,
   isFailure,
   isSuccess,
+  race,
   run,
   success,
-  throwIfError,
+  throwIfFailure,
   toFailableLike,
 } from './lib/failable.js';
 
