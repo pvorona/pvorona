@@ -21,6 +21,22 @@ import {
   type Success,
 } from './failable.js';
 
+type Equal<Left, Right> =
+  (<T>() => T extends Left ? 1 : 2) extends
+  (<T>() => T extends Right ? 1 : 2)
+    ? (<T>() => T extends Right ? 1 : 2) extends
+        (<T>() => T extends Left ? 1 : 2)
+      ? true
+      : false
+    : false;
+
+type Assert<T extends true> = T;
+
+function assertTsTypedef<T extends true>(): void {
+  const _assert: T = true as T;
+  void _assert;
+}
+
 const RAW_ERROR_CASES = [
   { label: 'string', error: faker.string.uuid() },
   { label: 'number', error: faker.number.int() },
@@ -2227,33 +2243,87 @@ describe('failable()', () => {
         expect(result.data).toBe(lookalike);
       });
 
-      it('returns Failure<Error> when an async function is passed by any-cast', () => {
+      it('supports async functions passed by any-cast via the async path', async () => {
         const value = faker.number.float();
-        const result = failable((async () => value) as unknown as () => number);
-
-        ensureFailure(result);
-        expect(result.error).toBeInstanceOf(Error);
-        const error = result.error as Error;
-        expect(error.message).toBe(
-          '`failable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await failable(promise)`.'
+        const result = await failable(
+          (async () => value) as unknown as () => number
         );
+
+        ensureSuccess(result);
+        expect(result.data).toBe(value);
       });
 
-      it('returns Failure<Error> when a callback returns a promise by any-cast', () => {
+      it('supports promise-returning callbacks passed by any-cast via the async path', async () => {
         const value = faker.number.float();
-        const result = failable(
+        const result = await failable(
           (() => Promise.resolve(value)) as unknown as () => number
         );
 
-        ensureFailure(result);
-        expect(result.error).toBeInstanceOf(Error);
-        const error = result.error as Error;
-        expect(error.message).toBe(
-          '`failable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await failable(promise)`.'
-        );
+        ensureSuccess(result);
+        expect(result.data).toBe(value);
       });
 
-      it('consumes rejected promise-returning callback misuse so it does not leak an unhandled rejection', async () => {
+      it('treats callbacks whose return type is a union with PromiseLike as a sync|async union at the type level', () => {
+        const unionReturner: () => number | Promise<number> = () => 1;
+        const result = failable(unionReturner);
+        assertTsTypedef<
+          Assert<
+            Equal<
+              typeof result,
+              Failable<number, unknown> | Promise<Failable<number, unknown>>
+            >
+          >
+        >();
+        void result;
+      });
+
+      it('treats callbacks returning `unknown` as a sync|async union at the type level', () => {
+        const unknownReturner: () => unknown = () => 1;
+        const result = failable(unknownReturner);
+        assertTsTypedef<
+          Assert<
+            Equal<
+              typeof result,
+              Failable<unknown, unknown> | Promise<Failable<unknown, unknown>>
+            >
+          >
+        >();
+        void result;
+      });
+
+      it('treats callbacks returning `any` as a sync|async union at the type level', () => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- regression: `any` must not pretend a single branch
+        const anyReturner: () => any = () => 1;
+        const result = failable(anyReturner);
+        assertTsTypedef<
+          Assert<
+            Equal<
+              typeof result,
+              Failable<unknown, unknown> | Promise<Failable<unknown, unknown>>
+            >
+          >
+        >();
+        void result;
+      });
+
+      it('resolves both branches when the callback return type is `T | Promise<T>`', async () => {
+        const syncValue = faker.number.float();
+        const asyncValue = faker.number.float();
+
+        const syncResult = await failable(
+          () => syncValue as number | Promise<number>
+        );
+        ensureSuccess(syncResult);
+        expect(syncResult.data).toBe(syncValue);
+
+        const asyncResult = await failable(
+          () => Promise.resolve(asyncValue) as number | Promise<number>
+        );
+        ensureSuccess(asyncResult);
+        expect(asyncResult.data).toBe(asyncValue);
+      });
+
+      it('captures rejected promise-returning callbacks as failures without unhandled rejections', async () => {
         const rejection = { code: faker.string.uuid() };
         let sawUnhandledRejection = false;
         const onUnhandledRejection = (reason: unknown) => {
@@ -2263,12 +2333,12 @@ describe('failable()', () => {
         process.on('unhandledRejection', onUnhandledRejection);
 
         try {
-          const result = failable(
+          const result = await failable(
             (() => Promise.reject(rejection)) as unknown as () => number
           );
 
           ensureFailure(result);
-          expect(result.error).toBeInstanceOf(Error);
+          expect(result.error).toBe(rejection);
           await new Promise<void>((resolve) => setImmediate(resolve));
           expect(sawUnhandledRejection).toBe(false);
         } finally {
@@ -2276,20 +2346,20 @@ describe('failable()', () => {
         }
       });
 
-      it('preserves the actionable guard error even when custom normalization is enabled', () => {
-        const normalizeError = vi.fn(
-          (error: unknown) => new Error('normalized', { cause: error })
-        );
-        const result = failable(
-          (() => Promise.resolve(faker.number.float())) as unknown as () => number,
+      it('follows the async normalization path for promise-returning callbacks instead of returning the old guard error', async () => {
+        const rejection = { code: faker.string.uuid() };
+        const normalized = new Error('normalized', { cause: rejection });
+        const normalizeError = vi.fn(() => normalized);
+
+        const result = await failable(
+          (() => Promise.reject(rejection)) as unknown as () => number,
           { normalizeError }
         );
 
         ensureFailure(result);
-        expect(normalizeError).not.toHaveBeenCalled();
-        expect(result.error.message).toBe(
-          '`failable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await failable(promise)`.'
-        );
+        expect(normalizeError).toHaveBeenCalledOnce();
+        expect(normalizeError).toHaveBeenCalledWith(rejection);
+        expect(result.error).toBe(normalized);
       });
     });
 

@@ -33,6 +33,11 @@ function expectType<Condition extends true>(condition: Condition): void {
   void condition;
 }
 
+/** Avoid `>>` / `>>>` tokenization issues in nested `expectType<Equal<...>>` */
+type PromiseFailable<T, E = unknown> = Promise<Failable<T, E>>;
+type FailableOrPromiseFailable<T, E = unknown> =
+  Failable<T, E> | PromiseFailable<T, E>;
+
 type HasIterator<T> = typeof Symbol.iterator extends keyof T ? true : false;
 type HasAsyncIterator<T> = typeof Symbol.asyncIterator extends keyof T
   ? true
@@ -90,6 +95,8 @@ const explicitUndefinedOk = success(undefined);
 
 expectType<Equal<typeof voidOk, Success<void>>>(true);
 expectType<Equal<typeof explicitUndefinedOk, Success<undefined>>>(true);
+void voidOk;
+void explicitUndefinedOk;
 expectType<Equal<HasIterator<Success<number>>, true>>(true);
 expectType<Equal<HasAsyncIterator<Success<number>>, false>>(true);
 expectType<Equal<HasIterator<Failure<string>>, true>>(true);
@@ -132,6 +139,8 @@ const explicitUndefinedProblem = failure(undefined);
 
 expectType<Equal<typeof voidProblem, Failure<void>>>(true);
 expectType<Equal<typeof explicitUndefinedProblem, Failure<undefined>>>(true);
+void voidProblem;
+void explicitUndefinedProblem;
 // @ts-expect-error `failure<E>()` still requires a value when `E` is explicit.
 failure<number>();
 
@@ -265,19 +274,59 @@ expectType<Equal<typeof failureWire, FailableLikeFailure<string>>>(true);
 const failureWireAsConsumerType: FailableLike<number, string> = failureWire;
 void failureWireAsConsumerType;
 
-const wrappedFunction = failable(() => 123);
-expectType<Equal<typeof wrappedFunction, Failable<number, unknown>>>(true);
-
-// @ts-expect-error `failable(() => ...)` accepts sync callbacks only.
-failable(async () => 123);
-
-// @ts-expect-error `failable(() => ...)` accepts sync callbacks only.
-failable(() => Promise.resolve(123));
-
-const wrappedPromise = failable(Promise.resolve(123));
+const wrappedSyncLiteral = failable(() => 123);
 expectType<
-  Equal<typeof wrappedPromise, Promise<Failable<number, unknown>>>
+  Equal<typeof wrappedSyncLiteral, Failable<number, unknown>>
 >(true);
+void wrappedSyncLiteral;
+
+type ConsumerPromiseFailableOf<T> = PromiseFailable<T>;
+
+const wrappedAsyncFn = failable(async () => 123);
+expectType<
+  Equal<typeof wrappedAsyncFn, ConsumerPromiseFailableOf<number>>
+>(true);
+
+const wrappedPromiseFn = failable(() => Promise.resolve(123));
+expectType<
+  Equal<typeof wrappedPromiseFn, ConsumerPromiseFailableOf<number>>
+>(true);
+void wrappedAsyncFn;
+void wrappedPromiseFn;
+
+type ConsumerNumberOrPromiseNumber = number | Promise<number>;
+declare const unionSyncOrPromise: () => ConsumerNumberOrPromiseNumber;
+type ConsumerFailableOrPromiseNumber = FailableOrPromiseFailable<number>;
+const wrappedUnionSyncOrPromise = failable(unionSyncOrPromise);
+expectType<
+  Equal<typeof wrappedUnionSyncOrPromise, ConsumerFailableOrPromiseNumber>
+>(true);
+void wrappedUnionSyncOrPromise;
+
+declare const unknownReturner: () => unknown;
+type ConsumerFailableOrPromiseUnknown = FailableOrPromiseFailable<
+  unknown,
+  unknown
+>;
+const wrappedUnknownReturner = failable(unknownReturner);
+expectType<
+  Equal<typeof wrappedUnknownReturner, ConsumerFailableOrPromiseUnknown>
+>(true);
+void wrappedUnknownReturner;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- regression: union typing for `any` returns
+declare const anyReturner: () => any;
+const wrappedAnyReturner = failable(anyReturner);
+expectType<
+  Equal<typeof wrappedAnyReturner, ConsumerFailableOrPromiseUnknown>
+>(true);
+void wrappedAnyReturner;
+
+const wrappedDirectPromise = failable(Promise.resolve(123));
+expectType<
+  Equal<typeof wrappedDirectPromise, ConsumerPromiseFailableOf<number>>
+>(true);
+void wrappedDirectPromise;
 
 const normalizedExplicitFailure = failable(
   failure(['first', 'second']),
@@ -434,7 +483,7 @@ const runAsyncDirectHydrated = run(async function* ({ get }) {
 expectType<
   Equal<
     typeof runAsyncDirectHydrated,
-    Promise<Failable<readonly [123, 'ready', true], 'source-error'>>
+    PromiseFailable<readonly [123, 'ready', true], 'source-error'>
   >
 >(true);
 
@@ -467,7 +516,7 @@ const runAsyncHelperReturn = run(async function* () {
 expectType<
   Equal<
     typeof runAsyncHelperReturn,
-    Promise<Failable<'helper-data', 'helper-error'>>
+    PromiseFailable<'helper-data', 'helper-error'>
   >
 >(true);
 
@@ -517,8 +566,13 @@ void readEnsuredUnionData;
 void readUnionValue;
 void normalizedArgUnion;
 void mappedArgUnion;
-void wrappedFunction;
-void wrappedPromise;
+void wrappedSyncLiteral;
+void wrappedAsyncFn;
+void wrappedPromiseFn;
+void wrappedUnionSyncOrPromise;
+void wrappedUnknownReturner;
+void wrappedAnyReturner;
+void wrappedDirectPromise;
 void normalizedExplicitFailure;
 void normalizedCustomFailure;
 void normalizedRejectedValue;
