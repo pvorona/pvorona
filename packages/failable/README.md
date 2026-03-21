@@ -12,6 +12,7 @@ A `Failable<T, E>` is either `Success<T>` or `Failure<E>`.
 - `failable(...)` captures thrown or rejected boundaries
 - `run(...)` composes multiple `Failable` steps
 - `all(...)`, `allSettled(...)`, and `race(...)` combine multiple sources
+- `result.map(...)` / `result.flatMap(...)` transform and chain success values
 
 ## Install
 
@@ -72,6 +73,8 @@ if (result.isFailure) {
 | Capture a throwing or rejecting boundary | `failable(...)` |
 | Compose multiple `Failable` steps | `run(...)` |
 | Combine multiple `Failable` sources | `all(...)`, `allSettled(...)`, `race(...)` |
+| Transform a successful value only | `map(...)` |
+| Chain another `Failable` step | `flatMap(...)` |
 | Cross a structured-clone boundary | `toFailableLike(...)` + `failable(...)` |
 | Validate `unknown` input | `isFailable(...)`, `isSuccess(...)`, `isFailure(...)`, `isFailableLike(...)` |
 
@@ -123,6 +126,62 @@ const result = readPort(process.env.PORT);
 throwIfError(result);
 console.log(result.data * 2);
 ```
+
+## Transform And Chain With `map(...)` And `flatMap(...)`
+
+Use `result.map(fn)` when you only need to change the success value. The callback
+runs on `Success` only; on `Failure`, the same failure is returned unchanged.
+
+Use `result.flatMap(fn)` when the next step can fail again. The callback must
+return another `Failable`. On `Success`, that result becomes the outcome; on
+`Failure`, `flatMap` short-circuits and keeps the original error.
+
+Building on `readPort` from [Basic Usage](#basic-usage):
+
+```ts
+import { failure, success, type Failable } from '@pvorona/failable';
+
+type ReadPortError =
+  | { code: 'missing' }
+  | { code: 'invalid'; raw: string };
+
+type ApplicationPortError =
+  | ReadPortError
+  | { code: 'not_application_port'; port: number };
+
+function readPort(raw: string | undefined): Failable<number, ReadPortError> {
+  if (raw === undefined) return failure({ code: 'missing' });
+
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port <= 0) {
+    return failure({ code: 'invalid', raw });
+  }
+
+  return success(port);
+}
+
+function ensureApplicationPort(
+  port: number,
+): Failable<number, ApplicationPortError> {
+  if (port < 3000 || port > 3999) {
+    return failure({ code: 'not_application_port', port });
+  }
+
+  return success(port);
+}
+
+const appPortResult = readPort(process.env.PORT).flatMap((port) =>
+  ensureApplicationPort(port),
+);
+
+const labelResult = appPortResult.map(
+  (port) => `Application listening on ${port}`,
+);
+```
+
+When you pass object literals directly into `success(...)` or `failure(...)`,
+TypeScript often keeps their types as narrow as possible (literal fields where
+that makes sense), which helps `switch` on `error.code` and similar patterns.
 
 ## Capture Thrown Or Rejected Failures With `failable(...)`
 
@@ -421,6 +480,8 @@ if (isFailable(candidate) && candidate.isFailure) {
 - `failable(...)`: preserve, rehydrate, capture, or normalize failures at
   a boundary
 - `run(...)`: compose `Failable` steps without nested branching
+- `result.map(...)`: transform success data; failures pass through unchanged
+- `result.flatMap(...)`: chain another `Failable`; failures short-circuit
 - `toFailableLike(...)`: convert a hydrated result into a wire shape
 - `isFailableLike(...)`: validate a wire shape
 - `isFailable(...)`, `isSuccess(...)`, `isFailure(...)`: validate hydrated

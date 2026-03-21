@@ -49,6 +49,35 @@ function divide(a: number, b: number): Failable<number, string> {
   return success(a / b);
 }
 
+type ReadPortError =
+  | { readonly code: 'missing' }
+  | { readonly code: 'invalid'; readonly raw: string };
+
+type ApplicationPortError =
+  | ReadPortError
+  | { readonly code: 'not_application_port'; readonly port: number };
+
+function readPort(raw: string | undefined): Failable<number, ReadPortError> {
+  if (raw === undefined) return failure({ code: 'missing' });
+
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port <= 0) {
+    return failure({ code: 'invalid', raw });
+  }
+
+  return success(port);
+}
+
+function ensureApplicationPort(
+  port: number
+): Failable<number, ApplicationPortError> {
+  if (port < 3000 || port > 3999) {
+    return failure({ code: 'not_application_port', port });
+  }
+
+  return success(port);
+}
+
 type TransferRequest = {
   readonly fromAccountId: string;
   readonly toAccountId: string;
@@ -261,7 +290,7 @@ describe('public surface', () => {
     expect(packageJson.exports).toStrictEqual(EXPECTED_PACKAGE_EXPORTS);
   });
 
-  it('supports the README quick-start branching example', () => {
+  it('supports typed error branching on hydrated results', () => {
     const okResult = planTransfer(
       {
         fromAccountId: 'checking',
@@ -429,6 +458,41 @@ describe('public surface', () => {
     throwIfError(result);
 
     expect(result.data).toBe(5);
+  });
+
+  it('supports the README `map(...)` / `flatMap(...)` example', () => {
+    const appPortResult = readPort('3000').flatMap((port) =>
+      ensureApplicationPort(port)
+    );
+
+    if (appPortResult.isFailure) {
+      throw new Error('Expected flatMap to pass through a valid application port');
+    }
+
+    expect(appPortResult.data).toBe(3000);
+
+    const labelResult = appPortResult.map(
+      (port) => `Application listening on ${port}`
+    );
+
+    if (labelResult.isFailure) {
+      throw new Error('Expected map to transform the success value');
+    }
+
+    expect(labelResult.data).toBe('Application listening on 3000');
+
+    const invalidRange = readPort('8080').flatMap((port) =>
+      ensureApplicationPort(port)
+    );
+
+    if (!invalidRange.isFailure) {
+      throw new Error('Expected flatMap to return validation failure');
+    }
+
+    expect(invalidRange.error).toStrictEqual({
+      code: 'not_application_port',
+      port: 8080,
+    });
   });
 
   it('throws the stored failure unchanged with `throwIfError(...)`', () => {
