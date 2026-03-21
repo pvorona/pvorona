@@ -1,6 +1,6 @@
 {
   "name": "@pvorona/failable",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Typed success/failure results for expected failures in TypeScript.",
   "keywords": [
     "failable",

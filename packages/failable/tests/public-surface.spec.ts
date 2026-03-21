@@ -11,7 +11,7 @@ import {
   race,
   run,
   success,
-  throwIfError,
+  throwIfFailure,
   toFailableLike,
   type Failable,
 } from '@pvorona/failable';
@@ -30,7 +30,7 @@ const EXPECTED_RUNTIME_EXPORTS = [
   'race',
   'run',
   'success',
-  'throwIfError',
+  'throwIfFailure',
   'toFailableLike',
 ] as const;
 
@@ -452,10 +452,10 @@ describe('public surface', () => {
     expect(value).toBe('fallback');
   });
 
-  it('supports the README `throwIfError(...)` example', () => {
+  it('supports the README `throwIfFailure(...)` example', () => {
     const result = divide(10, 2);
 
-    throwIfError(result);
+    throwIfFailure(result);
 
     expect(result.data).toBe(5);
   });
@@ -495,17 +495,17 @@ describe('public surface', () => {
     });
   });
 
-  it('throws the stored failure unchanged with `throwIfError(...)`', () => {
+  it('throws the stored failure unchanged with `throwIfFailure(...)`', () => {
     const result = divide(10, 0);
 
     try {
-      throwIfError(result);
+      throwIfFailure(result);
     } catch (error) {
       expect(error).toBe('Cannot divide by zero');
       return;
     }
 
-    throw new Error('Expected throwIfError(...) to throw the stored error');
+    throw new Error('Expected throwIfFailure(...) to throw the stored error');
   });
 
   it('supports the README `getOrThrow()` example', () => {

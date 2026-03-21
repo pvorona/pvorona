@@ -14,7 +14,7 @@ import {
   race,
   run,
   success,
-  throwIfError,
+  throwIfFailure,
   toFailableLike,
   type Failable,
   type FailableLike,
@@ -910,9 +910,9 @@ describe('flatMap()', () => {
   });
 });
 
-describe('throwIfError()', () => {
+describe('throwIfFailure()', () => {
   it('returns without throwing for success input', () => {
-    expect(throwIfError(success(123 as const))).toBeUndefined();
+    expect(throwIfFailure(success(123 as const))).toBeUndefined();
   });
 
   it('throws the stored error unchanged for failure input', () => {
@@ -922,13 +922,13 @@ describe('throwIfError()', () => {
     };
 
     try {
-      throwIfError(failure(error));
+      throwIfFailure(failure(error));
     } catch (thrown) {
       expect(thrown).toBe(error);
       return;
     }
 
-    throw new Error('Expected throwIfError() to throw the stored error');
+    throw new Error('Expected throwIfFailure() to throw the stored error');
   });
 
   it('narrows the same union variable after the helper returns', () => {
@@ -941,7 +941,7 @@ describe('throwIfError()', () => {
           ? success(123 as ValueType)
           : failure('boom' as ErrorType);
 
-      throwIfError(result);
+      throwIfFailure(result);
 
       return result.data;
     };

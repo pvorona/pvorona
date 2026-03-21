@@ -12,7 +12,7 @@ export {
   race,
   run,
   success,
-  throwIfError,
+  throwIfFailure,
   toFailableLike,
 } from './lib/failable.js';
 

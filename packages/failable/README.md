@@ -69,7 +69,7 @@ if (result.isFailure) {
 | Read the value or provide a fallback | `getOr(...)` / `getOrElse(...)` |
 | Recover to `Success<T>` | `or(...)` / `orElse(...)` |
 | Map both branches to one output | `match(onSuccess, onFailure)` |
-| Throw the stored failure unchanged | `getOrThrow()` / `throwIfError(result)` |
+| Throw the stored failure unchanged | `getOrThrow()` / `throwIfFailure(result)` |
 | Capture a throwing or rejecting boundary | `failable(...)` |
 | Compose multiple `Failable` steps | `run(...)` |
 | Combine multiple `Failable` sources | `all(...)`, `allSettled(...)`, `race(...)` |
@@ -91,7 +91,7 @@ you want something shorter, use the helper that matches the job:
 - `result.orElse((error) => fallback)`: lazy recovery to `Success<T>` derived from the failure
 - `result.match(onSuccess, onFailure)`: map both branches to one output
 - `result.getOrThrow()`: return the success value or throw `result.error`
-- `throwIfError(result)`: throw `result.error` and narrow the same variable
+- `throwIfFailure(result)`: throw `result.error` and narrow the same variable
 
 Use the lazy forms when the fallback is expensive or has side effects. Failure
 callbacks always receive the stored error, so `() => ...` can ignore it and
@@ -115,15 +115,15 @@ const label = result.match(
 );
 ```
 
-`throwIfError` narrows the result to `Success` in place, so
+`throwIfFailure` narrows the result to `Success` in place, so
 subsequent code can access `.data` without branching:
 
 ```ts
-import { throwIfError } from '@pvorona/failable';
+import { throwIfFailure } from '@pvorona/failable';
 
 const result = readPort(process.env.PORT);
 
-throwIfError(result);
+throwIfFailure(result);
 console.log(result.data * 2);
 ```
 
@@ -475,7 +475,7 @@ if (isFailable(candidate) && candidate.isFailure) {
 - `type Success<T>` / `type Failure<E>`: hydrated result variants
 - `type FailableLike<T, E>`: structured-clone-friendly wire shape
 - `success()` / `success(data)` / `failure()` / `failure(error)`: create hydrated results
-- `throwIfError(result)` / `result.getOrThrow()`: throw the stored failure
+- `throwIfFailure(result)` / `result.getOrThrow()`: throw the stored failure
   unchanged
 - `failable(...)`: preserve, rehydrate, capture, or normalize failures at
   a boundary

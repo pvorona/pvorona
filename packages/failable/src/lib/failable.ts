@@ -331,7 +331,7 @@ const BASE_FAILURE = (() => {
  *
  * Function-first exports:
  * - `success()` / `success(data)` / `failure()` / `failure(error)` create hydrated results.
- * - `throwIfError(result)` throws on failure and narrows the same result on success.
+ * - `throwIfFailure(result)` throws on failure and narrows the same result on success.
  * - `failable(...)` captures synchronous throws, async rejections, and wire shapes.
  * - `run(...)` composes existing `Failable` values.
  *
@@ -339,13 +339,13 @@ const BASE_FAILURE = (() => {
  * - `failable(() => value)`: capture synchronous throws from throwy code.
  * - `await failable(promise)`: capture async rejections from promise-based code.
  * - `run(...)`: compose steps that already return `Failable`.
- * - `throwIfError(result)`: keep using the same `result` variable after narrowing.
+ * - `throwIfFailure(result)`: keep using the same `result` variable after narrowing.
  * - `result.getOrThrow()`: unwrap the success value in expression or return position.
  *
  * Design goals:
  * - Prefer explicit, typed results over exceptions.
  * - Provide tiny ergonomics (`or`, `getOr`, `getOrThrow`) plus a minimal top-level
- *   `throwIfError(result)` helper.
+ *   `throwIfFailure(result)` helper.
  * - Support transport across structured-clone boundaries via {@link FailableLike}.
  *
  * Runtime model / invariants:
@@ -378,7 +378,7 @@ const BASE_FAILURE = (() => {
  * - `or(...)` and `getOr(...)` are eager (fallback is evaluated before the call). Use branching for
  *   lazy fallbacks.
  * - Without normalization options, whatever you throw/reject becomes `.error` unchanged.
- * - `throwIfError(result)` also throws `.error` unchanged. Normalize earlier with
+ * - `throwIfFailure(result)` also throws `.error` unchanged. Normalize earlier with
  *   `failable(..., NormalizedErrors)` or a custom `normalizeError` if you need `Error` values.
  * - `failable(() => somePromise)` is not the supported API. In TypeScript,
  *   obviously promise-returning callbacks are rejected. JS or any-cast callers receive
@@ -442,7 +442,7 @@ export function failure<const E>(error?: E): Failure<E | void> {
  * Use `result.getOrThrow()` when you need the success value itself in expression or return position.
  * If you need `Error`-shaped failures, normalize earlier with `failable(...)`.
  */
-export function throwIfError<T, E>(
+export function throwIfFailure<T, E>(
   result: Failable<T, E>
 ): asserts result is Success<T> {
   if (result.status === FailableStatus.Failure) throw result.error;

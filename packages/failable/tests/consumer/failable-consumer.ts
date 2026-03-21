@@ -12,7 +12,7 @@ import {
   race,
   run,
   success,
-  throwIfError,
+  throwIfFailure,
   toFailableLike,
   type FailableNormalizeErrorOptions,
   type Failable,
@@ -51,7 +51,7 @@ type ExpectedRuntimeExportName =
   | 'race'
   | 'run'
   | 'success'
-  | 'throwIfError'
+  | 'throwIfFailure'
   | 'toFailableLike';
 
 expectType<Equal<Exclude<keyof ConsumerModule, ExpectedRuntimeExportName>, never>>(
@@ -81,7 +81,7 @@ expectType<
     false
   >
 >(true);
-expectType<Equal<'throwIfError' extends keyof ConsumerModule ? true : false, true>>(
+expectType<Equal<'throwIfFailure' extends keyof ConsumerModule ? true : false, true>>(
   true
 );
 
@@ -254,14 +254,14 @@ expectType<
 >(true);
 
 const readOkData = () => {
-  throwIfError(ok);
+  throwIfFailure(ok);
 
   return ok.data;
 };
 expectType<Equal<ReturnType<typeof readOkData>, 123>>(true);
 
 const ensureProblem = () => {
-  throwIfError(problem);
+  throwIfFailure(problem);
 };
 expectType<Equal<ReturnType<typeof ensureProblem>, void>>(true);
 
@@ -269,7 +269,7 @@ const readEnsuredUnionData = () => {
   const result: Failable<number, string> =
     Math.random() > 0.5 ? success(123) : failure('boom');
 
-  throwIfError(result);
+  throwIfFailure(result);
 
   const ensuredSuccess: Success<number> = result;
   void ensuredSuccess;
@@ -287,12 +287,12 @@ const readUnionValue = () => {
 expectType<Equal<ReturnType<typeof readUnionValue>, number>>(true);
 
 const normalizedArgUnion = success(123) as Failable<number, string>;
-// @ts-expect-error `throwIfError(...)` does not accept normalization options.
-throwIfError(normalizedArgUnion, NormalizedErrors);
+// @ts-expect-error `throwIfFailure(...)` does not accept normalization options.
+throwIfFailure(normalizedArgUnion, NormalizedErrors);
 
 const mappedArgUnion = success(123) as Failable<number, { readonly code: 'boom' }>;
-// @ts-expect-error `throwIfError(...)` does not accept mapper callbacks.
-throwIfError(mappedArgUnion, () => new Error('boom'));
+// @ts-expect-error `throwIfFailure(...)` does not accept mapper callbacks.
+throwIfFailure(mappedArgUnion, () => new Error('boom'));
 
 const successWire = toFailableLike(ok);
 
