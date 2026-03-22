@@ -263,8 +263,10 @@ non-`unknown` return type on the callback) when you want a single Promise.
 ## Compose Existing `Failable` Steps With `run(...)`
 
 Use `run(...)` when each step already returns `Failable` and you want to write
-the success path once. If any yielded step fails, `run(...)` returns that same
-failure unchanged.
+the success path once. If any yielded step fails, that failure becomes the
+default unwind result. Cleanup still runs first, and an explicit `return`
+reached in `finally` overrides it. Yielded cleanup `Failure` values keep the
+current unwind result unless a later cleanup `return` overrides it.
 
 Inside a `run(...)` builder, there are two valid delegation forms:
 
@@ -409,7 +411,10 @@ async function loadUserPage(
 }
 ```
 
-- if a yielded step fails, `run(...)` returns that original failure unchanged
+- if a yielded step fails, that failure becomes the default unwind result
+- cleanup still runs, and the last explicit `return` reached in `finally` wins
+- yielded cleanup `Failure` values keep the current unwind result unless a
+  later cleanup `return` overrides it
 - sync hydrated `Failable` helpers can use direct `yield* helper()` in both sync
   and async builders
 - promised sources in async builders use `yield* await promisedHelper()`

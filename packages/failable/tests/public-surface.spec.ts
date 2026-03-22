@@ -754,6 +754,23 @@ describe('public surface', () => {
     expect(cleanupSteps).toStrictEqual(['cleanup-step-1', 'cleanup-step-2']);
   });
 
+  /* eslint-disable no-unsafe-finally -- intentional smoke coverage for run() cleanup return semantics */
+  it('lets explicit sync cleanup returns override yielded Failures', () => {
+    const cleanup = success('cleanup-value' as const);
+
+    const result = run(function* () {
+      try {
+        yield* failure('original-failure');
+
+        return success('unreachable');
+      } finally {
+        return cleanup;
+      }
+    });
+
+    expect(result).toBe(cleanup);
+  });
+
   it('rejects promised cleanup rejections unchanged during failure unwinding', async () => {
     const original = failure('cleanup-base-failure');
     const rejection = { code: 'cleanup-rejection' } as const;
@@ -795,6 +812,23 @@ describe('public surface', () => {
     expect(result).toBe(original);
     expect(outerCleanupRan).toBe(true);
   });
+
+  it('lets explicit async cleanup returns override yielded Failures', async () => {
+    const cleanup = failure('cleanup-failure' as const);
+
+    const result = await run(async function* () {
+      try {
+        yield* await Promise.resolve(failure('original-failure'));
+
+        return success('unreachable');
+      } finally {
+        return cleanup;
+      }
+    });
+
+    expect(result).toBe(cleanup);
+  });
+  /* eslint-enable no-unsafe-finally */
 
   it('lets direct cleanup throws replace yielded Failures', () => {
     const original = failure('original-failure');

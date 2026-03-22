@@ -2449,6 +2449,122 @@ describe('run()', () => {
       expect(step2).toBe(true);
     });
 
+    /* eslint-disable no-unsafe-finally -- intentional regression coverage for run() last-return-wins unwind semantics */
+    it('lets explicit Success cleanup returns override yielded Failures', () => {
+      const original = failure('original-failure' as const);
+      const cleanup = success('cleanup-success' as const);
+
+      const result = run(function* () {
+        try {
+          yield* original;
+
+          return success('unreachable' as const);
+        } finally {
+          return cleanup;
+        }
+      });
+
+      expect(result).toBe(cleanup);
+    });
+
+    it('lets explicit Failure cleanup returns override yielded Failures', () => {
+      const original = failure('original-failure' as const);
+      const cleanup = failure('cleanup-failure' as const);
+
+      const result = run(function* () {
+        try {
+          yield* original;
+
+          return success('unreachable' as const);
+        } finally {
+          return cleanup;
+        }
+      });
+
+      expect(result).toBe(cleanup);
+    });
+
+    it('lets union-typed cleanup Failable returns override yielded Failures', () => {
+      const original = failure('original-failure' as const);
+      const cleanup = success('cleanup-success' as const) as Failable<
+        'cleanup-success',
+        'cleanup-failure'
+      >;
+
+      const result = run(function* () {
+        try {
+          yield* original;
+
+          return success('unreachable' as const);
+        } finally {
+          return cleanup;
+        }
+      });
+
+      expect(result).toBe(cleanup);
+    });
+
+    it('treats bare cleanup returns as success() during failure unwinding', () => {
+      const original = failure('original-failure' as const);
+
+      const result = run(function* () {
+        try {
+          yield* original;
+
+          return success('unreachable' as const);
+        } finally {
+          return;
+        }
+      });
+
+      expect(result).toStrictEqual(success());
+    });
+
+    it('lets explicit cleanup returns win after draining yielded Success cleanup steps', () => {
+      const original = failure('original-failure' as const);
+      const cleanup = success('cleanup-success' as const);
+      let cleanedUp = false;
+
+      const result = run(function* () {
+        try {
+          yield* original;
+
+          return success('unreachable' as const);
+        } finally {
+          yield* success('cleanup-step' as const);
+          cleanedUp = true;
+          return cleanup;
+        }
+      });
+
+      expect(result).toBe(cleanup);
+      expect(cleanedUp).toBe(true);
+    });
+
+    it('uses the last cleanup return reached during nested failure unwinding', () => {
+      const original = failure('original-failure' as const);
+      const outerCleanup = failure('outer-cleanup-failure' as const);
+      let outerCleanupRan = false;
+
+      const result = run(function* () {
+        try {
+          try {
+            yield* original;
+
+            return success('unreachable' as const);
+          } finally {
+            return success('inner-cleanup-success' as const);
+          }
+        } finally {
+          outerCleanupRan = true;
+          return outerCleanup;
+        }
+      });
+
+      expect(result).toBe(outerCleanup);
+      expect(outerCleanupRan).toBe(true);
+    });
+
     it('returns the explicit failure even if a finally block yields a different failure', () => {
       const original = failure('original-failure' as const);
       let cleanedUp = false;
@@ -2488,6 +2604,121 @@ describe('run()', () => {
 
       expect(result).toBe(original);
       expect(outerCleanedUp).toBe(true);
+    });
+
+    it('lets explicit Success cleanup returns override yielded async Failures', async () => {
+      const original = failure('original-failure' as const);
+      const cleanup = success('cleanup-success' as const);
+
+      const result = await run(async function* () {
+        try {
+          yield* await Promise.resolve(original);
+
+          return success('unreachable' as const);
+        } finally {
+          return cleanup;
+        }
+      });
+
+      expect(result).toBe(cleanup);
+    });
+
+    it('lets explicit Failure cleanup returns override yielded async Failures', async () => {
+      const original = failure('original-failure' as const);
+      const cleanup = failure('cleanup-failure' as const);
+
+      const result = await run(async function* () {
+        try {
+          yield* await Promise.resolve(original);
+
+          return success('unreachable' as const);
+        } finally {
+          return cleanup;
+        }
+      });
+
+      expect(result).toBe(cleanup);
+    });
+
+    it('lets union-typed async cleanup Failable returns override yielded Failures', async () => {
+      const original = failure('original-failure' as const);
+      const cleanup = success('cleanup-success' as const) as Failable<
+        'cleanup-success',
+        'cleanup-failure'
+      >;
+
+      const result = await run(async function* () {
+        try {
+          yield* await Promise.resolve(original);
+
+          return success('unreachable' as const);
+        } finally {
+          return cleanup;
+        }
+      });
+
+      expect(result).toBe(cleanup);
+    });
+
+    it('treats bare async cleanup returns as success() during failure unwinding', async () => {
+      const original = failure('original-failure' as const);
+
+      const result = await run(async function* () {
+        try {
+          yield* await Promise.resolve(original);
+
+          return success('unreachable' as const);
+        } finally {
+          return;
+        }
+      });
+
+      expect(result).toStrictEqual(success());
+    });
+
+    it('lets async cleanup returns win after draining yielded Success cleanup steps', async () => {
+      const original = failure('original-failure' as const);
+      const cleanup = success('cleanup-success' as const);
+      let cleanedUp = false;
+
+      const result = await run(async function* () {
+        try {
+          yield* await Promise.resolve(original);
+
+          return success('unreachable' as const);
+        } finally {
+          yield* await Promise.resolve(success('cleanup-step' as const));
+          cleanedUp = true;
+          return cleanup;
+        }
+      });
+
+      expect(result).toBe(cleanup);
+      expect(cleanedUp).toBe(true);
+    });
+
+    it('uses the last async cleanup return reached during nested failure unwinding', async () => {
+      const original = failure('original-failure' as const);
+      const outerCleanup = failure('outer-cleanup-failure' as const);
+      let outerCleanupRan = false;
+
+      const result = await run(async function* () {
+        try {
+          try {
+            yield* await Promise.resolve(original);
+
+            return success('unreachable' as const);
+          } finally {
+            return success('inner-cleanup-success' as const);
+          }
+        } finally {
+          outerCleanupRan = true;
+          return outerCleanup;
+        }
+      });
+
+      expect(result).toBe(outerCleanup);
+      expect(outerCleanupRan).toBe(true);
     });
 
     it('rejects promised source rejections unchanged in the main path', async () => {
@@ -2544,6 +2775,33 @@ describe('run()', () => {
       ).rejects.toBe(rejection);
       expect(cleanedUp).toBe(true);
     });
+
+    it('uses the last cleanup return during main-path rejection unwinding', async () => {
+      const rejection = { code: 'main-rejection' } as const;
+      const outerCleanup = failure('outer-cleanup-failure' as const);
+      let outerCleanupRan = false;
+
+      const result = await run(async function* () {
+        try {
+          try {
+            yield* await createRejectingThenable<Failable<never, never>>(
+              rejection
+            );
+
+            return success('unreachable' as const);
+          } finally {
+            return success('inner-cleanup-success' as const);
+          }
+        } finally {
+          outerCleanupRan = true;
+          return outerCleanup;
+        }
+      });
+
+      expect(result).toBe(outerCleanup);
+      expect(outerCleanupRan).toBe(true);
+    });
+    /* eslint-enable no-unsafe-finally */
 
     it('uses the cleanup rejection when cleanup also rejects', async () => {
       const rejection = { code: 'main-rejection' } as const;

@@ -1049,7 +1049,7 @@ async function readAsyncRunGetSource(
 function closeRunIterator<TYield extends RunYield, TResult extends RunReturn>(
   iterator: Generator<TYield, TResult, unknown>,
   result: Failable<unknown, unknown>
-) {
+): InferRunResult<TYield, TResult> {
   let closing = iterator.return(result as never);
 
   while (!closing.done) {
@@ -1061,6 +1061,8 @@ function closeRunIterator<TYield extends RunYield, TResult extends RunReturn>(
 
     closing = iterator.next(source.data);
   }
+
+  return finalizeRunResult<TYield, TResult>(closing.value);
 }
 
 async function closeAsyncRunIterator<
@@ -1069,7 +1071,7 @@ async function closeAsyncRunIterator<
 >(
   iterator: AsyncGenerator<TYield, TResult, unknown>,
   result: Failable<unknown, unknown>
-) {
+): Promise<InferRunResult<TYield, TResult>> {
   let closing = await iterator.return(result as never);
 
   while (!closing.done) {
@@ -1081,6 +1083,8 @@ async function closeAsyncRunIterator<
 
     closing = await iterator.next(source.data);
   }
+
+  return finalizeRunResult<TYield, TResult>(closing.value);
 }
 
 function finalizeRunResult<TYield, TResult extends RunReturn>(
@@ -1115,8 +1119,7 @@ function runSyncIterator<TYield extends RunYield, TResult extends RunReturn>(
   while (!iteration.done) {
     const source = readRunGetSource(iteration.value);
     if (source.status === FailableStatus.Failure) {
-      closeRunIterator(iterator, source);
-      return source as InferRunResult<TYield, TResult>;
+      return closeRunIterator(iterator, source);
     }
 
     iteration = iterator.next(source.data);
@@ -1136,8 +1139,7 @@ async function runAsyncIterator<
   while (!iteration.done) {
     const source = await readAsyncRunGetSource(iteration.value);
     if (source.status === FailableStatus.Failure) {
-      await closeAsyncRunIterator(iterator, source);
-      return source as InferRunResult<TYield, TResult>;
+      return closeAsyncRunIterator(iterator, source);
     }
 
     iteration = await iterator.next(source.data);
@@ -1178,6 +1180,11 @@ export function run<
  * - use `yield* await allSettled(...)` to wait for all sources to resolve and get
  *   a `Success` tuple of each `Failable` result
  * - use `yield* await race(...)` to take the first promised `Failable` to settle
+ * - if a yielded step fails, that failure becomes the default unwind result
+ * - cleanup still runs, and the last explicit `return` reached in `finally`
+ *   wins (including bare `return;`, which becomes `success()`)
+ * - yielded cleanup `Failure` values keep the current unwind result unless a
+ *   later cleanup `return` overrides it
  * - rejected promised sources follow normal async `await` / `try` / `finally`
  *   semantics rather than a helper-managed rejection path
  *
