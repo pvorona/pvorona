@@ -274,7 +274,7 @@ expectType<Equal<typeof problemFlatMapped, Failure<'boom'>>>(true);
 const unionFlatMapped = union.flatMap((value) =>
   value > 0
     ? success(value.toString())
-    : failure({ code: 'mapped-error' as const })
+    : failure({ code: 'mapped-error' })
 );
 expectType<
   Equal<
@@ -342,7 +342,7 @@ const mappedArgUnion = success(123) as Failable<number, { readonly code: 'boom' 
 // @ts-expect-error `throwIfFailure(...)` does not accept mapper callbacks.
 throwIfFailure(mappedArgUnion, () => new Error('boom'));
 
-const mappedProblem = failure({ code: 'boom' } as const);
+const mappedProblem = failure({ code: 'boom' });
 // @ts-expect-error `getOrThrow()` does not accept mapper callbacks.
 mappedProblem.getOrThrow(() => new Error('boom'));
 
@@ -415,7 +415,7 @@ const normalizedCustomFailure = failable(
 expectType<Equal<typeof normalizedCustomFailure, Failure<Error>>>(true);
 
 const normalizedRejectedValue = failable(
-  Promise.reject('boom' as const),
+  Promise.reject('boom'),
   normalizeOptions
 );
 expectType<Equal<typeof normalizedRejectedValue, Promise<Failure<Error>>>>(true);
@@ -439,7 +439,7 @@ const runSuccess = run(function* () {
 expectType<Equal<typeof runSuccess, Success<123>>>(true);
 
 const runDirectSuccess = run(function* () {
-  const value = yield* success(123 as const);
+  const value = yield* success(123);
 
   return success(value);
 });
@@ -463,7 +463,7 @@ const runInlineFailure = run(function* () {
 expectType<Equal<typeof runInlineFailure, Failure<'inline-error'>>>(true);
 
 const runDirectFailure = run(function* () {
-  const value = yield* failure('inline-error' as const);
+  const value = yield* failure('inline-error');
 
   return success(value);
 });
@@ -484,7 +484,7 @@ const runNeverSuccessWithYieldedErrorAsFailable: Failable<
 void runNeverSuccessWithYieldedErrorAsFailable;
 
 const runDirectFailable = run(function* () {
-  const value = yield* (success(123 as const) as Failable<123, 'source-error'>);
+  const value = yield* (success(123) as Failable<123, 'source-error'>);
 
   return success(value);
 });
@@ -544,7 +544,7 @@ const runAsyncSuccess = run(async function* () {
   const first = yield* success(123);
   const second = yield* await Promise.resolve(success('ready'));
 
-  return success([first, second] as const);
+  return success([first, second]);
 });
 expectType<
   Equal<typeof runAsyncSuccess, Promise<Success<readonly [123, 'ready']>>>
@@ -554,7 +554,7 @@ const runAsyncDirectHelper = run(async function* () {
   const first = yield* helperResult();
   const second = yield* await Promise.resolve(success('ready'));
 
-  return success([first, second] as const);
+  return success([first, second]);
 });
 const runAsyncDirectHelperAsPromise: Promise<
   Failable<readonly ['helper-data', 'ready'], 'helper-error'>
@@ -562,14 +562,14 @@ const runAsyncDirectHelperAsPromise: Promise<
 void runAsyncDirectHelperAsPromise;
 
 const runAsyncDirectHydrated = run(async function* () {
-  const directValue = yield* success(123 as const);
-  const directFailable = yield* (success('ready' as const) as Failable<
+  const directValue = yield* success(123);
+  const directFailable = yield* (success('ready') as Failable<
     'ready',
     'source-error'
   >);
-  const promisedValue = yield* await Promise.resolve(success(true as const));
+  const promisedValue = yield* await Promise.resolve(success(true));
 
-  return success([directValue, directFailable, promisedValue] as const);
+  return success([directValue, directFailable, promisedValue]);
 });
 expectType<
   Equal<
@@ -593,7 +593,7 @@ expectType<
 >(true);
 
 const runAsyncDirectFailure = run(async function* () {
-  const value = yield* failure('async-direct-error' as const);
+  const value = yield* failure('async-direct-error');
 
   return success(value);
 });
@@ -603,14 +603,14 @@ expectType<
 
 const getAsyncUser = async (userId: string) => {
   if (userId === '') {
-    return failure('missing-user-id' as const);
+    return failure('missing-user-id');
   }
 
   if (userId === 'offline') {
-    return failure('network-error' as const);
+    return failure('network-error');
   }
 
-  return success({ id: userId } as const);
+  return success({ id: userId });
 };
 
 const runAsyncPromisedSourceUnion = run(async function* () {
@@ -631,31 +631,31 @@ expectType<
 >(true);
 void runAsyncPromisedSourceUnion;
 
-const syncAll = all(success(1 as const), success('two' as const));
+const syncAll = all(success(1), success('two'));
 const syncAllAsFailable: Failable<readonly [1, 'two'], never> = syncAll;
 void syncAllAsFailable;
 
 const mixedAll = all(
-  success(1 as const),
-  Promise.resolve(success('two' as const))
+  success(1),
+  Promise.resolve(success('two'))
 );
 const mixedAllAsPromise: Promise<Failable<readonly [1, 'two'], never>> = mixedAll;
 void mixedAllAsPromise;
 
 const settledAll = allSettled(
-  Promise.resolve(success(1 as const)),
-  Promise.resolve(failure('boom' as const))
+  Promise.resolve(success(1)),
+  Promise.resolve(failure('boom'))
 );
 const settledAllAsPromise: Promise<readonly [Success<1>, Failure<'boom'>]> =
   settledAll;
 void settledAllAsPromise;
 
 // @ts-expect-error `allSettled(...)` rejects obvious bare `Promise.reject(...)` inputs.
-allSettled(Promise.reject('boom' as const));
+allSettled(Promise.reject('boom'));
 
 const racedResult = race(
-  Promise.resolve(success(1 as const)),
-  Promise.resolve(failure('boom' as const))
+  Promise.resolve(success(1)),
+  Promise.resolve(failure('boom'))
 );
 const racedResultAsPromise: Promise<Failable<1, 'boom'>> = racedResult;
 void racedResultAsPromise;
@@ -677,35 +677,35 @@ expectType<Equal<typeof runAsyncThrowOnly, Promise<never>>>(true);
 
 // @ts-expect-error `run(...)` async builders no longer receive combinator helpers.
 run(async function* ({ all: runAll }) {
-  const [value] = yield* await runAll(Promise.resolve(success(123 as const)));
+  const [value] = yield* await runAll(Promise.resolve(success(123)));
 
   return success(value);
 });
 
 run(function* () {
   // @ts-expect-error sync `run(...)` builders only accept hydrated `Failable` values.
-  const value = yield* Promise.resolve(success(123 as const));
+  const value = yield* Promise.resolve(success(123));
 
   return success(value);
 });
 
 run(async function* () {
   // @ts-expect-error promised sources must be awaited before `yield*`.
-  const value = yield* Promise.resolve(success(123 as const));
+  const value = yield* Promise.resolve(success(123));
 
   return success(value);
 });
 
 run(async function* () {
   // @ts-expect-error direct `yield*` does not accept promised `Failable` sources.
-  const value = yield* Promise.resolve(success(123 as const));
+  const value = yield* Promise.resolve(success(123));
 
   return success(value);
 });
 
 // @ts-expect-error `run(...)` builders must return a `Failable`.
 run(function* () {
-  return 123 as const;
+  return 123;
 });
 
 // @ts-expect-error `run(...)` builders must return hydrated `Failable` values only.
@@ -753,7 +753,7 @@ run(async function* () {
 });
 
 // @ts-expect-error `race(...)` accepts promised `Failable` sources only.
-race(success(123 as const));
+race(success(123));
 
 const runEmpty = run(function* () {
   return;

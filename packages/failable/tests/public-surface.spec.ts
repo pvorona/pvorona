@@ -404,12 +404,12 @@ describe('public surface', () => {
   });
 
   it('supports top-level all() for sync or promised sources', async () => {
-    const syncResult = all(success(1 as const), success(2 as const));
+    const syncResult = all(success(1), success(2));
     expect(syncResult).toStrictEqual(success([1, 2]));
 
     const asyncResult = await all(
-      success('user' as const),
-      Promise.resolve(success('profile' as const))
+      success('user'),
+      Promise.resolve(success('profile'))
     );
     expect(asyncResult).toStrictEqual(success(['user', 'profile']));
   });
@@ -417,24 +417,24 @@ describe('public surface', () => {
   it('supports top-level allSettled() capturing promised source rejections', async () => {
     const missingProfileSource: Promise<Failable<never, 'missing-profile'>> =
       Promise.resolve().then(() => {
-        throw 'missing-profile' as const;
+        throw 'missing-profile';
       });
     const result = await allSettled(
-      Promise.resolve(success(1 as const)),
+      Promise.resolve(success(1)),
       missingProfileSource
     );
 
     expect(result).toStrictEqual([
-      success(1 as const),
-      failure('missing-profile' as const),
+      success(1),
+      failure('missing-profile'),
     ]);
   });
 
   it('supports top-level race() for promised sources', async () => {
     const result = await race(
-      Promise.resolve(success('fast' as const)),
+      Promise.resolve(success('fast')),
       new Promise<ReturnType<typeof success<'slow'>>>((resolve) => {
-        setTimeout(() => resolve(success('slow' as const)), 10);
+        setTimeout(() => resolve(success('slow')), 10);
       })
     );
 
@@ -807,7 +807,7 @@ describe('public surface', () => {
 
   /* eslint-disable no-unsafe-finally -- intentional smoke coverage for run() cleanup return semantics */
   it('lets explicit sync cleanup returns override yielded Failures', () => {
-    const cleanup = success('cleanup-value' as const);
+    const cleanup = success('cleanup-value');
 
     const result = run(function* () {
       try {
@@ -865,7 +865,7 @@ describe('public surface', () => {
   });
 
   it('lets explicit async cleanup returns override yielded Failures', async () => {
-    const cleanup = failure('cleanup-failure' as const);
+    const cleanup = failure('cleanup-failure');
 
     const result = await run(async function* () {
       try {

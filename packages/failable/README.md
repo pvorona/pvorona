@@ -372,17 +372,17 @@ type Profile = { id: string; pictureUrl: string };
 async function readJson<T>(url: string) {
   const responseResult = await failable(fetch(url));
   if (responseResult.isFailure) {
-    return failure({ code: 'network_error', cause: responseResult.error } as const);
+    return failure({ code: 'network_error', cause: responseResult.error });
   }
 
   const response = responseResult.data;
   if (!response.ok) {
-    return failure({ code: 'http_error', status: response.status } as const);
+    return failure({ code: 'http_error', status: response.status });
   }
 
   const jsonResult = await failable(response.json());
   if (jsonResult.isFailure) {
-    return failure({ code: 'json_parse_error', cause: jsonResult.error } as const);
+    return failure({ code: 'json_parse_error', cause: jsonResult.error });
   }
 
   return success(jsonResult.data as T);
@@ -444,25 +444,25 @@ import {
   type Failable,
 } from '@pvorona/failable';
 
-const syncTuple = all(success(1 as const), success('two' as const));
+const syncTuple = all(success(1), success('two'));
 const mixedTuple = await all(
-  success(1 as const),
-  Promise.resolve(success('two' as const))
+  success(1),
+  Promise.resolve(success('two'))
 );
 
 const missingProfileSource: Promise<Failable<never, 'missing-profile'>> =
   Promise.resolve().then(() => {
-    throw 'missing-profile' as const;
+    throw 'missing-profile';
   });
 
 const settled = await allSettled(
-  Promise.resolve(success(1 as const)),
+  Promise.resolve(success(1)),
   missingProfileSource
 );
 
 const winner = await race(
-  Promise.resolve(success('fast' as const)),
-  Promise.resolve(success('slow' as const))
+  Promise.resolve(success('fast')),
+  Promise.resolve(success('slow'))
 );
 ```
 
