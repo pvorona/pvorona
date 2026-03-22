@@ -1,6 +1,6 @@
 {
   "name": "@pvorona/reference",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -30,7 +30,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@pvorona/assert": "~1.0.0",
-    "@pvorona/resolve-value-or-getter": "0.0.0"
+    "@pvorona/assert": "~1.0.1",
+    "@pvorona/resolve-value-or-getter": "~0.1.0"
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@pvorona/duration",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -30,6 +30,6 @@
     "access": "public"
   },
   "dependencies": {
-    "@pvorona/assert": "~1.0.0"
+    "@pvorona/assert": "~1.0.1"
   }
 }

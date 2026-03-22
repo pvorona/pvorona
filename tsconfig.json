@@ -29,6 +29,12 @@
     },
     {
       "path": "./packages/disposable"
+    },
+    {
+      "path": "./packages/resolve-value-or-getter"
+    },
+    {
+      "path": "./packages/types"
     }
   ]
 }

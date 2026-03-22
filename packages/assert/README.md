@@ -227,7 +227,7 @@ const requiredFallbackPort = ensureDefined(fallbackPort);
 
 The root package no longer re-exports some advanced helpers from older internal surfaces.
 
-- `resolveValueOrGetter` moved to a private workspace package and is no longer part of the published API
+- `resolveValueOrGetter` moved to [`@pvorona/resolve-value-or-getter`](https://www.npmjs.com/package/@pvorona/resolve-value-or-getter) and is no longer part of the `@pvorona/assert` API
 - `Mutable` moved to a private workspace package and is no longer part of the published API
 - External consumers should define local equivalents if they still need either helper
 - Removed root exports include internal-looking helpers such as `Override`, `InferErrorMessage`, `NotOnly*`, `Includes*`, `AtLeastOneValid`, and `InferArrayType`

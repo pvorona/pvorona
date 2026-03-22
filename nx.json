@@ -65,12 +65,11 @@
           "*",
           "!@pvorona/source",
           "!@pvorona/reference",
-          "!@pvorona/resolve-value-or-getter",
           "!@pvorona/types"
         ],
         "projectsRelationship": "independent",
         "version": {
-          "groupPreVersionCommand": "npx nx run-many -t build --projects='*,!@pvorona/source,!@pvorona/reference,!@pvorona/resolve-value-or-getter,!@pvorona/types'"
+          "groupPreVersionCommand": "npx nx run-many -t build --projects='*,!@pvorona/source,!@pvorona/reference,!@pvorona/types'"
         }
       }
     }

@@ -1,6 +1,6 @@
 {
   "name": "@pvorona/counter",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -29,7 +29,5 @@
   "publishConfig": {
     "access": "public"
   },
-  "dependencies": {
-    "@pvorona/types": "0.0.0"
-  }
+  "dependencies": {}
 }

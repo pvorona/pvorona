@@ -16,9 +16,6 @@
     },
     {
       "path": "../assert/tsconfig.lib.json"
-    },
-    {
-      "path": "../types/tsconfig.lib.json"
     }
   ],
   "exclude": [

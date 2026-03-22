@@ -1,11 +1,13 @@
-import type { Mutable } from '@pvorona/types';
-
 export type Counter = {
   readonly value: number;
   increment(amount?: number): number;
   decrement(amount?: number): number;
   set(value: number): number;
   reset(): number;
+};
+
+type Mutable<T> = {
+  -readonly [K in keyof T]: T[K];
 };
 
 type CounterState = Mutable<Counter> & {
