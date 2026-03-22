@@ -139,6 +139,12 @@ const normalizeOptions = {
   },
 } satisfies FailableNormalizeErrorOptions;
 
+const okGetOrThrowNormalized = ok.getOrThrow(NormalizedErrors);
+expectType<Equal<typeof okGetOrThrowNormalized, 123>>(true);
+
+const okGetOrThrowCustom = ok.getOrThrow(normalizeOptions);
+expectType<Equal<typeof okGetOrThrowCustom, 123>>(true);
+
 const problem = failure('boom');
 const voidProblem = failure();
 const explicitUndefinedProblem = failure(undefined);
@@ -164,6 +170,12 @@ expectType<Equal<typeof problemGetOrElseFromError, number>>(true);
 
 const problemGetOrThrow = () => problem.getOrThrow();
 expectType<Equal<ReturnType<typeof problemGetOrThrow>, never>>(true);
+
+const problemGetOrThrowNormalized = () => problem.getOrThrow(NormalizedErrors);
+expectType<Equal<ReturnType<typeof problemGetOrThrowNormalized>, never>>(true);
+
+const problemGetOrThrowCustom = () => problem.getOrThrow(normalizeOptions);
+expectType<Equal<ReturnType<typeof problemGetOrThrowCustom>, never>>(true);
 
 const problemMatch = problem.match(
   () => 'unexpected',
@@ -306,13 +318,35 @@ const readUnionValue = () => {
 };
 expectType<Equal<ReturnType<typeof readUnionValue>, number>>(true);
 
+const readUnionValueWithNormalizedErrors = () => {
+  const result: Failable<number, string> =
+    Math.random() > 0.5 ? success(123) : failure('boom');
+
+  return result.getOrThrow(NormalizedErrors);
+};
+expectType<Equal<ReturnType<typeof readUnionValueWithNormalizedErrors>, number>>(true);
+
+const readUnionValueWithCustomNormalization = () => {
+  const result: Failable<number, string> =
+    Math.random() > 0.5 ? success(123) : failure('boom');
+
+  return result.getOrThrow(normalizeOptions);
+};
+expectType<
+  Equal<ReturnType<typeof readUnionValueWithCustomNormalization>, number>
+>(true);
+
 const normalizedArgUnion = success(123) as Failable<number, string>;
-// @ts-expect-error `throwIfFailure(...)` does not accept normalization options.
 throwIfFailure(normalizedArgUnion, NormalizedErrors);
+throwIfFailure(normalizedArgUnion, normalizeOptions);
 
 const mappedArgUnion = success(123) as Failable<number, { readonly code: 'boom' }>;
 // @ts-expect-error `throwIfFailure(...)` does not accept mapper callbacks.
 throwIfFailure(mappedArgUnion, () => new Error('boom'));
+
+const mappedProblem = failure({ code: 'boom' } as const);
+// @ts-expect-error `getOrThrow()` does not accept mapper callbacks.
+mappedProblem.getOrThrow(() => new Error('boom'));
 
 const successWire = toFailableLike(ok);
 
@@ -778,8 +812,15 @@ void readOkData;
 void ensureProblem;
 void readEnsuredUnionData;
 void readUnionValue;
+void okGetOrThrowNormalized;
+void okGetOrThrowCustom;
+void problemGetOrThrowNormalized;
+void problemGetOrThrowCustom;
+void readUnionValueWithNormalizedErrors;
+void readUnionValueWithCustomNormalization;
 void normalizedArgUnion;
 void mappedArgUnion;
+void mappedProblem;
 void wrappedSyncLiteral;
 void wrappedAsyncFn;
 void wrappedPromiseFn;

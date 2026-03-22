@@ -905,6 +905,12 @@ describe('getOrThrow()', () => {
       expect(() => failure(error).getOrThrow()).toThrow(error);
     });
 
+    it('preserves existing Error instances with NormalizedErrors', () => {
+      const error = new Error(faker.string.uuid());
+
+      expect(() => failure(error).getOrThrow(NormalizedErrors)).toThrow(error);
+    });
+
     it.each(RAW_ERROR_CASES)(
       'normalizes non-Error failure values into Error objects ($label)',
       ({ error }) => {
@@ -915,8 +921,25 @@ describe('getOrThrow()', () => {
       }
     );
 
+    it.each(RAW_ERROR_CASES)(
+      'normalizes non-Error failure values into Error objects with NormalizedErrors ($label)',
+      ({ error }) => {
+        expectThrowBoundaryToNormalizeFailure(
+          () => failure(error).getOrThrow(NormalizedErrors),
+          error
+        );
+      }
+    );
+
     it('normalizes void failures into Error objects', () => {
       expectThrowBoundaryToNormalizeFailure(() => failure().getOrThrow(), undefined);
+    });
+
+    it('normalizes void failures into Error objects with NormalizedErrors', () => {
+      expectThrowBoundaryToNormalizeFailure(
+        () => failure().getOrThrow(NormalizedErrors),
+        undefined
+      );
     });
 
     it('does not leak thrown coercion errors while normalizing failures', () => {
@@ -935,6 +958,34 @@ describe('getOrThrow()', () => {
       }
 
       throw new Error('Expected getOrThrow() to throw');
+    });
+
+    it('uses custom normalizeError for non-Error failure values', () => {
+      const rawError = { code: faker.string.uuid() } as const;
+      const normalized = new Error('normalized', { cause: rawError });
+      const normalizeError = vi.fn((error: unknown) => {
+        expect(error).toBe(rawError);
+        return normalized;
+      });
+
+      expect(() =>
+        failure(rawError).getOrThrow({ normalizeError })
+      ).toThrow(normalized);
+      expect(normalizeError).toHaveBeenCalledWith(rawError);
+    });
+
+    it('uses custom normalizeError for existing Error failure values', () => {
+      const rawError = new Error(faker.string.uuid());
+      const normalized = new Error('normalized', { cause: rawError });
+      const normalizeError = vi.fn((error: unknown) => {
+        expect(error).toBe(rawError);
+        return normalized;
+      });
+
+      expect(() =>
+        failure(rawError).getOrThrow({ normalizeError })
+      ).toThrow(normalized);
+      expect(normalizeError).toHaveBeenCalledWith(rawError);
     });
 
     it('returns never for failure types', () => {
@@ -1054,6 +1105,19 @@ describe('throwIfFailure()', () => {
     throw new Error('Expected throwIfFailure() to throw the stored error');
   });
 
+  it('preserves existing Error instances with NormalizedErrors for failure input', () => {
+    const error = new Error(faker.string.uuid());
+
+    try {
+      throwIfFailure(failure(error), NormalizedErrors);
+    } catch (thrown) {
+      expect(thrown).toBe(error);
+      return;
+    }
+
+    throw new Error('Expected throwIfFailure() to throw the stored error');
+  });
+
   it.each(RAW_ERROR_CASES)(
     'normalizes non-Error failure values into Error objects ($label)',
     ({ error }) => {
@@ -1064,9 +1128,26 @@ describe('throwIfFailure()', () => {
     }
   );
 
+  it.each(RAW_ERROR_CASES)(
+    'normalizes non-Error failure values into Error objects with NormalizedErrors ($label)',
+    ({ error }) => {
+      expectThrowBoundaryToNormalizeFailure(
+        () => throwIfFailure(failure(error), NormalizedErrors),
+        error
+      );
+    }
+  );
+
   it('normalizes void failures into Error objects', () => {
     expectThrowBoundaryToNormalizeFailure(
       () => throwIfFailure(failure()),
+      undefined
+    );
+  });
+
+  it('normalizes void failures into Error objects with NormalizedErrors', () => {
+    expectThrowBoundaryToNormalizeFailure(
+      () => throwIfFailure(failure(), NormalizedErrors),
       undefined
     );
   });
@@ -1087,6 +1168,34 @@ describe('throwIfFailure()', () => {
     }
 
     throw new Error('Expected throwIfFailure() to throw');
+  });
+
+  it('uses custom normalizeError for non-Error failure values', () => {
+    const rawError = { code: faker.string.uuid() } as const;
+    const normalized = new Error('normalized', { cause: rawError });
+    const normalizeError = vi.fn((error: unknown) => {
+      expect(error).toBe(rawError);
+      return normalized;
+    });
+
+    expect(() =>
+      throwIfFailure(failure(rawError), { normalizeError })
+    ).toThrow(normalized);
+    expect(normalizeError).toHaveBeenCalledWith(rawError);
+  });
+
+  it('uses custom normalizeError for existing Error failure values', () => {
+    const rawError = new Error(faker.string.uuid());
+    const normalized = new Error('normalized', { cause: rawError });
+    const normalizeError = vi.fn((error: unknown) => {
+      expect(error).toBe(rawError);
+      return normalized;
+    });
+
+    expect(() =>
+      throwIfFailure(failure(rawError), { normalizeError })
+    ).toThrow(normalized);
+    expect(normalizeError).toHaveBeenCalledWith(rawError);
   });
 
   it('narrows the same union variable after the helper returns', () => {

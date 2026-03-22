@@ -546,6 +546,15 @@ describe('public surface', () => {
     );
   });
 
+  it('supports throw-boundary normalization with `throwIfFailure(...)`', () => {
+    const result = divide(10, 0);
+
+    expectThrowBoundaryToNormalizeFailure(
+      () => throwIfFailure(result, NormalizedErrors),
+      'Cannot divide by zero',
+    );
+  });
+
   it('supports the README `getOrThrow()` example', () => {
     const result = divide(10, 2);
 
@@ -559,6 +568,15 @@ describe('public surface', () => {
 
     expectThrowBoundaryToNormalizeFailure(
       () => result.getOrThrow(),
+      'Cannot divide by zero',
+    );
+  });
+
+  it('supports throw-boundary normalization with `getOrThrow()`', () => {
+    const result = divide(10, 0);
+
+    expectThrowBoundaryToNormalizeFailure(
+      () => result.getOrThrow(NormalizedErrors),
       'Cannot divide by zero',
     );
   });

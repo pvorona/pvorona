@@ -69,7 +69,7 @@ if (result.isFailure) {
 | Read the value or provide a fallback | `getOr(...)` / `getOrElse(...)` |
 | Recover to `Success<T>` | `or(...)` / `orElse(...)` |
 | Map both branches to one output | `match(onSuccess, onFailure)` |
-| Throw an `Error` from a failure | `getOrThrow()` / `throwIfFailure(result)` |
+| Throw an `Error` from a failure | `getOrThrow(normalizeOption?)` / `throwIfFailure(result, normalizeOption?)` |
 | Capture a throwing or rejecting boundary | `failable(...)` |
 | Compose multiple `Failable` steps | `run(...)` |
 | Combine multiple `Failable` sources | `all(...)`, `allSettled(...)`, `race(...)` |
@@ -90,18 +90,20 @@ you want something shorter, use the helper that matches the job:
 - `result.orElse(() => fallback)`: lazy recovery to `Success<T>`
 - `result.orElse((error) => fallback)`: lazy recovery to `Success<T>` derived from the failure
 - `result.match(onSuccess, onFailure)`: map both branches to one output
-- `result.getOrThrow()`: return the success value or throw an `Error` derived from the failure
-- `throwIfFailure(result)`: throw an `Error` derived from the failure and narrow the same variable
+- `result.getOrThrow(normalizeOption?)`: return the success value or throw an `Error` derived from the failure
+- `throwIfFailure(result, normalizeOption?)`: throw an `Error` derived from the failure and narrow the same variable
 
-Both throw helpers preserve existing `Error` instances unchanged. Other
-failure values are normalized with the built-in rules: arrays become
+Both throw helpers preserve existing `Error` instances unchanged by default.
+Other failure values are normalized with the built-in rules: arrays become
 `AggregateError`; plain objects become `Error` with `cause`; primitives and
-`undefined` become `Error(String(value), { cause: value })`. Use
-`failable(..., NormalizedErrors)` or a custom `normalizeError(...)` earlier
-when you need a specific normalized `Error` shape before the throw boundary.
-If built-in message derivation itself fails, normalization still returns an
-`Error` with message `Unstringifiable error value` and `cause` set to the
-original raw value.
+`undefined` become `Error(String(value), { cause: value })`.
+
+Pass `NormalizedErrors` or a custom `normalizeError(...)` when you need a
+specific `Error` shape at the throw boundary. Normalize earlier with
+`failable(...)` only when you need that normalized `Error` inside the
+`Failure` channel before anything throws. If built-in message derivation
+itself fails, normalization still returns an `Error` with message
+`Unstringifiable error value` and `cause` set to the original raw value.
 
 Use the lazy forms when the fallback is expensive or has side effects. Failure
 callbacks always receive the stored error, so `() => ...` can ignore it and
@@ -135,6 +137,15 @@ const result = readPort(process.env.PORT);
 
 throwIfFailure(result);
 console.log(result.data * 2);
+```
+
+When you want a specific `Error` shape only at the throw site, pass the
+normalize option there:
+
+```ts
+import { NormalizedErrors } from '@pvorona/failable';
+
+const port = readPort(process.env.PORT).getOrThrow(NormalizedErrors);
 ```
 
 ## Transform And Chain With `map(...)` And `flatMap(...)`
@@ -519,8 +530,8 @@ if (isFailable(candidate) && candidate.isFailure) {
 - `type Success<T>` / `type Failure<E>`: hydrated result variants
 - `type FailableLike<T, E>`: structured-clone-friendly wire shape
 - `success()` / `success(data)` / `failure()` / `failure(error)`: create hydrated results
-- `throwIfFailure(result)` / `result.getOrThrow()`: throw an `Error`,
-  preserving existing `Error` instances unchanged
+- `throwIfFailure(result, normalizeOption?)` / `result.getOrThrow(normalizeOption?)`:
+  throw an `Error`, preserving existing `Error` instances unchanged by default
 - `failable(...)`: preserve, rehydrate, capture, or normalize failures at
   a boundary
 - `run(...)`: compose `Failable` steps without nested branching
@@ -530,5 +541,6 @@ if (isFailable(candidate) && candidate.isFailure) {
 - `isFailableLike(...)`: validate a wire shape
 - `isFailable(...)`, `isSuccess(...)`, `isFailure(...)`: validate hydrated
   results
-- `NormalizedErrors`: built-in `Error` normalization for `failable(...)`
+- `NormalizedErrors`: built-in `Error` normalization for `failable(...)` and
+  throw-boundary helpers
 - `FailableStatus`: runtime success/failure status values

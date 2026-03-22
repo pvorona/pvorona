@@ -169,7 +169,7 @@ export type Success<T> = {
   readonly orElse: <U>(getValue: LazyFallback<U, never>) => Success<T>;
   readonly getOr: <U>(value: U) => T;
   readonly getOrElse: <U>(getValue: LazyFallback<U, never>) => T;
-  readonly getOrThrow: () => T;
+  readonly getOrThrow: (normalizeOption?: FailableNormalizeErrorInput) => T;
   readonly match: SuccessMatch<T>;
   readonly map: SuccessMap<T>;
   readonly flatMap: SuccessFlatMap<T>;
@@ -191,7 +191,7 @@ export type Failure<E> = {
   readonly orElse: <U>(getValue: LazyFallback<U, E>) => Success<U>;
   readonly getOr: <U>(value: U) => U;
   readonly getOrElse: <U>(getValue: LazyFallback<U, E>) => U;
-  readonly getOrThrow: () => never;
+  readonly getOrThrow: (normalizeOption?: FailableNormalizeErrorInput) => never;
   readonly match: FailureMatch<E>;
   readonly map: FailureMap<E>;
   readonly flatMap: FailureFlatMap<E>;
@@ -247,8 +247,31 @@ function resolveLazyFallback<U, E>(getValue: () => U, error: E): U {
   return (getValue as unknown as (error: E) => U)(error);
 }
 
-function throwNormalizedFailure(error: unknown): never {
-  throw normalizeUnknownError(error);
+function toThrownError(
+  error: unknown,
+  normalizeOption?: FailableNormalizeErrorInput
+): Error {
+  if (normalizeOption === undefined) {
+    return normalizeUnknownError(error);
+  }
+
+  const normalizeError = resolveNormalizeError(normalizeOption);
+  if (normalizeError === null) {
+    return normalizeUnknownError(error);
+  }
+
+  if (error instanceof Error && isNormalizedErrorsPreset(normalizeOption)) {
+    return error;
+  }
+
+  return normalizeError(error);
+}
+
+function throwNormalizedFailure(
+  error: unknown,
+  normalizeOption?: FailableNormalizeErrorInput
+): never {
+  throw toThrownError(error, normalizeOption);
 }
 
 const BASE_SUCCESS = (() => {
@@ -268,7 +291,10 @@ const BASE_SUCCESS = (() => {
   node.getOrElse = function getOrElseSuccess() {
     return this.data;
   };
-  node.getOrThrow = function getOrThrowSuccess() {
+  node.getOrThrow = function getOrThrowSuccess(
+    _normalizeOption?: FailableNormalizeErrorInput
+  ) {
+    void _normalizeOption;
     return this.data;
   };
   node.match = function matchSuccess(
@@ -309,8 +335,10 @@ const BASE_FAILURE = (() => {
   node.getOrElse = function getOrElseFailure<U>(getValue: () => U) {
     return resolveLazyFallback(getValue, this.error);
   };
-  node.getOrThrow = function getOrThrowFailure() {
-    throwNormalizedFailure(this.error);
+  node.getOrThrow = function getOrThrowFailure(
+    normalizeOption?: FailableNormalizeErrorInput
+  ) {
+    throwNormalizedFailure(this.error, normalizeOption);
   };
   node.match = function matchFailure(
     this: InternalFailure<unknown>,
@@ -351,8 +379,10 @@ const BASE_FAILURE = (() => {
  *   or `T | Promise<T>`).
  * - `await failable(promise)`: capture async rejections when you already hold a promise.
  * - `run(...)`: compose steps that already return `Failable`.
- * - `throwIfFailure(result)`: keep using the same `result` variable after narrowing.
- * - `result.getOrThrow()`: unwrap the success value in expression or return position.
+ * - `throwIfFailure(result, normalizeOption?)`: keep using the same `result`
+ *   variable after narrowing, with optional throw-boundary normalization.
+ * - `result.getOrThrow(normalizeOption?)`: unwrap the success value in
+ *   expression or return position, with optional throw-boundary normalization.
  *
  * Design goals:
  * - Prefer explicit, typed results over exceptions.
@@ -392,8 +422,11 @@ const BASE_FAILURE = (() => {
  * - `getOrThrow()` and `throwIfFailure(result)` always throw `Error` values. Existing `Error`
  *   instances are preserved unchanged; other failure values use the built-in normalization rules,
  *   including values whose string coercion hooks throw.
- * - Normalize earlier with `failable(..., NormalizedErrors)` or a custom `normalizeError`
- *   if you need a specific `Error` shape before the throw boundary.
+ * - Pass `NormalizedErrors` or `{ normalizeError }` directly to `getOrThrow(...)`
+ *   or `throwIfFailure(...)` when you need a specific `Error` shape at the
+ *   throw boundary.
+ * - Normalize earlier with `failable(...)` only when you need that `Error`
+ *   shape inside the `Failure` channel before throwing.
  * - Callback typing follows runtime branches: purely synchronous callbacks return `Failable<...>`;
  *   purely `PromiseLike`-returning callbacks (including `async` functions) return
  *   `Promise<Failable<...>>`.
@@ -458,14 +491,15 @@ export function failure<const E>(error?: E): Failure<E | void> {
  *
  * Use this when you want control-flow narrowing without replacing the original variable.
  * Use `result.getOrThrow()` when you need the success value itself in expression or return position.
- * Existing `Error` instances are thrown unchanged. Other failure values are normalized with the
- * built-in rules. Normalize earlier with `failable(...)` when you need a specific `Error` shape.
+ * Existing `Error` instances are thrown unchanged by default. Pass `NormalizedErrors`
+ * or `{ normalizeError }` when you need a specific `Error` shape at the throw boundary.
  */
 export function throwIfFailure<T, E>(
-  result: Failable<T, E>
+  result: Failable<T, E>,
+  normalizeOption?: FailableNormalizeErrorInput
 ): asserts result is Success<T> {
   if (result.status === FailableStatus.Failure) {
-    throwNormalizedFailure(result.error);
+    throwNormalizedFailure(result.error, normalizeOption);
   }
 }
 
