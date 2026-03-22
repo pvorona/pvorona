@@ -2006,6 +2006,19 @@ describe('run()', () => {
       void buildResult;
     });
 
+    it('infers Promise<Failable> from all() when a source may be sync or promised', () => {
+      const maybeAsyncSource:
+        | Failable<number, string>
+        | Promise<Failable<number, string>> =
+        Math.random() > 0.5 ? success(1) : Promise.resolve(success(1));
+
+      const result = all(maybeAsyncSource);
+
+      expectTypeOf(result).toEqualTypeOf<
+        Promise<Failable<readonly [number], string>>
+      >();
+    });
+
     it('infers Success tuple entries when Promise<Success> is passed to allSettled()', () => {
       const buildResult = () =>
         run(async function* () {
@@ -2070,6 +2083,19 @@ describe('run()', () => {
       void buildResult;
     });
 
+    it('infers Promise<settled tuple> from allSettled() when a source may be sync or promised', () => {
+      const maybeAsyncSource:
+        | Failable<number, string>
+        | Promise<Failable<number, string>> =
+        Math.random() > 0.5 ? success(1) : Promise.resolve(success(1));
+
+      const result = allSettled(maybeAsyncSource);
+
+      expectTypeOf(result).toEqualTypeOf<
+        Promise<readonly [Failable<number, string>]>
+      >();
+    });
+
     it('infers sync Failable from race() when only hydrated sync sources are passed', () => {
       const result = race(
         success(1),
@@ -2086,6 +2112,17 @@ describe('run()', () => {
       );
 
       expectTypeOf(result).toEqualTypeOf<Promise<Failable<1, 'err'>>>();
+    });
+
+    it('infers Promise<Failable> from race() when a source may be sync or promised', () => {
+      const maybeAsyncSource:
+        | Failable<number, string>
+        | Promise<Failable<number, string>> =
+        Math.random() > 0.5 ? success(1) : Promise.resolve(success(1));
+
+      const result = race(maybeAsyncSource);
+
+      expectTypeOf(result).toEqualTypeOf<Promise<Failable<number, string>>>();
     });
 
     it('infers data union from race() when only Promise<Success> is passed', () => {

@@ -33,7 +33,9 @@ type FailableNormalizeErrorInput =
   | typeof NormalizedErrors
   | FailableNormalizeErrorOptions;
 
-type LazyFallback<U, E> = (() => U) | ((error: E) => U);
+type LazyFallback<U, E> = {
+  bivarianceHack(error?: E): U;
+}['bivarianceHack'];
 
 type Match<T, E> = <U>(
   onSuccess: (data: T) => U,
@@ -243,8 +245,8 @@ const BASE_FAILABLE = {
   },
 } as const;
 
-function resolveLazyFallback<U, E>(getValue: () => U, error: E): U {
-  return (getValue as unknown as (error: E) => U)(error);
+function resolveLazyFallback<U, E>(getValue: LazyFallback<U, E>, error: E): U {
+  return getValue(error);
 }
 
 function toThrownError(
@@ -832,11 +834,11 @@ type FailableSourceSettled<T> = T extends Success<infer D>
   ? Failable<D, E>
   : never;
 
-type FailableSourceIsAsync<T> = T extends PromiseLike<
-  Failable<unknown, unknown>
->
-  ? true
-  : false;
+type FailableSourceIsAsync<T> = [
+  Extract<T, PromiseLike<Failable<unknown, unknown>>>
+] extends [never]
+  ? false
+  : true;
 
 type FailableSourceHasGuaranteedFailure<T> = T extends
   | Failure<unknown>

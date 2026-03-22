@@ -642,6 +642,16 @@ const mixedAll = all(
 const mixedAllAsPromise: Promise<Failable<readonly [1, 'two'], never>> = mixedAll;
 void mixedAllAsPromise;
 
+const maybeAsyncSource:
+  | Failable<number, string>
+  | Promise<Failable<number, string>> =
+  Math.random() > 0.5 ? success(1) : Promise.resolve(success(1));
+
+const maybeAsyncAll = all(maybeAsyncSource);
+expectType<
+  Equal<typeof maybeAsyncAll, Promise<Failable<readonly [number], string>>>
+>(true);
+
 const settledAll = allSettled(
   Promise.resolve(success(1)),
   Promise.resolve(failure('boom'))
@@ -649,6 +659,11 @@ const settledAll = allSettled(
 const settledAllAsPromise: Promise<readonly [Success<1>, Failure<'boom'>]> =
   settledAll;
 void settledAllAsPromise;
+
+const maybeAsyncSettled = allSettled(maybeAsyncSource);
+expectType<
+  Equal<typeof maybeAsyncSettled, Promise<readonly [Failable<number, string>]>>
+>(true);
 
 // @ts-expect-error `allSettled(...)` rejects obvious bare `Promise.reject(...)` inputs.
 allSettled(Promise.reject('boom'));
@@ -666,6 +681,11 @@ const racedResult = race(
 );
 const racedResultAsPromise: Promise<Failable<1, 'boom'>> = racedResult;
 void racedResultAsPromise;
+
+const maybeAsyncRace = race(maybeAsyncSource);
+expectType<Equal<typeof maybeAsyncRace, Promise<Failable<number, string>>>>(
+  true
+);
 
 // @ts-expect-error `race(...)` rejects obvious bare `Promise.reject(...)` inputs.
 race(Promise.reject('boom'));
@@ -837,7 +857,10 @@ void runAsyncFailure;
 void runAsyncDirectFailure;
 void syncAll;
 void mixedAll;
+void maybeAsyncAll;
 void settledAll;
+void maybeAsyncSettled;
 void racedResult;
+void maybeAsyncRace;
 void runAsyncHelperReturn;
 void runAsyncThrowOnly;
