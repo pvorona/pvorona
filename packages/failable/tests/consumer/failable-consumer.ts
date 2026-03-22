@@ -646,10 +646,12 @@ const settledAll = allSettled(
   Promise.resolve(success(1 as const)),
   Promise.resolve(failure('boom' as const))
 );
-const settledAllAsPromise: Promise<
-  Success<readonly [Success<1>, Failure<'boom'>]>
-> = settledAll;
+const settledAllAsPromise: Promise<readonly [Success<1>, Failure<'boom'>]> =
+  settledAll;
 void settledAllAsPromise;
+
+// @ts-expect-error `allSettled(...)` rejects obvious bare `Promise.reject(...)` inputs.
+allSettled(Promise.reject('boom' as const));
 
 const racedResult = race(
   Promise.resolve(success(1 as const)),

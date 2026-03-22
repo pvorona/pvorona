@@ -414,15 +414,20 @@ describe('public surface', () => {
     expect(asyncResult).toStrictEqual(success(['user', 'profile']));
   });
 
-  it('supports top-level allSettled() for promised sources', async () => {
+  it('supports top-level allSettled() capturing promised source rejections', async () => {
+    const missingProfileSource: Promise<Failable<never, 'missing-profile'>> =
+      Promise.resolve().then(() => {
+        throw 'missing-profile' as const;
+      });
     const result = await allSettled(
       Promise.resolve(success(1 as const)),
-      Promise.resolve(failure('missing-profile' as const))
+      missingProfileSource
     );
 
-    expect(result).toStrictEqual(
-      success([success(1 as const), failure('missing-profile' as const)])
-    );
+    expect(result).toStrictEqual([
+      success(1 as const),
+      failure('missing-profile' as const),
+    ]);
   });
 
   it('supports top-level race() for promised sources', async () => {

@@ -2008,10 +2008,10 @@ describe('run()', () => {
       void buildResult;
     });
 
-    it('infers Success when Promise<Success> is passed to allSettled()', () => {
+    it('infers Success tuple entries when Promise<Success> is passed to allSettled()', () => {
       const buildResult = () =>
         run(async function* () {
-          const [r1, r2] = yield* await allSettled(
+          const [r1, r2] = await allSettled(
             Promise.resolve(success(1 as const)),
             Promise.resolve(success('two' as const))
           );
@@ -2022,10 +2022,10 @@ describe('run()', () => {
       void buildResult;
     });
 
-    it('infers Failure when Promise<Failure> is passed to allSettled()', () => {
+    it('infers Failure tuple entries when Promise<Failure> is passed to allSettled()', () => {
       const buildResult = () =>
         run(async function* () {
-          const [r1, r2] = yield* await allSettled(
+          const [r1, r2] = await allSettled(
             Promise.resolve(failure('err1' as const)),
             Promise.resolve(failure(42 as const))
           );
@@ -2036,7 +2036,7 @@ describe('run()', () => {
       void buildResult;
     });
 
-    it('infers Failable when Promise<Failable> is passed to allSettled()', () => {
+    it('infers Failable tuple entries when Promise<Failable> is passed to allSettled()', () => {
       const buildResult = () =>
         run(async function* () {
           const p1: Promise<Failable<number, string>> = Promise.resolve(
@@ -2045,7 +2045,7 @@ describe('run()', () => {
           const p2: Promise<Failable<boolean, string>> = Promise.resolve(
             failure('x')
           );
-          const [r1, r2] = yield* await allSettled(p1, p2);
+          const [r1, r2] = await allSettled(p1, p2);
           expectTypeOf(r1).toEqualTypeOf<Failable<number, string>>();
           expectTypeOf(r2).toEqualTypeOf<Failable<boolean, string>>();
           return success([r1, r2]);
@@ -2053,13 +2053,13 @@ describe('run()', () => {
       void buildResult;
     });
 
-    it('infers Success, Failure, and Failable from allSettled() when all three are passed', () => {
+    it('infers Success, Failure, and Failable tuple entries from allSettled() when all three are passed', () => {
       const buildResult = () =>
         run(async function* () {
           const p3: Promise<Failable<boolean, string>> = Promise.resolve(
             failure('f')
           );
-          const [r1, r2, r3] = yield* await allSettled(
+          const [r1, r2, r3] = await allSettled(
             Promise.resolve(success(1 as const)),
             Promise.resolve(failure('err' as const)),
             p3
@@ -2339,17 +2339,15 @@ describe('run()', () => {
       expect(result).toStrictEqual(err1);
     });
 
-    it('allSettled() returns Success of tuple for direct sync sources', () => {
+    it('allSettled() returns a settled tuple for direct sync sources', () => {
       const result = allSettled(success(1 as const), failure('e2' as const));
 
-      expect(result).toStrictEqual(
-        success([success(1 as const), failure('e2' as const)])
-      );
+      expect(result).toStrictEqual([success(1 as const), failure('e2' as const)]);
     });
 
-    it('allSettled() returns Success of tuple when all sources succeed', async () => {
+    it('allSettled() returns a settled tuple when all sources succeed', async () => {
       const result = await run(async function* () {
-        const [a, b] = yield* await allSettled(
+        const [a, b] = await allSettled(
           Promise.resolve(success(1 as const)),
           Promise.resolve(success(2 as const))
         );
@@ -2360,10 +2358,10 @@ describe('run()', () => {
       expect(result).toStrictEqual(success(3));
     });
 
-    it('allSettled() returns Success of tuple when one fails', async () => {
+    it('allSettled() returns a settled tuple when one fails', async () => {
       const err = failure('e1' as const);
       const result = await run(async function* () {
-        const [r1, r2] = yield* await allSettled(
+        const [r1, r2] = await allSettled(
           Promise.resolve(success(1)),
           Promise.resolve(err)
         );
@@ -2376,9 +2374,9 @@ describe('run()', () => {
       expect(result).toStrictEqual(success('ok'));
     });
 
-    it('allSettled() returns Success of tuple when all fail', async () => {
+    it('allSettled() returns a settled tuple when all fail', async () => {
       const result = await run(async function* () {
-        const [a, b] = yield* await allSettled(
+        const [a, b] = await allSettled(
           Promise.resolve(failure('a' as const)),
           Promise.resolve(failure('b' as const))
         );
@@ -2387,6 +2385,66 @@ describe('run()', () => {
         return success([(a as Failure<'a'>).error, (b as Failure<'b'>).error]);
       });
       expect(result).toStrictEqual(success(['a', 'b']));
+    });
+
+    it('allSettled() captures rejected promised sources as Failure values', async () => {
+      // Bypass the best-effort type guardrail to verify runtime capture.
+      const result = await allSettled(
+        Promise.reject('boom' as const) as PromiseLike<Failable<never, 'boom'>>
+      );
+
+      expect(result).toStrictEqual([failure('boom' as const)]);
+    });
+
+    it('allSettled() preserves order across successes, failures, and rejected promises', async () => {
+      // Bypass the best-effort type guardrail to verify runtime capture.
+      const rejectedSource: PromiseLike<Failable<never, 'rejected'>> =
+        Promise.resolve().then(() => {
+          throw 'rejected' as const;
+        });
+
+      const result = await allSettled(
+        Promise.resolve(success(1 as const)),
+        Promise.resolve(failure('failed' as const)),
+        rejectedSource
+      );
+
+      expect(result).toStrictEqual([
+        success(1 as const),
+        failure('failed' as const),
+        failure('rejected' as const),
+      ]);
+    });
+
+    it('allSettled() captures rejected PromiseLike sources as Failure values', async () => {
+      const rejectedSource = createRejectingThenable<
+        Failable<never, 'thenable-error'>
+      >('thenable-error' as const);
+
+      const result = await allSettled(rejectedSource);
+
+      expect(result).toStrictEqual([failure('thenable-error' as const)]);
+    });
+
+    it('allSettled() lets async run() builders observe promised source rejections as settled Failure values', async () => {
+      // Bypass the best-effort type guardrail to verify runtime capture.
+      const rejectedSource: PromiseLike<Failable<never, 'missing-profile'>> =
+        Promise.resolve().then(() => {
+          throw 'missing-profile' as const;
+        });
+
+      const result = await run(async function* () {
+        const [user, profile] = await allSettled(
+          Promise.resolve(success('user' as const)),
+          rejectedSource
+        );
+
+        expect(user).toStrictEqual(success('user' as const));
+        expect(profile).toStrictEqual(failure('missing-profile' as const));
+        return success('ok' as const);
+      });
+
+      expect(result).toStrictEqual(success('ok' as const));
     });
 
     it('race() returns first success when it settles first', async () => {

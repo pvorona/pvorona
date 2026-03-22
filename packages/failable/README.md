@@ -421,11 +421,11 @@ async function loadUserPage(
   parallel and get a success tuple or the first failure
 - use `yield* all(...)` in sync builders when every source is already a hydrated
   `Failable`
-- use `yield* await allSettled(...)` to wait for all sources to resolve and get
-  a `Success` tuple of each `Failable` result
+- use `await allSettled(...)` to inspect the settled tuple of `Failable`
+  results, including promise rejections captured as `Failure` values
 - use `yield* await race(...)` to take the first promised `Failable` to settle
-- rejected promised sources follow normal async `await` / `try` / `finally`
-  semantics rather than a helper-managed rejection path
+- direct promised sources still follow normal async `await` / `try` /
+  `finally` semantics rather than a helper-managed rejection path
 - `run(...)` does not capture thrown values or rejected promises into `Failure`;
   wrap throwing boundaries with `failable(...)` before they enter `run(...)`
 
@@ -450,9 +450,14 @@ const mixedTuple = await all(
   Promise.resolve(success('two' as const))
 );
 
+const missingProfileSource: Promise<Failable<never, 'missing-profile'>> =
+  Promise.resolve().then(() => {
+    throw 'missing-profile' as const;
+  });
+
 const settled = await allSettled(
   Promise.resolve(success(1 as const)),
-  Promise.resolve<Failable<number, 'missing'>>(success(2))
+  missingProfileSource
 );
 
 const winner = await race(
@@ -464,9 +469,16 @@ const winner = await race(
 Key semantics:
 
 - `all(...)` returns the first failure in input order
-- `allSettled(...)` preserves `Failure` values in the returned success tuple
-- async `allSettled(...)` still rejects if a promise rejects; it is not
-  `Promise.allSettled(...)`
+- `allSettled(...)` returns a plain settled tuple rather than a `Success` wrapper
+- `allSettled(...)` preserves `Failure` values in the returned settled tuple
+- promised source rejections in `allSettled(...)` are captured as `Failure`
+  values instead of rejecting the whole combinator
+- rejection payloads captured by `allSettled(...)` stay raw; they are not
+  normalized
+- `allSettled(...)` is intentionally closer to `Promise.allSettled(...)`
+- bare `Promise.reject(...)` inputs are rejected at type level as a best-effort
+  guardrail; TypeScript still cannot model arbitrary promise rejection channels
+  precisely
 - `race(...)` accepts promised `Failable` sources only
 - `race()` with zero sources rejects with a clear error instead of hanging
 

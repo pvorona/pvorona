@@ -760,6 +760,24 @@ type ValidateRunReturn<TResult> = [TResult] extends [RunReturn]
 
 type FailableSource<T, E> = Failable<T, E> | PromiseLike<Failable<T, E>>;
 
+/**
+ * Reject obvious bare `Promise.reject(...)` inputs (`PromiseLike<never>`) while
+ * preserving the caller's original tuple types for valid sources.
+ */
+type AllSettledSourceInput<T> = T extends PromiseLike<infer U>
+  ? [U] extends [never]
+    ? never
+    : T extends PromiseLike<Failable<unknown, unknown>>
+    ? T
+    : never
+  : T extends Failable<unknown, unknown>
+  ? T
+  : never;
+
+type AllSettledSources<T extends readonly unknown[]> = {
+  readonly [K in keyof T]: AllSettledSourceInput<T[K]>;
+};
+
 type FailableSourceError<T> = T extends Success<unknown>
   ? never
   : T extends Failure<infer E>
@@ -882,6 +900,19 @@ async function resolveFailableSources(
   return results.map((result) => toValidatedFailable(result));
 }
 
+async function resolveAllSettledFailableSources(
+  sources: readonly unknown[]
+): Promise<readonly Failable<unknown, unknown>[]> {
+  return Promise.all(
+    sources.map((source) =>
+      Promise.resolve(source).then(
+        (result) => toValidatedFailable(result),
+        (error) => failure(error)
+      )
+    )
+  );
+}
+
 function combineAllResults<T extends readonly unknown[]>(
   results: readonly Failable<unknown, unknown>[]
 ): Failable<AllReturnData<T>, AllTupleError<T>> {
@@ -903,8 +934,8 @@ function combineAllResults<T extends readonly unknown[]>(
 
 function combineAllSettledResults<T extends readonly unknown[]>(
   results: readonly Failable<unknown, unknown>[]
-): Success<AllSettledTuple<T>> {
-  return success(results as AllSettledTuple<T>);
+): AllSettledTuple<T> {
+  return results as AllSettledTuple<T>;
 }
 
 export function all<
@@ -929,26 +960,33 @@ export function all<
     : Failable<AllReturnData<T>, AllTupleError<T>>;
 }
 
+/**
+ * Wait for every source to settle and return a tuple of their `Failable`
+ * results.
+ *
+ * Promised source rejections are captured as raw `Failure` values inside the
+ * settled tuple instead of rejecting the whole combinator.
+ */
 export function allSettled<
-  const T extends readonly FailableSource<unknown, unknown>[]
+  const T extends readonly unknown[]
 >(
-  ...sources: T
+  ...sources: T & AllSettledSources<T>
 ): TupleHasAsync<T> extends true
-  ? Promise<Success<AllSettledTuple<T>>>
-  : Success<AllSettledTuple<T>> {
+  ? Promise<AllSettledTuple<T>>
+  : AllSettledTuple<T> {
   if (!hasPromiseLikeSources(sources)) {
     return combineAllSettledResults<T>(
       sources.map((source) => toValidatedFailable(source))
     ) as TupleHasAsync<T> extends true
-      ? Promise<Success<AllSettledTuple<T>>>
-      : Success<AllSettledTuple<T>>;
+      ? Promise<AllSettledTuple<T>>
+      : AllSettledTuple<T>;
   }
 
-  return resolveFailableSources(sources).then((results) =>
+  return resolveAllSettledFailableSources(sources).then((results) =>
     combineAllSettledResults<T>(results)
   ) as TupleHasAsync<T> extends true
-    ? Promise<Success<AllSettledTuple<T>>>
-    : Success<AllSettledTuple<T>>;
+    ? Promise<AllSettledTuple<T>>
+    : AllSettledTuple<T>;
 }
 
 export function race<
@@ -1138,16 +1176,16 @@ export function run<
  *   parallel and get a success tuple or the first failure
  * - use `yield* all(...)` in sync builders when every source is already a hydrated
  *   `Failable`
- * - use `yield* await allSettled(...)` to wait for all sources to resolve and get
- *   a `Success` tuple of each `Failable` result
+ * - use `await allSettled(...)` to inspect the settled tuple of `Failable`
+ *   results, including promise rejections captured as `Failure` values
  * - use `yield* await race(...)` to take the first promised `Failable` to settle
  * - if a yielded step fails, that failure becomes the default unwind result
  * - cleanup still runs, and the last explicit `return` reached in `finally`
  *   wins (including bare `return;`, which becomes `success()`)
  * - yielded cleanup `Failure` values keep the current unwind result unless a
  *   later cleanup `return` overrides it
- * - rejected promised sources follow normal async `await` / `try` / `finally`
- *   semantics rather than a helper-managed rejection path
+ * - direct promised sources still follow normal async `await` / `try` /
+ *   `finally` semantics rather than a helper-managed rejection path
  *
  * Hydrated `Failable` values expose both sync and async iterators so `yield*` can
  * flow through the same internal step protocol in sync and async builders.
