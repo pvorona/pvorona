@@ -38,8 +38,6 @@ function expectType<Condition extends true>(condition: Condition): void {
 
 /** Avoid `>>` / `>>>` tokenization issues in nested `expectType<Equal<...>>` */
 type PromiseFailable<T, E = unknown> = Promise<Failable<T, E>>;
-type FailableOrPromiseFailable<T, E = unknown> =
-  Failable<T, E> | PromiseFailable<T, E>;
 
 type HasIterator<T> = typeof Symbol.iterator extends keyof T ? true : false;
 type HasAsyncIterator<T> = typeof Symbol.asyncIterator extends keyof T
@@ -378,45 +376,23 @@ void wrappedSyncLiteral;
 
 type ConsumerPromiseFailableOf<T> = PromiseFailable<T>;
 
-const wrappedAsyncFn = failable(async () => 123);
-expectType<
-  Equal<typeof wrappedAsyncFn, ConsumerPromiseFailableOf<number>>
->(true);
-
-const wrappedPromiseFn = failable(() => Promise.resolve(123));
-expectType<
-  Equal<typeof wrappedPromiseFn, ConsumerPromiseFailableOf<number>>
->(true);
-void wrappedAsyncFn;
-void wrappedPromiseFn;
-
 type ConsumerNumberOrPromiseNumber = number | Promise<number>;
 declare const unionSyncOrPromise: () => ConsumerNumberOrPromiseNumber;
-type ConsumerFailableOrPromiseNumber = FailableOrPromiseFailable<number>;
-const wrappedUnionSyncOrPromise = failable(unionSyncOrPromise);
-expectType<
-  Equal<typeof wrappedUnionSyncOrPromise, ConsumerFailableOrPromiseNumber>
->(true);
-void wrappedUnionSyncOrPromise;
+// @ts-expect-error `failable(() => ...)` accepts sync callbacks only.
+failable(async () => 123);
+
+// @ts-expect-error `failable(() => ...)` accepts sync callbacks only.
+failable(() => Promise.resolve(123));
+
+// @ts-expect-error `failable(() => ...)` accepts sync callbacks only.
+failable(unionSyncOrPromise);
 
 declare const unknownReturner: () => unknown;
-type ConsumerFailableOrPromiseUnknown = FailableOrPromiseFailable<
-  unknown,
-  unknown
->;
 const wrappedUnknownReturner = failable(unknownReturner);
-expectType<
-  Equal<typeof wrappedUnknownReturner, ConsumerFailableOrPromiseUnknown>
->(true);
+expectType<Equal<typeof wrappedUnknownReturner, Failable<unknown, unknown>>>(
+  true
+);
 void wrappedUnknownReturner;
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- regression: union typing for `any` returns
-declare const anyReturner: () => any;
-const wrappedAnyReturner = failable(anyReturner);
-expectType<
-  Equal<typeof wrappedAnyReturner, ConsumerFailableOrPromiseUnknown>
->(true);
-void wrappedAnyReturner;
 
 const wrappedDirectPromise = failable(Promise.resolve(123));
 expectType<
@@ -822,11 +798,7 @@ void normalizedArgUnion;
 void mappedArgUnion;
 void mappedProblem;
 void wrappedSyncLiteral;
-void wrappedAsyncFn;
-void wrappedPromiseFn;
-void wrappedUnionSyncOrPromise;
 void wrappedUnknownReturner;
-void wrappedAnyReturner;
 void wrappedDirectPromise;
 void normalizedExplicitFailure;
 void normalizedCustomFailure;

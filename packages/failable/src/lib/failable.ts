@@ -373,10 +373,7 @@ const BASE_FAILURE = (() => {
  *   `yield* result`; they are not meant to be a general-purpose collection API.
  *
  * Quick chooser:
- * - `failable(() => value)`: capture synchronous throws when the callback is typed as sync-only.
- * - `await failable(async () => value)` / `await failable(() => promise)`: purely async callbacks.
- * - `await Promise.resolve(failable(...))`: when the callback may be sync or async (`any`, `unknown`,
- *   or `T | Promise<T>`).
+ * - `failable(() => value)`: capture synchronous throws from throwy code.
  * - `await failable(promise)`: capture async rejections when you already hold a promise.
  * - `run(...)`: compose steps that already return `Failable`.
  * - `throwIfFailure(result, normalizeOption?)`: keep using the same `result`
@@ -427,17 +424,13 @@ const BASE_FAILURE = (() => {
  *   throw boundary.
  * - Normalize earlier with `failable(...)` only when you need that `Error`
  *   shape inside the `Failure` channel before throwing.
- * - Callback typing follows runtime branches: purely synchronous callbacks return `Failable<...>`;
- *   purely `PromiseLike`-returning callbacks (including `async` functions) return
- *   `Promise<Failable<...>>`.
- * - If the static return type may be sync **or** `PromiseLike` (for example `T | Promise<T>`,
- *   `unknown`, or `any`), the result type is a **union** of `Failable<...>` and
- *   `Promise<Failable<...>>` so callers cannot assume promise-only APIs like `.then`.
- *   Normalize with `await Promise.resolve(result)` when you want a single `Promise`.
+ * - `failable(() => somePromise)` is not the supported API. In TypeScript,
+ *   obviously promise-returning callbacks are rejected. JS callers, plus
+ *   `any`/`unknown`-typed callbacks, receive a `Failure<Error>` telling them
+ *   to pass the promise directly instead.
  *
  * @example
- * // `JSON.parse` is typed as `any`, so the callback form is a `Failable | Promise<Failable>` union.
- * const raw = await Promise.resolve(failable(() => JSON.parse(text)));
+ * const raw = failable(() => JSON.parse(text));
  * if (raw.isSuccess) return raw.data;
  * console.error(raw.error);
  *
@@ -534,95 +527,18 @@ type InferFailableFromValue<T, E = unknown> = [T] extends [never]
 
 type IsAny<T> = 0 extends 1 & T ? true : false;
 
-type IsNever<T> = [T] extends [never] ? true : false;
-
-/**
- * `unknown` as a return type (but not `any`, which is handled separately).
- */
-type IsUnknownNotAny<T> = IsAny<T> extends true
+type HasKnownPromiseLikeReturn<T> = IsAny<T> extends true
   ? false
-  : [unknown] extends [T]
-  ? [T] extends [unknown]
-    ? true
-    : false
-  : false;
-
-/**
- * Callback return is typed as **only** `PromiseLike` (e.g. `Promise<T>`, `async () => T`).
- */
-type IsPureAsyncReturn<T> = [T] extends [never]
+  : unknown extends T
   ? false
-  : IsAny<T> extends true
-  ? false
-  : IsUnknownNotAny<T> extends true
-  ? false
-  : [T] extends [PromiseLike<unknown>]
-  ? true
-  : false;
-
-/**
- * Callback return may be sync **or** `PromiseLike` (`T | Promise<T>`, `unknown`, `any`, …).
- */
-type IsAmbiguousCallbackReturn<T> = [T] extends [never]
-  ? false
-  : IsAny<T> extends true
-  ? true
-  : IsUnknownNotAny<T> extends true
-  ? true
-  : IsNever<Extract<T, PromiseLike<unknown>>> extends true
-  ? false
-  : [T] extends [PromiseLike<unknown>]
+  : [Extract<T, PromiseLike<unknown>>] extends [never]
   ? false
   : true;
 
-/**
- * Callback return is typed as never `PromiseLike` (pure sync path at type level).
- */
-type IsPureSyncReturn<T> = [T] extends [never]
-  ? true
-  : IsAny<T> extends true
-  ? false
-  : IsUnknownNotAny<T> extends true
-  ? false
-  : IsNever<Extract<T, PromiseLike<unknown>>> extends true
-  ? true
-  : false;
-
-/**
- * Promise source for the async branch of ambiguous callbacks (`Extract` or `Promise<unknown>`).
- */
-type AsyncCallbackPromiseSource<T> = [T] extends [never]
-  ? Promise<unknown>
-  : IsAny<T> extends true
-  ? Promise<unknown>
-  : IsUnknownNotAny<T> extends true
-  ? Promise<unknown>
-  : Extract<T, PromiseLike<unknown>>;
-
-type AsPureAsyncCallback<F extends () => unknown> = F &
-  (IsPureAsyncReturn<ReturnType<F>> extends true
-    ? unknown
-    : { readonly __failableNotPureAsync: never });
-
-type AsAmbiguousCallback<F extends () => unknown> = F &
-  (IsAmbiguousCallbackReturn<ReturnType<F>> extends true
-    ? unknown
-    : { readonly __failableNotAmbiguous: never });
-
-type AsPureSyncCallback<F extends () => unknown> = F &
-  (IsPureSyncReturn<ReturnType<F>> extends true
-    ? unknown
-    : { readonly __failableNotPureSync: never });
-
-type AmbiguousCallbackReturn<T, E = unknown> = IsAny<T> extends true
-  ? Failable<unknown, E> | Promise<Failable<unknown, E>>
-  : InferFailableFromValue<Exclude<T, PromiseLike<unknown>>, E>
-    | InferReturnTypeFromPromise<AsyncCallbackPromiseSource<T>, E>;
-
-type AmbiguousCallbackReturnNormalized<T> = IsAny<T> extends true
-  ? NormalizeFailableResult<unknown> | Promise<NormalizeFailableResult<unknown>>
-  : NormalizeFailableResult<Exclude<T, PromiseLike<unknown>>>
-    | Promise<NormalizeFailableResult<Awaited<AsyncCallbackPromiseSource<T>>>>;
+type FailableSyncOnlyCallback<F extends () => unknown> = F &
+  (HasKnownPromiseLikeReturn<ReturnType<F>> extends true
+    ? { readonly __failablePassPromiseDirectly: never }
+    : unknown);
 
 type InferReturnTypeFromPromise<
   P extends PromiseLike<unknown>,
@@ -664,6 +580,16 @@ type FailableInput =
   | Failable<unknown, unknown>
   | (() => unknown)
   | PromiseLike<unknown>;
+
+const FAILABLE_PROMISE_CALLBACK_MESSAGE =
+  '`failable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await failable(promise)`.';
+const FAILABLE_PROMISE_CALLBACK_GUARD_TAG = Symbol(
+  'FailablePromiseCallbackGuard'
+);
+
+type FailablePromiseCallbackGuardError = Error & {
+  readonly [FAILABLE_PROMISE_CALLBACK_GUARD_TAG]: true;
+};
 
 const RUN_GET_TAG = Symbol('RunGet');
 
@@ -1281,29 +1207,16 @@ export function failable<T, E>(
 ): Failable<T, Error>;
 /**
  * Capture the boundary you actually have:
- * - `failable(() => value)` when the callback is typed as purely synchronous
- * - `await failable(async () => value)` / `await failable(() => promise)` when purely async
- * - `await Promise.resolve(failable(...))` when the callback may be sync or async at the type level
+ * - `failable(() => value)` for synchronous callbacks that may throw
  * - `await failable(promise)` for promise-based code that may reject
  * - `run(...)` when the steps already return `Failable`
+ *
+ * In TypeScript, obviously promise-returning callbacks like `async () => ...` and
+ * `() => Promise.resolve(...)` are rejected. JS callers, plus `any`/`unknown`-typed
+ * callbacks, still rely on the runtime guard and receive a `Failure<Error>` telling
+ * them to pass the promise directly instead. That guard error is preserved even when
+ * a custom `normalizeError` callback is provided.
  */
-export function failable<F extends () => unknown>(
-  fun: AsPureAsyncCallback<F>,
-  normalizeOption: FailableNormalizeErrorInput
-): Promise<NormalizeFailableResult<Awaited<ReturnType<F>>>>;
-export function failable<F extends () => unknown, E = unknown>(
-  fun: AsPureAsyncCallback<F>
-): InferReturnTypeFromPromise<
-  Extract<ReturnType<F>, PromiseLike<unknown>>,
-  E
->;
-export function failable<F extends () => unknown>(
-  fun: AsAmbiguousCallback<F>,
-  normalizeOption: FailableNormalizeErrorInput
-): AmbiguousCallbackReturnNormalized<ReturnType<F>>;
-export function failable<F extends () => unknown, E = unknown>(
-  fun: AsAmbiguousCallback<F>
-): AmbiguousCallbackReturn<ReturnType<F>, E>;
 export function failable<P extends PromiseLike<unknown>>(
   promise: P,
   normalizeOption: FailableNormalizeErrorInput
@@ -1312,11 +1225,11 @@ export function failable<P extends PromiseLike<unknown>, E = unknown>(
   promise: P
 ): InferReturnTypeFromPromise<P, E>;
 export function failable<F extends () => unknown>(
-  fun: AsPureSyncCallback<F>,
+  fun: FailableSyncOnlyCallback<F>,
   normalizeOption: FailableNormalizeErrorInput
 ): NormalizeFailableResult<ReturnType<F>>;
 export function failable<F extends () => unknown, E = unknown>(
-  fun: AsPureSyncCallback<F>
+  fun: FailableSyncOnlyCallback<F>
 ): InferFailableFromValue<ReturnType<F>, E>;
 export function failable(
   value: FailableInput,
@@ -1347,6 +1260,38 @@ function fromFailableLike<T, E>(
   return failure(failableLike.error);
 }
 
+function createPromiseReturningCallbackGuardError(): FailablePromiseCallbackGuardError {
+  const error = new Error(
+    FAILABLE_PROMISE_CALLBACK_MESSAGE
+  ) as FailablePromiseCallbackGuardError;
+
+  Object.defineProperty(error, FAILABLE_PROMISE_CALLBACK_GUARD_TAG, {
+    value: true,
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  });
+
+  return error;
+}
+
+function isPromiseReturningCallbackGuardError(
+  error: unknown
+): error is FailablePromiseCallbackGuardError {
+  if (!(error instanceof Error)) return false;
+
+  return (
+    Object.getOwnPropertyDescriptor(
+      error,
+      FAILABLE_PROMISE_CALLBACK_GUARD_TAG
+    )?.value === true
+  );
+}
+
+function consumePromiseLikeRejection(value: PromiseLike<unknown>) {
+  void Promise.resolve(value).catch(() => undefined);
+}
+
 function fromFunction<T extends () => U, E, U = ReturnType<T>>(
   fun: T,
   normalizeOption?: FailableNormalizeErrorInput
@@ -1355,7 +1300,11 @@ function fromFunction<T extends () => U, E, U = ReturnType<T>>(
     const data = fun();
 
     if (isPromiseLike(data)) {
-      return fromPromise(data, normalizeOption);
+      consumePromiseLikeRejection(data);
+      return normalizeFailableResult(
+        failure(createPromiseReturningCallbackGuardError()),
+        normalizeOption
+      );
     }
 
     if (isFailable(data)) {
@@ -1397,6 +1346,7 @@ function normalizeFailableResult<T, E>(
   normalizeOption?: FailableNormalizeErrorInput
 ) {
   if (result.status === FailableStatus.Success) return result;
+  if (isPromiseReturningCallbackGuardError(result.error)) return result;
 
   const normalizeError = resolveNormalizeError(normalizeOption);
   if (normalizeError === null) return result;

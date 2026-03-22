@@ -216,11 +216,7 @@ Use the callback form for synchronous code that can throw:
 import { failable, NormalizedErrors } from '@pvorona/failable';
 
 const rawConfig = '{"theme":"dark"}';
-// `JSON.parse` is typed as `any`, so the callback overload is a `Failable | Promise<Failable>` union.
-// `await Promise.resolve(...)` normalizes to a single Promise (plain `await` also works).
-const configResult = await Promise.resolve(
-  failable(() => JSON.parse(rawConfig), NormalizedErrors)
-);
+const configResult = failable(() => JSON.parse(rawConfig), NormalizedErrors);
 
 if (configResult.isFailure) {
   console.error(configResult.error.message);
@@ -229,21 +225,11 @@ if (configResult.isFailure) {
 }
 ```
 
-When the callback is typed as **purely** `PromiseLike`-returning (including
-`async` functions), the result type is `Promise<Failable<...>>`:
-
-```ts
-const text = '{"theme":"dark"}';
-const asyncResult = await failable(async () => JSON.parse(text));
-const promisedResult = await failable(() => Promise.resolve(JSON.parse(text)));
-```
-
 `NormalizedErrors` is the built-in shortcut when you want `.error` to be an
 `Error`, including when the thrown or rejected non-`Error` value cannot be
 stringified safely.
 
-Pass a promise directly when you want rejection capture (equivalent to the
-promise-returning callback form above, when you already have the promise):
+Pass a promise directly when you want rejection capture:
 
 ```ts
 import { failable, NormalizedErrors } from '@pvorona/failable';
@@ -262,18 +248,16 @@ const config = fileResult.getOr('{}');
 - preserve an existing `Failable`
 - rehydrate a `FailableLike`
 - capture sync throws from a callback
-- capture async rejections from `async` callbacks or callbacks that return a
-  `PromiseLike`
 - capture promise rejections from a promise passed directly
 - normalize failures with `NormalizedErrors` or a custom `normalizeError(...)`
 
 By default, the thrown or rejected value becomes `.error` unchanged.
 
-If the callback’s return type may be synchronous **or** `PromiseLike` (for
-example `T | Promise<T>`, `unknown`, or `any`), TypeScript models the result as
-`Failable<...> | Promise<Failable<...>>` so you cannot treat it as always
-thenable. Use `await Promise.resolve(result)` (or an explicit non-`any` /
-non-`unknown` return type on the callback) when you want a single Promise.
+Pass the promise itself when you want rejection capture. In TypeScript,
+obviously promise-returning callbacks like `async () => ...` and
+`() => Promise.resolve(...)` are rejected. JS callers, plus `any`/`unknown`-typed
+callbacks, receive a `Failure<Error>` telling them to pass the promise directly
+instead.
 
 ## Compose Existing `Failable` Steps With `run(...)`
 

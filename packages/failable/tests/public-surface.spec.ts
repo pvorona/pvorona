@@ -698,11 +698,7 @@ describe('public surface', () => {
   });
 
   it('supports the README `failable(...)` chooser: callback for sync throws, promise for async capture', async () => {
-    // `JSON.parse` is typed as `any`, so `failable(() => JSON.parse(...))` is typed as async;
-    // use a void callback body to model a sync throw boundary here.
-    const syncResult = failable(() => {
-      JSON.parse('not valid json');
-    });
+    const syncResult = failable(() => JSON.parse('not valid json'));
     const asyncResult = await failable(Promise.resolve(5));
 
     if (!syncResult.isFailure) {
@@ -717,38 +713,22 @@ describe('public surface', () => {
     expect(asyncResult.data).toBe(5);
   });
 
-  it('supports async and promise-returning callbacks in `failable(...)`', async () => {
-    const asyncValue = 5;
-    const promisedValue = 8;
-    const rejection = { code: 'async_callback_failure' } as const;
-
-    const asyncCallbackResult = await failable(async () => asyncValue);
-    const promiseReturningCallbackResult = await failable(
-      () => Promise.resolve(promisedValue)
-    );
-    const rejectedPromiseCallbackResult = await failable(
-      () => Promise.reject(rejection)
+  it('exposes the exact sync-callback misuse guidance for `failable(() => promise)`', () => {
+    const result = failable(
+      (() => Promise.resolve(5)) as unknown as () => number
     );
 
-    if (asyncCallbackResult.isFailure) {
-      throw new Error('Expected `failable(async () => value)` to capture success');
+    if (!result.isFailure) {
+      throw new Error('Expected `failable(() => promise)` to return a Failure');
     }
 
-    if (promiseReturningCallbackResult.isFailure) {
-      throw new Error(
-        'Expected `failable(() => Promise.resolve(value))` to capture success'
-      );
+    if (!(result.error instanceof Error)) {
+      throw new Error('Expected `failable(() => promise)` to capture an Error');
     }
 
-    if (!rejectedPromiseCallbackResult.isFailure) {
-      throw new Error(
-        'Expected `failable(() => Promise.reject(error))` to capture failure'
-      );
-    }
-
-    expect(asyncCallbackResult.data).toBe(asyncValue);
-    expect(promiseReturningCallbackResult.data).toBe(promisedValue);
-    expect(rejectedPromiseCallbackResult.error).toBe(rejection);
+    expect(result.error.message).toBe(
+      '`failable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await failable(promise)`.'
+    );
   });
 
   it('supports the README `run(...)` example', () => {
