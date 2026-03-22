@@ -33,9 +33,7 @@ type FailableNormalizeErrorInput =
   | typeof NormalizedErrors
   | FailableNormalizeErrorOptions;
 
-type LazyFallback<U, E> = {
-  bivarianceHack(error?: E): U;
-}['bivarianceHack'];
+type LazyFallback<U, E> = (error: E) => U;
 
 type Match<T, E> = <U>(
   onSuccess: (data: T) => U,
@@ -208,15 +206,15 @@ export type Failure<E> = {
 type InternalSuccess<T> = Omit<Success<T>, 'orElse' | 'getOrElse'> & {
   readonly [FAILABLE_TAG]: true;
   readonly [SUCCESS_TAG]: true;
-  readonly orElse: <U>(getValue: () => U) => Success<T>;
-  readonly getOrElse: <U>(getValue: () => U) => T;
+  readonly orElse: <U>(getValue: LazyFallback<U, never>) => Success<T>;
+  readonly getOrElse: <U>(getValue: LazyFallback<U, never>) => T;
 };
 
 type InternalFailure<E> = Omit<Failure<E>, 'orElse' | 'getOrElse'> & {
   readonly [FAILABLE_TAG]: true;
   readonly [FAILURE_TAG]: true;
-  readonly orElse: <U>(getValue: () => U) => Success<U>;
-  readonly getOrElse: <U>(getValue: () => U) => U;
+  readonly orElse: <U>(getValue: LazyFallback<U, E>) => Success<U>;
+  readonly getOrElse: <U>(getValue: LazyFallback<U, E>) => U;
 };
 
 const BASE_FAILABLE = {
@@ -328,13 +326,15 @@ const BASE_FAILURE = (() => {
   node.or = function orFailure(value) {
     return success(value);
   };
-  node.orElse = function orElseFailure<U>(getValue: () => U) {
+  node.orElse = function orElseFailure<U>(getValue: LazyFallback<U, unknown>) {
     return success(resolveLazyFallback(getValue, this.error));
   };
   node.getOr = function getOrFailure(value) {
     return value;
   };
-  node.getOrElse = function getOrElseFailure<U>(getValue: () => U) {
+  node.getOrElse = function getOrElseFailure<U>(
+    getValue: LazyFallback<U, unknown>
+  ) {
     return resolveLazyFallback(getValue, this.error);
   };
   node.getOrThrow = function getOrThrowFailure(
