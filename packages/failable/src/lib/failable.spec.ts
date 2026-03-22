@@ -89,7 +89,8 @@ function createRunReturnSuccessLike<T>(data: T) {
     status: FailableStatus.Success,
     data,
     error: null,
-    match: ((onSuccess: (value: T) => T) => onSuccess(data)) as Success<T>['match'],
+    match: ((onSuccess: (value: T) => T) =>
+      onSuccess(data)) as Success<T>['match'],
   };
 }
 
@@ -167,8 +168,14 @@ function createUnstringifiableErrorValue(): {
   };
 }
 
-function createPlainObjectWithoutSafeErrorMessage(): Record<string | symbol, unknown> {
-  const value = createNullPrototypeObject({}) as Record<string | symbol, unknown>;
+function createPlainObjectWithoutSafeErrorMessage(): Record<
+  string | symbol,
+  unknown
+> {
+  const value = createNullPrototypeObject({}) as Record<
+    string | symbol,
+    unknown
+  >;
 
   Object.defineProperty(value, 'toJSON', {
     value() {
@@ -916,7 +923,10 @@ describe('getOrThrow()', () => {
     );
 
     it('normalizes void failures into Error objects', () => {
-      expectThrowBoundaryToNormalizeFailure(() => failure().getOrThrow(), undefined);
+      expectThrowBoundaryToNormalizeFailure(
+        () => failure().getOrThrow(),
+        undefined
+      );
     });
 
     it('normalizes void failures into Error objects with NormalizedErrors', () => {
@@ -952,9 +962,9 @@ describe('getOrThrow()', () => {
         return normalized;
       });
 
-      expect(() =>
-        failure(rawError).getOrThrow({ normalizeError })
-      ).toThrow(normalized);
+      expect(() => failure(rawError).getOrThrow({ normalizeError })).toThrow(
+        normalized
+      );
       expect(normalizeError).toHaveBeenCalledWith(rawError);
     });
 
@@ -966,9 +976,9 @@ describe('getOrThrow()', () => {
         return normalized;
       });
 
-      expect(() =>
-        failure(rawError).getOrThrow({ normalizeError })
-      ).toThrow(normalized);
+      expect(() => failure(rawError).getOrThrow({ normalizeError })).toThrow(
+        normalized
+      );
       expect(normalizeError).toHaveBeenCalledWith(rawError);
     });
 
@@ -1162,9 +1172,9 @@ describe('throwIfFailure()', () => {
       return normalized;
     });
 
-    expect(() =>
-      throwIfFailure(failure(rawError), { normalizeError })
-    ).toThrow(normalized);
+    expect(() => throwIfFailure(failure(rawError), { normalizeError })).toThrow(
+      normalized
+    );
     expect(normalizeError).toHaveBeenCalledWith(rawError);
   });
 
@@ -1176,9 +1186,9 @@ describe('throwIfFailure()', () => {
       return normalized;
     });
 
-    expect(() =>
-      throwIfFailure(failure(rawError), { normalizeError })
-    ).toThrow(normalized);
+    expect(() => throwIfFailure(failure(rawError), { normalizeError })).toThrow(
+      normalized
+    );
     expect(normalizeError).toHaveBeenCalledWith(rawError);
   });
 
@@ -1475,9 +1485,7 @@ describe('run()', () => {
 
           expectTypeOf(value).toEqualTypeOf<'wrapped-string' | 123>();
 
-          return shouldUseString
-            ? success(value)
-            : failure('builder-error');
+          return shouldUseString ? success(value) : failure('builder-error');
         });
 
       expectTypeOf<ReturnType<typeof buildResult>>().toEqualTypeOf<
@@ -1947,16 +1955,14 @@ describe('run()', () => {
 
     it('rejects async builder helper injection at type level', () => {
       const buildResult = () =>
-        run(
-          async function* (
-            // @ts-expect-error `run(...)` no longer injects combinator helpers.
-            { all: runAll }
-          ) {
-            const [a] = yield* await runAll(Promise.resolve(success(1)));
+        run(async function* (
+          // @ts-expect-error `run(...)` no longer injects combinator helpers.
+          { all: runAll }
+        ) {
+          const [a] = yield* await runAll(Promise.resolve(success(1)));
 
-            return success(a);
-          }
-        );
+          return success(a);
+        });
 
       void buildResult;
     });
@@ -1995,10 +2001,7 @@ describe('run()', () => {
           const p2: Promise<Failable<boolean, string>> = Promise.resolve(
             success(true)
           );
-          const [a, b] = yield* await all(
-            success(1),
-            p2
-          );
+          const [a, b] = yield* await all(success(1), p2);
           expectTypeOf(a).toEqualTypeOf<1>();
           expectTypeOf(b).toEqualTypeOf<boolean>();
           return success([a, b]);
@@ -2097,19 +2100,13 @@ describe('run()', () => {
     });
 
     it('infers sync Failable from race() when only hydrated sync sources are passed', () => {
-      const result = race(
-        success(1),
-        failure('e1')
-      );
+      const result = race(success(1), failure('e1'));
 
       expectTypeOf(result).toEqualTypeOf<Failable<1, 'e1'>>();
     });
 
     it('infers Promise<Failable> from race() when sync and promised sources are mixed', () => {
-      const result = race(
-        success(1),
-        Promise.resolve(failure('err'))
-      );
+      const result = race(success(1), Promise.resolve(failure('err')));
 
       expectTypeOf(result).toEqualTypeOf<Promise<Failable<1, 'err'>>>();
     });
@@ -2190,10 +2187,7 @@ describe('run()', () => {
     it('supports sync race() in sync builders', () => {
       const buildResult = () =>
         run(function* () {
-          const value = yield* race(
-            success(1),
-            success('two')
-          );
+          const value = yield* race(success(1), success('two'));
 
           expectTypeOf(value).toEqualTypeOf<1 | 'two'>();
 
@@ -2374,9 +2368,7 @@ describe('run()', () => {
     it('supports custom PromiseLike success sources in async builders', async () => {
       const result = await run(async function* () {
         const left = yield* success(20);
-        const right = yield* await createResolvingThenable(
-          success(22)
-        );
+        const right = yield* await createResolvingThenable(success(22));
 
         return success(left + right);
       });
@@ -2483,9 +2475,10 @@ describe('run()', () => {
     });
 
     it('allSettled() rejects rejected PromiseLike sources unchanged', async () => {
-      const rejectedSource = createRejectingThenable<
-        Failable<never, 'thenable-error'>
-      >('thenable-error');
+      const rejectedSource =
+        createRejectingThenable<Failable<never, 'thenable-error'>>(
+          'thenable-error'
+        );
 
       await expect(allSettled(rejectedSource)).rejects.toBe('thenable-error');
     });
@@ -2499,10 +2492,7 @@ describe('run()', () => {
 
       await expect(
         run(async function* () {
-          await allSettled(
-            Promise.resolve(success('user')),
-            rejectedSource
-          );
+          await allSettled(Promise.resolve(success('user')), rejectedSource);
 
           return success('ok');
         })
@@ -2510,20 +2500,14 @@ describe('run()', () => {
     });
 
     it('race() returns first sync source when every source is sync', () => {
-      const result = race(
-        success(2),
-        success(1)
-      );
+      const result = race(success(2), success(1));
 
       expect(result).toStrictEqual(success(2));
     });
 
     it('race() returns first sync failure when it appears first', () => {
       const err = failure('first-error');
-      const result = race(
-        err,
-        success(1)
-      );
+      const result = race(err, success(1));
 
       expect(result).toBe(err);
     });
@@ -2544,10 +2528,7 @@ describe('run()', () => {
 
     it('supports sync race() in sync run() builders', () => {
       const result = run(function* () {
-        const winner = yield* race(
-          success(20),
-          success(22)
-        );
+        const winner = yield* race(success(20), success(22));
 
         return success(winner);
       });
@@ -3131,9 +3112,9 @@ describe('run()', () => {
       const result = await run(async function* () {
         try {
           try {
-            yield* await createRejectingThenable<Failable<never, never>>(
-              rejection
-            );
+            yield* await createRejectingThenable<
+              Failable<never, never>
+            >(rejection);
 
             return success('unreachable');
           } finally {
@@ -3720,9 +3701,8 @@ describe('failable()', () => {
 
       it('returns Failure<Error> when a callback returns a promise by any-cast', () => {
         const value = faker.number.float();
-        const result = failable(
-          (() => Promise.resolve(value)) as unknown as () => number
-        );
+        const result = failable((() =>
+          Promise.resolve(value)) as unknown as () => number);
 
         ensureFailure(result);
         expect(result.error).toBeInstanceOf(Error);
@@ -3742,9 +3722,8 @@ describe('failable()', () => {
         process.on('unhandledRejection', onUnhandledRejection);
 
         try {
-          const result = failable(
-            (() => Promise.reject(rejection)) as unknown as () => number
-          );
+          const result = failable((() =>
+            Promise.reject(rejection)) as unknown as () => number);
 
           ensureFailure(result);
           expect(result.error).toBeInstanceOf(Error);
@@ -3760,7 +3739,8 @@ describe('failable()', () => {
           (error: unknown) => new Error('normalized', { cause: error })
         );
         const result = failable(
-          (() => Promise.resolve(faker.number.float())) as unknown as () => number,
+          (() =>
+            Promise.resolve(faker.number.float())) as unknown as () => number,
           { normalizeError }
         );
 

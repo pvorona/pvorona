@@ -106,7 +106,7 @@ itself fails, normalization still returns an `Error` with message
 `Unstringifiable error value` and `cause` set to the original raw value.
 
 Use the lazy forms when the fallback is expensive or has side effects. Failure
-callbacks always receive the stored error, so `() => ...` can ignore it and
+callbacks receive the stored error, so `() => ...` can ignore it and
 `(error) => ...` can use it:
 
 ```ts
@@ -273,9 +273,9 @@ Inside a `run(...)` builder, there are two valid delegation forms:
 - `yield* await promisedResult` in async builders when you have a
   `Promise<Failable<...>>`
 
-Hydrated `Failable` values are sync-iterable only so `run(...)` can intercept
-`yield* result`. Outside `run(...)`, treat them as result objects rather than as
-a general-purpose collection API.
+Hydrated `Failable` values expose sync and async iterators so `run(...)` can
+intercept `yield* result` in both sync and async builders. Outside `run(...)`,
+treat them as result objects rather than as a general-purpose collection API.
 
 Without `run(...)`, composing steps means checking each result before
 continuing:

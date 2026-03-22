@@ -23,14 +23,13 @@ import {
   type Success,
 } from '@pvorona/failable';
 
-type Equal<Left, Right> =
-  (<T>() => T extends Left ? 1 : 2) extends
-  (<T>() => T extends Right ? 1 : 2)
-    ? (<T>() => T extends Right ? 1 : 2) extends
-        (<T>() => T extends Left ? 1 : 2)
-      ? true
-      : false
-    : false;
+type Equal<Left, Right> = (<T>() => T extends Left ? 1 : 2) extends <
+  T
+>() => T extends Right ? 1 : 2
+  ? (<T>() => T extends Right ? 1 : 2) extends <T>() => T extends Left ? 1 : 2
+    ? true
+    : false
+  : false;
 
 function expectType<Condition extends true>(condition: Condition): void {
   void condition;
@@ -62,36 +61,36 @@ type ExpectedRuntimeExportName =
   | 'throwIfFailure'
   | 'toFailableLike';
 
-expectType<Equal<Exclude<keyof ConsumerModule, ExpectedRuntimeExportName>, never>>(
-  true
-);
-expectType<Equal<Exclude<ExpectedRuntimeExportName, keyof ConsumerModule>, never>>(
-  true
-);
-expectType<Equal<'FailableTag' extends keyof ConsumerModule ? true : false, false>>(
-  true
-);
-expectType<Equal<'SuccessTag' extends keyof ConsumerModule ? true : false, false>>(
-  true
-);
-expectType<Equal<'FailureTag' extends keyof ConsumerModule ? true : false, false>>(
-  true
-);
+expectType<
+  Equal<Exclude<keyof ConsumerModule, ExpectedRuntimeExportName>, never>
+>(true);
+expectType<
+  Equal<Exclude<ExpectedRuntimeExportName, keyof ConsumerModule>, never>
+>(true);
+expectType<
+  Equal<'FailableTag' extends keyof ConsumerModule ? true : false, false>
+>(true);
+expectType<
+  Equal<'SuccessTag' extends keyof ConsumerModule ? true : false, false>
+>(true);
+expectType<
+  Equal<'FailureTag' extends keyof ConsumerModule ? true : false, false>
+>(true);
 expectType<Equal<'RunGet' extends keyof ConsumerModule ? true : false, false>>(
   true
 );
-expectType<Equal<'get' extends keyof ConsumerModule ? true : false, false>>(true);
+expectType<Equal<'get' extends keyof ConsumerModule ? true : false, false>>(
+  true
+);
 expectType<
   Equal<
-    'FailableNormalizeErrorOptions' extends keyof ConsumerModule
-      ? true
-      : false,
+    'FailableNormalizeErrorOptions' extends keyof ConsumerModule ? true : false,
     false
   >
 >(true);
-expectType<Equal<'throwIfFailure' extends keyof ConsumerModule ? true : false, true>>(
-  true
-);
+expectType<
+  Equal<'throwIfFailure' extends keyof ConsumerModule ? true : false, true>
+>(true);
 
 const ok = success(123);
 const voidOk = success();
@@ -180,12 +179,12 @@ const problemMatch = problem.match(
   (error) => error
 );
 expectType<Equal<typeof problemMatch, string>>(true);
-expectType<Equal<'isError' extends keyof Success<number> ? true : false, false>>(
-  true
-);
-expectType<Equal<'isError' extends keyof Failure<string> ? true : false, false>>(
-  true
-);
+expectType<
+  Equal<'isError' extends keyof Success<number> ? true : false, false>
+>(true);
+expectType<
+  Equal<'isError' extends keyof Failure<string> ? true : false, false>
+>(true);
 expectType<
   Equal<'isError' extends keyof Failable<number, string> ? true : false, false>
 >(true);
@@ -201,11 +200,8 @@ if (union.isFailure) {
 const maybeHydrated:
   | Success<number>
   | Failure<string>
-  | { readonly nope: true } = Math.random() > 0.5
-  ? ok
-  : Math.random() > 0.5
-  ? problem
-  : { nope: true };
+  | { readonly nope: true } =
+  Math.random() > 0.5 ? ok : Math.random() > 0.5 ? problem : { nope: true };
 
 if (isFailable(maybeHydrated) && maybeHydrated.isFailure) {
   expectType<Equal<typeof maybeHydrated.error, string>>(true);
@@ -220,9 +216,9 @@ if (isFailure(maybeHydrated)) {
 }
 
 const unionOrElse = union.orElse(() => ({ a: 1 }));
-expectType<
-  Equal<typeof unionOrElse, Success<number> | Success<{ a: number }>>
->(true);
+expectType<Equal<typeof unionOrElse, Success<number> | Success<{ a: number }>>>(
+  true
+);
 
 const unionOrElseFromError = union.orElse((error) => ({ reason: error }));
 expectType<
@@ -236,9 +232,9 @@ const unionGetOrElse = union.getOrElse(() => ({ b: 'b' }));
 expectType<Equal<typeof unionGetOrElse, number | { b: string }>>(true);
 
 const unionGetOrElseFromError = union.getOrElse((error) => ({ reason: error }));
-expectType<
-  Equal<typeof unionGetOrElseFromError, number | { reason: string }>
->(true);
+expectType<Equal<typeof unionGetOrElseFromError, number | { reason: string }>>(
+  true
+);
 
 const unionMatch = union.match(
   (value) => value.toString(),
@@ -272,9 +268,7 @@ const problemFlatMapped = problem.flatMap(() => success(123));
 expectType<Equal<typeof problemFlatMapped, Failure<'boom'>>>(true);
 
 const unionFlatMapped = union.flatMap((value) =>
-  value > 0
-    ? success(value.toString())
-    : failure({ code: 'mapped-error' })
+  value > 0 ? success(value.toString()) : failure({ code: 'mapped-error' })
 );
 expectType<
   Equal<
@@ -322,7 +316,9 @@ const readUnionValueWithNormalizedErrors = () => {
 
   return result.getOrThrow(NormalizedErrors);
 };
-expectType<Equal<ReturnType<typeof readUnionValueWithNormalizedErrors>, number>>(true);
+expectType<
+  Equal<ReturnType<typeof readUnionValueWithNormalizedErrors>, number>
+>(true);
 
 const readUnionValueWithCustomNormalization = () => {
   const result: Failable<number, string> =
@@ -338,7 +334,10 @@ const normalizedArgUnion = success(123) as Failable<number, string>;
 throwIfFailure(normalizedArgUnion, NormalizedErrors);
 throwIfFailure(normalizedArgUnion, normalizeOptions);
 
-const mappedArgUnion = success(123) as Failable<number, { readonly code: 'boom' }>;
+const mappedArgUnion = success(123) as Failable<
+  number,
+  { readonly code: 'boom' }
+>;
 // @ts-expect-error `throwIfFailure(...)` does not accept mapper callbacks.
 throwIfFailure(mappedArgUnion, () => new Error('boom'));
 
@@ -369,9 +368,7 @@ const failureWireAsConsumerType: FailableLike<number, string> = failureWire;
 void failureWireAsConsumerType;
 
 const wrappedSyncLiteral = failable(() => 123);
-expectType<
-  Equal<typeof wrappedSyncLiteral, Failable<number, unknown>>
->(true);
+expectType<Equal<typeof wrappedSyncLiteral, Failable<number, unknown>>>(true);
 void wrappedSyncLiteral;
 
 type ConsumerPromiseFailableOf<T> = PromiseFailable<T>;
@@ -406,19 +403,18 @@ const normalizedExplicitFailure = failable(
 );
 expectType<Equal<typeof normalizedExplicitFailure, Failure<Error>>>(true);
 
-const normalizedCustomFailure = failable(
-  () => {
-    throw { code: 'boom' };
-  },
-  normalizeOptions
-);
+const normalizedCustomFailure = failable(() => {
+  throw { code: 'boom' };
+}, normalizeOptions);
 expectType<Equal<typeof normalizedCustomFailure, Failure<Error>>>(true);
 
 const normalizedRejectedValue = failable(
   Promise.reject('boom'),
   normalizeOptions
 );
-expectType<Equal<typeof normalizedRejectedValue, Promise<Failure<Error>>>>(true);
+expectType<Equal<typeof normalizedRejectedValue, Promise<Failure<Error>>>>(
+  true
+);
 
 const helperResult = (): Failable<'helper-data', 'helper-error'> =>
   success('helper-data');
@@ -470,9 +466,7 @@ const runDirectFailure = run(function* () {
 expectType<Equal<typeof runDirectFailure, Failure<'inline-error'>>>(true);
 
 const runNeverSuccessWithYieldedError = run(function* () {
-  const value = yield* (
-    success(123) as Failable<123, 'source-error'>
-  );
+  const value = yield* success(123) as Failable<123, 'source-error'>;
 
   void value;
   return typedNeverSuccess;
@@ -484,16 +478,16 @@ const runNeverSuccessWithYieldedErrorAsFailable: Failable<
 void runNeverSuccessWithYieldedErrorAsFailable;
 
 const runDirectFailable = run(function* () {
-  const value = yield* (success(123) as Failable<123, 'source-error'>);
+  const value = yield* success(123) as Failable<123, 'source-error'>;
 
   return success(value);
 });
-expectType<Equal<typeof runDirectFailable, Failable<123, 'source-error'>>>(true);
+expectType<Equal<typeof runDirectFailable, Failable<123, 'source-error'>>>(
+  true
+);
 
 const runNeverSuccessWithGuaranteedFailureInYieldSet = run(function* () {
-  const maybeValue = yield* (
-    success(123) as Failable<123, 'source-error'>
-  );
+  const maybeValue = yield* success(123) as Failable<123, 'source-error'>;
   const guaranteedValue = yield* failure('inline-error');
 
   void maybeValue;
@@ -563,10 +557,10 @@ void runAsyncDirectHelperAsPromise;
 
 const runAsyncDirectHydrated = run(async function* () {
   const directValue = yield* success(123);
-  const directFailable = yield* (success('ready') as Failable<
+  const directFailable = yield* success('ready') as Failable<
     'ready',
     'source-error'
-  >);
+  >;
   const promisedValue = yield* await Promise.resolve(success(true));
 
   return success([directValue, directFailable, promisedValue]);
@@ -588,9 +582,9 @@ const runAsyncFailure = run(async function* () {
 
   return success(value);
 });
-expectType<
-  Equal<typeof runAsyncFailure, Promise<Failure<'async-error'>>>
->(true);
+expectType<Equal<typeof runAsyncFailure, Promise<Failure<'async-error'>>>>(
+  true
+);
 
 const runAsyncDirectFailure = run(async function* () {
   const value = yield* failure('async-direct-error');
@@ -622,10 +616,7 @@ expectType<
   Equal<
     typeof runAsyncPromisedSourceUnion,
     Promise<
-      Failable<
-        { readonly id: string },
-        'missing-user-id' | 'network-error'
-      >
+      Failable<{ readonly id: string }, 'missing-user-id' | 'network-error'>
     >
   >
 >(true);
@@ -635,11 +626,9 @@ const syncAll = all(success(1), success('two'));
 const syncAllAsFailable: Failable<readonly [1, 'two'], never> = syncAll;
 void syncAllAsFailable;
 
-const mixedAll = all(
-  success(1),
-  Promise.resolve(success('two'))
-);
-const mixedAllAsPromise: Promise<Failable<readonly [1, 'two'], never>> = mixedAll;
+const mixedAll = all(success(1), Promise.resolve(success('two')));
+const mixedAllAsPromise: Promise<Failable<readonly [1, 'two'], never>> =
+  mixedAll;
 void mixedAllAsPromise;
 
 const maybeAsyncSource:
@@ -668,17 +657,11 @@ expectType<
 // @ts-expect-error `allSettled(...)` rejects obvious bare `Promise.reject(...)` inputs.
 allSettled(Promise.reject('boom'));
 
-const syncRacedResult = race(
-  success(1),
-  failure('boom')
-);
+const syncRacedResult = race(success(1), failure('boom'));
 const syncRacedResultAsFailable: Failable<1, 'boom'> = syncRacedResult;
 void syncRacedResultAsFailable;
 
-const racedResult = race(
-  success(1),
-  Promise.resolve(failure('boom'))
-);
+const racedResult = race(success(1), Promise.resolve(failure('boom')));
 const racedResultAsPromise: Promise<Failable<1, 'boom'>> = racedResult;
 void racedResultAsPromise;
 
@@ -755,8 +738,10 @@ run(function* () {
     status: FailableStatus.Failure,
     data: null,
     error: 'boom' as const,
-    match: ((_: (value: never) => 'boom', onFailure: (value: 'boom') => 'boom') =>
-      onFailure('boom')) as Failure<'boom'>['match'],
+    match: ((
+      _: (value: never) => 'boom',
+      onFailure: (value: 'boom') => 'boom'
+    ) => onFailure('boom')) as Failure<'boom'>['match'],
   };
 });
 
@@ -777,8 +762,10 @@ run(async function* () {
     status: FailableStatus.Failure,
     data: null,
     error: 'boom' as const,
-    match: ((_: (value: never) => 'boom', onFailure: (value: 'boom') => 'boom') =>
-      onFailure('boom')) as Failure<'boom'>['match'],
+    match: ((
+      _: (value: never) => 'boom',
+      onFailure: (value: 'boom') => 'boom'
+    ) => onFailure('boom')) as Failure<'boom'>['match'],
   };
 });
 
