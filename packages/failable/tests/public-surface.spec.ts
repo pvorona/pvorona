@@ -49,6 +49,14 @@ function divide(a: number, b: number): Failable<number, string> {
   return success(a / b);
 }
 
+function createUnstringifiableErrorValue() {
+  return Object.assign(Object.create({ marker: true }) as object, {
+    toString() {
+      throw 'coercion boom';
+    },
+  });
+}
+
 function expectThrowBoundaryToNormalizeFailure(
   runThrowBoundary: () => unknown,
   rawError: unknown,
@@ -562,6 +570,24 @@ describe('public surface', () => {
     );
   });
 
+  it('does not leak raw coercion throws from `getOrThrow()`', () => {
+    const rawError = createUnstringifiableErrorValue();
+
+    try {
+      failure(rawError).getOrThrow();
+    } catch (thrown) {
+      expect(thrown).toBeInstanceOf(Error);
+      expect(thrown).not.toBe('coercion boom');
+      expect(thrown).toMatchObject({
+        message: 'Unstringifiable error value',
+        cause: rawError,
+      });
+      return;
+    }
+
+    throw new Error('Expected getOrThrow() to throw');
+  });
+
   it('supports the README `failable(...)` boundary example', async () => {
     const okResult = await submitTransfer({
       fromAccountId: 'checking',
@@ -629,6 +655,28 @@ describe('public surface', () => {
     expect(result.error).toBeInstanceOf(Error);
     expect(result.error.message).toBe(JSON.stringify({ code: 'bad_request' }));
     expect(result.error).toMatchObject({ cause: rawError });
+  });
+
+  it('supports `NormalizedErrors` for unstringifiable thrown values', () => {
+    const rawError = createUnstringifiableErrorValue();
+    const result = failable(
+      () => {
+        throw rawError;
+      },
+      NormalizedErrors
+    );
+
+    if (!result.isFailure) {
+      throw new Error(
+        'Expected `NormalizedErrors` to keep the unstringifiable value inside Failure'
+      );
+    }
+
+    expect(result.error).toBeInstanceOf(Error);
+    expect(result.error).toMatchObject({
+      message: 'Unstringifiable error value',
+      cause: rawError,
+    });
   });
 
   it('supports the README `failable(...)` chooser: callback for sync throws, promise for async capture', async () => {

@@ -169,6 +169,39 @@ function createNullPrototypeObject<T extends Record<string, unknown>>(
   ) as T;
 }
 
+function createUnstringifiableErrorValue(): {
+  readonly toString: () => never;
+  readonly [Symbol.toPrimitive]?: () => never;
+} {
+  return Object.assign(Object.create({ marker: true }) as object, {
+    toString() {
+      throw 'coercion boom';
+    },
+  }) as {
+    readonly toString: () => never;
+    readonly [Symbol.toPrimitive]?: () => never;
+  };
+}
+
+function createPlainObjectWithoutSafeErrorMessage(): Record<string | symbol, unknown> {
+  const value = createNullPrototypeObject({}) as Record<string | symbol, unknown>;
+
+  Object.defineProperty(value, 'toJSON', {
+    value() {
+      throw 'json boom';
+    },
+    enumerable: true,
+  });
+
+  Object.defineProperty(value, Symbol.toStringTag, {
+    get() {
+      throw 'tag boom';
+    },
+  });
+
+  return value;
+}
+
 function expectThrowBoundaryToNormalizeFailure(
   runThrowBoundary: () => unknown,
   rawError: unknown
@@ -886,6 +919,24 @@ describe('getOrThrow()', () => {
       expectThrowBoundaryToNormalizeFailure(() => failure().getOrThrow(), undefined);
     });
 
+    it('does not leak thrown coercion errors while normalizing failures', () => {
+      const rawError = createUnstringifiableErrorValue();
+
+      try {
+        failure(rawError).getOrThrow();
+      } catch (thrown) {
+        expect(thrown).toBeInstanceOf(Error);
+        expect(thrown).not.toBe('coercion boom');
+        expect(thrown).toMatchObject({
+          message: 'Unstringifiable error value',
+          cause: rawError,
+        });
+        return;
+      }
+
+      throw new Error('Expected getOrThrow() to throw');
+    });
+
     it('returns never for failure types', () => {
       const result = failure('boom' as const);
 
@@ -1018,6 +1069,24 @@ describe('throwIfFailure()', () => {
       () => throwIfFailure(failure()),
       undefined
     );
+  });
+
+  it('does not leak thrown coercion errors while normalizing failures', () => {
+    const rawError = createUnstringifiableErrorValue();
+
+    try {
+      throwIfFailure(failure(rawError));
+    } catch (thrown) {
+      expect(thrown).toBeInstanceOf(Error);
+      expect(thrown).not.toBe('coercion boom');
+      expect(thrown).toMatchObject({
+        message: 'Unstringifiable error value',
+        cause: rawError,
+      });
+      return;
+    }
+
+    throw new Error('Expected throwIfFailure() to throw');
   });
 
   it('narrows the same union variable after the helper returns', () => {
@@ -3215,6 +3284,17 @@ describe('failable()', () => {
         expect(result.error).toMatchObject({ cause: error });
       });
 
+      it('uses the stable fallback message when plain-object normalization cannot stringify safely', () => {
+        const error = createPlainObjectWithoutSafeErrorMessage();
+
+        const result = failable(failure(error), NormalizedErrors);
+
+        expectTypeOf(result).toEqualTypeOf<Failure<Error>>();
+        expect(result.error).toBeInstanceOf(Error);
+        expect(result.error.message).toBe('Unstringifiable error value');
+        expect(result.error).toMatchObject({ cause: error });
+      });
+
       it('converts array failures to AggregateError', () => {
         const error = [faker.string.uuid(), faker.string.uuid()];
         const result = failable(failure(error), NormalizedErrors);
@@ -3544,6 +3624,19 @@ describe('failable()', () => {
         expect(result.error).toMatchObject({ cause: error });
       });
 
+      it('captures unstringifiable thrown values with a stable Error message', () => {
+        const error = createUnstringifiableErrorValue();
+        const result = failable(() => {
+          throw error;
+        }, NormalizedErrors);
+
+        expectTypeOf(result).toEqualTypeOf<Failure<Error>>();
+        ensureFailure(result);
+        expect(result.error).toBeInstanceOf(Error);
+        expect(result.error.message).toBe('Unstringifiable error value');
+        expect(result.error).toMatchObject({ cause: error });
+      });
+
       it('uses a custom normalizeError function when provided', () => {
         const error = {
           code: faker.string.uuid(),
@@ -3759,6 +3852,19 @@ describe('failable()', () => {
         expect(resolved.error.message).toBe(
           JSON.stringify({ code: 'bad_request' })
         );
+        expect(resolved.error).toMatchObject({ cause: error });
+      });
+
+      it('captures unstringifiable rejected values with a stable Error message', async () => {
+        const error = createUnstringifiableErrorValue();
+        const result = failable(Promise.reject(error), NormalizedErrors);
+
+        expectTypeOf(result).toEqualTypeOf<Promise<Failure<Error>>>();
+
+        const resolved = await result;
+        ensureFailure(resolved);
+        expect(resolved.error).toBeInstanceOf(Error);
+        expect(resolved.error.message).toBe('Unstringifiable error value');
         expect(resolved.error).toMatchObject({ cause: error });
       });
 

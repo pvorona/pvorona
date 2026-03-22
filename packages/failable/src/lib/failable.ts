@@ -390,7 +390,8 @@ const BASE_FAILURE = (() => {
  *   lazy fallbacks.
  * - Without normalization options, whatever you throw/reject becomes `.error` unchanged.
  * - `getOrThrow()` and `throwIfFailure(result)` always throw `Error` values. Existing `Error`
- *   instances are preserved unchanged; other failure values use the built-in normalization rules.
+ *   instances are preserved unchanged; other failure values use the built-in normalization rules,
+ *   including values whose string coercion hooks throw.
  * - Normalize earlier with `failable(..., NormalizedErrors)` or a custom `normalizeError`
  *   if you need a specific `Error` shape before the throw boundary.
  * - Callback typing follows runtime branches: purely synchronous callbacks return `Failable<...>`;
@@ -1427,6 +1428,24 @@ function getSerializedPlainObjectErrorMessage(
   return null;
 }
 
+const UNSTRINGIFIABLE_ERROR_MESSAGE = 'Unstringifiable error value';
+
+function tryGetStringErrorMessage(value: unknown): string | null {
+  try {
+    return String(value);
+  } catch {
+    return null;
+  }
+}
+
+function tryGetObjectTagErrorMessage(value: object): string | null {
+  try {
+    return Object.prototype.toString.call(value);
+  } catch {
+    return null;
+  }
+}
+
 function getPlainObjectErrorMessage(
   value: Record<string | number | symbol, unknown>
 ): string {
@@ -1434,16 +1453,18 @@ function getPlainObjectErrorMessage(
     const serializedMessage = getSerializedPlainObjectErrorMessage(value);
     if (serializedMessage !== null) return serializedMessage;
 
-    return Object.prototype.toString.call(value);
+    return (
+      tryGetObjectTagErrorMessage(value) ?? UNSTRINGIFIABLE_ERROR_MESSAGE
+    );
   }
 
-  const message = String(value);
-  if (message !== '[object Object]') return message;
+  const message = tryGetStringErrorMessage(value);
+  if (message !== null && message !== '[object Object]') return message;
 
   const serializedMessage = getSerializedPlainObjectErrorMessage(value);
-  if (serializedMessage === null) return message;
+  if (serializedMessage !== null) return serializedMessage;
 
-  return serializedMessage;
+  return message ?? UNSTRINGIFIABLE_ERROR_MESSAGE;
 }
 
 function normalizeUnknownError(error: unknown): Error {
@@ -1456,5 +1477,8 @@ function normalizeUnknownError(error: unknown): Error {
     return new Error(getPlainObjectErrorMessage(error), { cause: error });
   }
 
-  return new Error(String(error), { cause: error });
+  return new Error(
+    tryGetStringErrorMessage(error) ?? UNSTRINGIFIABLE_ERROR_MESSAGE,
+    { cause: error }
+  );
 }

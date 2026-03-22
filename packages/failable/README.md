@@ -99,6 +99,9 @@ failure values are normalized with the built-in rules: arrays become
 `undefined` become `Error(String(value), { cause: value })`. Use
 `failable(..., NormalizedErrors)` or a custom `normalizeError(...)` earlier
 when you need a specific normalized `Error` shape before the throw boundary.
+If built-in message derivation itself fails, normalization still returns an
+`Error` with message `Unstringifiable error value` and `cause` set to the
+original raw value.
 
 Use the lazy forms when the fallback is expensive or has side effects. Failure
 callbacks always receive the stored error, so `() => ...` can ignore it and
@@ -225,7 +228,8 @@ const promisedResult = await failable(() => Promise.resolve(JSON.parse(text)));
 ```
 
 `NormalizedErrors` is the built-in shortcut when you want `.error` to be an
-`Error`.
+`Error`, including when the thrown or rejected non-`Error` value cannot be
+stringified safely.
 
 Pass a promise directly when you want rejection capture (equivalent to the
 promise-returning callback form above, when you already have the promise):
