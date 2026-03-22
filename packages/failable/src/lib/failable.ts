@@ -764,7 +764,7 @@ type FailableSource<T, E> = Failable<T, E> | PromiseLike<Failable<T, E>>;
  * Reject obvious bare `Promise.reject(...)` inputs (`PromiseLike<never>`) while
  * preserving the caller's original tuple types for valid sources.
  */
-type AllSettledSourceInput<T> = T extends PromiseLike<infer U>
+type GuardedFailableSourceInput<T> = T extends PromiseLike<infer U>
   ? [U] extends [never]
     ? never
     : T extends PromiseLike<Failable<unknown, unknown>>
@@ -775,7 +775,11 @@ type AllSettledSourceInput<T> = T extends PromiseLike<infer U>
   : never;
 
 type AllSettledSources<T extends readonly unknown[]> = {
-  readonly [K in keyof T]: AllSettledSourceInput<T[K]>;
+  readonly [K in keyof T]: GuardedFailableSourceInput<T[K]>;
+};
+
+type RaceSources<T extends readonly unknown[]> = {
+  readonly [K in keyof T]: GuardedFailableSourceInput<T[K]>;
 };
 
 type FailableSourceError<T> = T extends Success<unknown>
@@ -876,6 +880,12 @@ type RaceError<T> = T extends readonly (infer P)[]
   ? FailableSourceError<P>
   : never;
 
+type RaceReturn<T extends readonly unknown[]> = T extends readonly []
+  ? Promise<Failable<RaceData<T>, RaceError<T>>>
+  : TupleHasAsync<T> extends true
+  ? Promise<Failable<RaceData<T>, RaceError<T>>>
+  : Failable<RaceData<T>, RaceError<T>>;
+
 function toValidatedFailable(source: unknown): Failable<unknown, unknown> {
   if (isFailable(source)) return source;
 
@@ -898,19 +908,6 @@ async function resolveFailableSources(
   );
 
   return results.map((result) => toValidatedFailable(result));
-}
-
-async function resolveAllSettledFailableSources(
-  sources: readonly unknown[]
-): Promise<readonly Failable<unknown, unknown>[]> {
-  return Promise.all(
-    sources.map((source) =>
-      Promise.resolve(source).then(
-        (result) => toValidatedFailable(result),
-        (error) => failure(error)
-      )
-    )
-  );
 }
 
 function combineAllResults<T extends readonly unknown[]>(
@@ -961,11 +958,12 @@ export function all<
 }
 
 /**
- * Wait for every source to settle and return a tuple of their `Failable`
- * results.
+ * Wait for every source that resolves successfully and return a tuple of their
+ * `Failable` results.
  *
- * Promised source rejections are captured as raw `Failure` values inside the
- * settled tuple instead of rejecting the whole combinator.
+ * If a source promise rejects before producing a `Failable`, the combinator
+ * rejects unchanged. Wrap that boundary with `failable(...)` first if you want
+ * the rejection converted into `Failure`.
  */
 export function allSettled<
   const T extends readonly unknown[]
@@ -982,34 +980,37 @@ export function allSettled<
       : AllSettledTuple<T>;
   }
 
-  return resolveAllSettledFailableSources(sources).then((results) =>
+  return resolveFailableSources(sources).then((results) =>
     combineAllSettledResults<T>(results)
   ) as TupleHasAsync<T> extends true
     ? Promise<AllSettledTuple<T>>
     : AllSettledTuple<T>;
 }
 
+/**
+ * Take the first `Failable` source to settle.
+ *
+ * When every source is already hydrated, the first source in input order wins
+ * synchronously. When any source is promised, winner ordering follows normal
+ * `Promise.race(...)` semantics for already-settled entries.
+ */
 export function race<
-  const T extends readonly PromiseLike<Failable<unknown, unknown>>[]
->(...sources: T): Promise<Failable<RaceData<T>, RaceError<T>>> {
+  const T extends readonly unknown[]
+>(...sources: T & RaceSources<T>): RaceReturn<T> {
   if (sources.length === 0) {
     return Promise.reject(
-      new Error('`race()` requires at least one promised `Failable` source.')
-    ) as Promise<Failable<RaceData<T>, RaceError<T>>>;
+      new Error('`race()` requires at least one `Failable` source.')
+    ) as RaceReturn<T>;
   }
 
-  for (const source of sources) {
-    if (!isPromiseLike(source)) {
-      return Promise.reject(
-        new Error('`race()` only accepts promised `Failable` sources.')
-      ) as Promise<Failable<RaceData<T>, RaceError<T>>>;
-    }
+  if (!hasPromiseLikeSources(sources)) {
+    return toValidatedFailable(sources[0]) as RaceReturn<T>;
   }
 
   return Promise.race(sources.map((source) => Promise.resolve(source))).then(
     (result) =>
       toValidatedFailable(result) as Failable<RaceData<T>, RaceError<T>>
-  );
+  ) as RaceReturn<T>;
 }
 
 type AsyncRunBuilder<
@@ -1176,9 +1177,11 @@ export function run<
  *   parallel and get a success tuple or the first failure
  * - use `yield* all(...)` in sync builders when every source is already a hydrated
  *   `Failable`
- * - use `await allSettled(...)` to inspect the settled tuple of `Failable`
- *   results, including promise rejections captured as `Failure` values
- * - use `yield* await race(...)` to take the first promised `Failable` to settle
+ * - use `await allSettled(...)` to inspect the settled tuple of sources that
+ *   resolve to `Failable`; source promise rejections still reject unchanged
+ * - use `yield* race(...)` when every raced source is already a hydrated
+ *   `Failable`
+ * - use `yield* await race(...)` when any raced source is promised
  * - if a yielded step fails, that failure becomes the default unwind result
  * - cleanup still runs, and the last explicit `return` reached in `finally`
  *   wins (including bare `return;`, which becomes `success()`)

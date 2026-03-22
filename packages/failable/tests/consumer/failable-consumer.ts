@@ -653,12 +653,22 @@ void settledAllAsPromise;
 // @ts-expect-error `allSettled(...)` rejects obvious bare `Promise.reject(...)` inputs.
 allSettled(Promise.reject('boom'));
 
+const syncRacedResult = race(
+  success(1),
+  failure('boom')
+);
+const syncRacedResultAsFailable: Failable<1, 'boom'> = syncRacedResult;
+void syncRacedResultAsFailable;
+
 const racedResult = race(
-  Promise.resolve(success(1)),
+  success(1),
   Promise.resolve(failure('boom'))
 );
 const racedResultAsPromise: Promise<Failable<1, 'boom'>> = racedResult;
 void racedResultAsPromise;
+
+// @ts-expect-error `race(...)` rejects obvious bare `Promise.reject(...)` inputs.
+race(Promise.reject('boom'));
 
 const runAsyncHelperReturn = run(async function* () {
   return helperResult();
@@ -752,8 +762,9 @@ run(async function* () {
   };
 });
 
-// @ts-expect-error `race(...)` accepts promised `Failable` sources only.
-race(success(123));
+const singleSyncRace = race(success(123));
+const singleSyncRaceAsFailable: Failable<123, never> = singleSyncRace;
+void singleSyncRaceAsFailable;
 
 const runEmpty = run(function* () {
   return;

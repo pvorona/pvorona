@@ -421,9 +421,11 @@ async function loadUserPage(
   parallel and get a success tuple or the first failure
 - use `yield* all(...)` in sync builders when every source is already a hydrated
   `Failable`
-- use `await allSettled(...)` to inspect the settled tuple of `Failable`
-  results, including promise rejections captured as `Failure` values
-- use `yield* await race(...)` to take the first promised `Failable` to settle
+- use `await allSettled(...)` to inspect the settled tuple of sources that
+  resolve to `Failable`; source promise rejections still reject unchanged
+- use `yield* race(...)` when every raced source is already a hydrated
+  `Failable`
+- use `yield* await race(...)` when any raced source is promised
 - direct promised sources still follow normal async `await` / `try` /
   `finally` semantics rather than a helper-managed rejection path
 - `run(...)` does not capture thrown values or rejected promises into `Failure`;
@@ -439,9 +441,9 @@ builders.
 import {
   all,
   allSettled,
+  failure,
   race,
   success,
-  type Failable,
 } from '@pvorona/failable';
 
 const syncTuple = all(success(1), success('two'));
@@ -450,19 +452,19 @@ const mixedTuple = await all(
   Promise.resolve(success('two'))
 );
 
-const missingProfileSource: Promise<Failable<never, 'missing-profile'>> =
-  Promise.resolve().then(() => {
-    throw 'missing-profile';
-  });
-
 const settled = await allSettled(
   Promise.resolve(success(1)),
-  missingProfileSource
+  Promise.resolve(failure('missing-profile'))
 );
 
-const winner = await race(
-  Promise.resolve(success('fast')),
-  Promise.resolve(success('slow'))
+const syncWinner = race(
+  success('cached'),
+  success('stale')
+);
+
+const mixedWinner = await race(
+  success('cached'),
+  Promise.resolve(success('network'))
 );
 ```
 
@@ -471,15 +473,18 @@ Key semantics:
 - `all(...)` returns the first failure in input order
 - `allSettled(...)` returns a plain settled tuple rather than a `Success` wrapper
 - `allSettled(...)` preserves `Failure` values in the returned settled tuple
-- promised source rejections in `allSettled(...)` are captured as `Failure`
-  values instead of rejecting the whole combinator
-- rejection payloads captured by `allSettled(...)` stay raw; they are not
-  normalized
-- `allSettled(...)` is intentionally closer to `Promise.allSettled(...)`
+- `allSettled(...)` only settles sources that resolve to `Failable` values
+- promised source rejections in `allSettled(...)` still reject the combinator
+- wrap rejecting boundaries with `failable(...)` first if you want a rejection
+  converted into `Failure`
 - bare `Promise.reject(...)` inputs are rejected at type level as a best-effort
   guardrail; TypeScript still cannot model arbitrary promise rejection channels
   precisely
-- `race(...)` accepts promised `Failable` sources only
+- `race(...)` accepts sync or promised `Failable` sources
+- `race(...)` returns sync `Failable` when every source is sync, otherwise
+  `Promise<Failable>`
+- when `race(...)` mixes already-settled sync and promised sources, winner
+  order follows normal `Promise.race(...)` input ordering
 - `race()` with zero sources rejects with a clear error instead of hanging
 
 ## Transport And Runtime Validation

@@ -414,14 +414,10 @@ describe('public surface', () => {
     expect(asyncResult).toStrictEqual(success(['user', 'profile']));
   });
 
-  it('supports top-level allSettled() capturing promised source rejections', async () => {
-    const missingProfileSource: Promise<Failable<never, 'missing-profile'>> =
-      Promise.resolve().then(() => {
-        throw 'missing-profile';
-      });
+  it('supports top-level allSettled() for promised Failable sources', async () => {
     const result = await allSettled(
       Promise.resolve(success(1)),
-      missingProfileSource
+      Promise.resolve(failure('missing-profile'))
     );
 
     expect(result).toStrictEqual([
@@ -430,15 +426,33 @@ describe('public surface', () => {
     ]);
   });
 
-  it('supports top-level race() for promised sources', async () => {
-    const result = await race(
+  it('rejects top-level allSettled() when a source promise rejects', async () => {
+    const missingProfileSource: Promise<Failable<never, 'missing-profile'>> =
+      Promise.resolve().then(() => {
+        throw 'missing-profile';
+      });
+
+    await expect(
+      allSettled(
+        Promise.resolve(success(1)),
+        missingProfileSource
+      )
+    ).rejects.toBe('missing-profile');
+  });
+
+  it('supports top-level race() for sync or promised sources', async () => {
+    const syncResult = race(
+      success('cached'),
+      success('stale')
+    );
+    expect(syncResult).toStrictEqual(success('cached'));
+
+    const mixedResult = await race(
       Promise.resolve(success('fast')),
-      new Promise<ReturnType<typeof success<'slow'>>>((resolve) => {
-        setTimeout(() => resolve(success('slow')), 10);
-      })
+      success('slow')
     );
 
-    expect(result).toStrictEqual(success('fast'));
+    expect(mixedResult).toStrictEqual(success('fast'));
   });
 
   it('supports guard-based validation for hydrated unknown values', () => {

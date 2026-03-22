@@ -2070,6 +2070,24 @@ describe('run()', () => {
       void buildResult;
     });
 
+    it('infers sync Failable from race() when only hydrated sync sources are passed', () => {
+      const result = race(
+        success(1),
+        failure('e1')
+      );
+
+      expectTypeOf(result).toEqualTypeOf<Failable<1, 'e1'>>();
+    });
+
+    it('infers Promise<Failable> from race() when sync and promised sources are mixed', () => {
+      const result = race(
+        success(1),
+        Promise.resolve(failure('err'))
+      );
+
+      expectTypeOf(result).toEqualTypeOf<Promise<Failable<1, 'err'>>>();
+    });
+
     it('infers data union from race() when only Promise<Success> is passed', () => {
       const buildResult = () =>
         run(async function* () {
@@ -2132,6 +2150,22 @@ describe('run()', () => {
       void buildResult;
     });
 
+    it('supports sync race() in sync builders', () => {
+      const buildResult = () =>
+        run(function* () {
+          const value = yield* race(
+            success(1),
+            success('two')
+          );
+
+          expectTypeOf(value).toEqualTypeOf<1 | 'two'>();
+
+          return success(value);
+        });
+
+      void buildResult;
+    });
+
     it('rejects promised all() in sync builders at type level', () => {
       const buildResult = () => {
         const promised = all(Promise.resolve(success(1)));
@@ -2147,10 +2181,26 @@ describe('run()', () => {
       void buildResult;
     });
 
-    it('rejects sync sources passed to race() at type level', () => {
+    it('supports mixed race() in async builders', () => {
+      const buildResult = () =>
+        run(async function* () {
+          const value = yield* await race(
+            success(1),
+            Promise.resolve(success('two'))
+          );
+
+          expectTypeOf(value).toEqualTypeOf<1 | 'two'>();
+
+          return success(value);
+        });
+
+      void buildResult;
+    });
+
+    it('rejects obvious bare Promise.reject() inputs passed to race() at type level', () => {
       const buildResult = () => {
-        // @ts-expect-error `race()` only accepts promised `Failable` sources.
-        const result = race(success(1));
+        // @ts-expect-error `race()` rejects obvious bare `Promise.reject(...)` inputs.
+        const result = race(Promise.reject('boom'));
 
         return result;
       };
@@ -2385,64 +2435,100 @@ describe('run()', () => {
       expect(result).toStrictEqual(success(['a', 'b']));
     });
 
-    it('allSettled() captures rejected promised sources as Failure values', async () => {
-      // Bypass the best-effort type guardrail to verify runtime capture.
-      const result = await allSettled(
-        Promise.reject('boom') as PromiseLike<Failable<never, 'boom'>>
-      );
-
-      expect(result).toStrictEqual([failure('boom')]);
+    it('allSettled() rejects when a promised source rejects', async () => {
+      // Bypass the best-effort type guardrail to verify runtime rejection.
+      await expect(
+        allSettled(
+          Promise.resolve(success(1)),
+          Promise.reject('boom') as PromiseLike<Failable<never, 'boom'>>
+        )
+      ).rejects.toBe('boom');
     });
 
-    it('allSettled() preserves order across successes, failures, and rejected promises', async () => {
-      // Bypass the best-effort type guardrail to verify runtime capture.
-      const rejectedSource: PromiseLike<Failable<never, 'rejected'>> =
-        Promise.resolve().then(() => {
-          throw 'rejected';
-        });
-
-      const result = await allSettled(
-        Promise.resolve(success(1)),
-        Promise.resolve(failure('failed')),
-        rejectedSource
-      );
-
-      expect(result).toStrictEqual([
-        success(1),
-        failure('failed'),
-        failure('rejected'),
-      ]);
-    });
-
-    it('allSettled() captures rejected PromiseLike sources as Failure values', async () => {
+    it('allSettled() rejects rejected PromiseLike sources unchanged', async () => {
       const rejectedSource = createRejectingThenable<
         Failable<never, 'thenable-error'>
       >('thenable-error');
 
-      const result = await allSettled(rejectedSource);
-
-      expect(result).toStrictEqual([failure('thenable-error')]);
+      await expect(allSettled(rejectedSource)).rejects.toBe('thenable-error');
     });
 
-    it('allSettled() lets async run() builders observe promised source rejections as settled Failure values', async () => {
-      // Bypass the best-effort type guardrail to verify runtime capture.
+    it('allSettled() causes async run() builders to reject when a source promise rejects', async () => {
+      // Bypass the best-effort type guardrail to verify runtime rejection.
       const rejectedSource: PromiseLike<Failable<never, 'missing-profile'>> =
         Promise.resolve().then(() => {
           throw 'missing-profile';
         });
 
-      const result = await run(async function* () {
-        const [user, profile] = await allSettled(
-          Promise.resolve(success('user')),
-          rejectedSource
+      await expect(
+        run(async function* () {
+          await allSettled(
+            Promise.resolve(success('user')),
+            rejectedSource
+          );
+
+          return success('ok');
+        })
+      ).rejects.toBe('missing-profile');
+    });
+
+    it('race() returns first sync source when every source is sync', () => {
+      const result = race(
+        success(2),
+        success(1)
+      );
+
+      expect(result).toStrictEqual(success(2));
+    });
+
+    it('race() returns first sync failure when it appears first', () => {
+      const err = failure('first-error');
+      const result = race(
+        err,
+        success(1)
+      );
+
+      expect(result).toBe(err);
+    });
+
+    it('race() follows Promise.race ordering for already-settled mixed sources', async () => {
+      const promiseFirst = await race(
+        Promise.resolve(success('promise-first')),
+        success('sync-second')
+      );
+      const syncFirst = await race(
+        success('sync-first'),
+        Promise.resolve(success('promise-second'))
+      );
+
+      expect(promiseFirst).toStrictEqual(success('promise-first'));
+      expect(syncFirst).toStrictEqual(success('sync-first'));
+    });
+
+    it('supports sync race() in sync run() builders', () => {
+      const result = run(function* () {
+        const winner = yield* race(
+          success(20),
+          success(22)
         );
 
-        expect(user).toStrictEqual(success('user'));
-        expect(profile).toStrictEqual(failure('missing-profile'));
-        return success('ok');
+        return success(winner);
       });
 
-      expect(result).toStrictEqual(success('ok'));
+      expect(result).toStrictEqual(success(20));
+    });
+
+    it('supports mixed race() in async run() builders', async () => {
+      const result = await run(async function* () {
+        const winner = yield* await race(
+          Promise.resolve(success('promise-first')),
+          success('sync-second')
+        );
+
+        return success(winner);
+      });
+
+      expect(result).toStrictEqual(success('promise-first'));
     });
 
     it('race() returns first success when it settles first', async () => {
@@ -2470,10 +2556,16 @@ describe('run()', () => {
       expect(result).toStrictEqual(err);
     });
 
-    it('race() rejects zero promised sources with a clear error', async () => {
+    it('race() rejects zero sources with a clear error', async () => {
       await expect(race()).rejects.toThrow(
-        '`race()` requires at least one promised `Failable` source.'
+        '`race()` requires at least one `Failable` source.'
       );
+    });
+
+    it('race() with one sync source returns that result', () => {
+      const result = race(success(42));
+
+      expect(result).toStrictEqual(success(42));
     });
 
     it('race() with one promise returns that result', async () => {
