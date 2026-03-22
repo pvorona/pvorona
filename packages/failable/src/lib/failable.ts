@@ -340,7 +340,7 @@ const BASE_FAILURE = (() => {
  * - `throwIfFailure(result)` throws on failure and narrows the same result on success.
  * - `failable(...)` captures synchronous throws, async rejections, and wire shapes.
  * - `run(...)` composes existing `Failable` values with `yield* result` for hydrated
- *   values and `yield* get(source)` when the helper is still needed.
+ *   values and `yield* await promisedResult` for promised sources in async builders.
  * - hydrated `Failable` values stay sync-iterable only so `run(...)` can observe
  *   `yield* result`; they are not meant to be a general-purpose collection API.
  *

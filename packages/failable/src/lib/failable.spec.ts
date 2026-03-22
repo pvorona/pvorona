@@ -1830,7 +1830,7 @@ describe('run()', () => {
       void buildResult;
     });
 
-    it('rejects promised `get(...)` sources in sync builders at type level', () => {
+    it('rejects promised sources in sync builders at type level', () => {
       const buildResult = () =>
         run(function* () {
           // @ts-expect-error sync `run(...)` only accepts hydrated `Failable` values.
@@ -1854,7 +1854,7 @@ describe('run()', () => {
       void buildResult;
     });
 
-    it('rejects async helper injection at type level', () => {
+    it('rejects async builder helper injection at type level', () => {
       const buildResult = () =>
         run(
           async function* (

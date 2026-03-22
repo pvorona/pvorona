@@ -275,8 +275,8 @@ current unwind result unless a later cleanup `return` overrides it.
 Inside a `run(...)` builder, there are two valid delegation forms:
 
 - `yield* result` when `result` is already a hydrated `Failable`
-- `yield* get(source)` when the helper is still needed, especially for promised
-  sources
+- `yield* await promisedResult` in async builders when you have a
+  `Promise<Failable<...>>`
 
 Hydrated `Failable` values are sync-iterable only so `run(...)` can intercept
 `yield* result`. Outside `run(...)`, treat them as result objects rather than as
