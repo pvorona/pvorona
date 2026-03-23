@@ -41,6 +41,10 @@ const EXPECTED_PACKAGE_EXPORTS = {
     import: './dist/index.js',
     default: './dist/index.js',
   },
+  './umd': {
+    types: './dist/index.d.ts',
+    default: './dist/umd/index.cjs',
+  },
 } as const;
 
 function divide(a: number, b: number): Failable<number, string> {

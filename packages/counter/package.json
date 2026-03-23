@@ -1,6 +1,6 @@
 {
   "name": "@pvorona/counter",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -13,6 +13,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./umd": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/umd/index.cjs"
     }
   },
   "files": [

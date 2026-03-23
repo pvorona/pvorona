@@ -1,6 +1,6 @@
 {
   "name": "@pvorona/reference",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -13,6 +13,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./umd": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/umd/index.cjs"
     }
   },
   "files": [
@@ -30,7 +34,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@pvorona/assert": "~1.0.1",
-    "@pvorona/resolve-value-or-getter": "~0.1.0"
+    "@pvorona/assert": "~1.0.2",
+    "@pvorona/resolve-value-or-getter": "~0.1.1"
   }
 }

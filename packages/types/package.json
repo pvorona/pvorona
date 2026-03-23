@@ -15,6 +15,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./umd": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/umd/index.cjs"
     }
   },
   "files": [

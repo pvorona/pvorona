@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -36,7 +37,13 @@ async function main() {
   const { stdout } = await execFileAsync(
     'npm',
     ['pack', '--dry-run', '--json'],
-    { cwd: packageRoot },
+    {
+      cwd: packageRoot,
+      env: {
+        ...process.env,
+        npm_config_cache: join(tmpdir(), 'pvorona-npm-cache', String(process.pid)),
+      },
+    },
   );
 
   const [packResult] = JSON.parse(stdout);
