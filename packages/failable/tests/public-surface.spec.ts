@@ -41,9 +41,9 @@ const EXPECTED_PACKAGE_EXPORTS = {
     import: './dist/index.js',
     default: './dist/index.js',
   },
-  './umd': {
+  './es-2018': {
     types: './dist/index.d.ts',
-    default: './dist/umd/index.cjs',
+    default: './dist/es-2018/index.cjs',
   },
 } as const;
 

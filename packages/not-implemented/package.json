@@ -1,6 +1,6 @@
 {
   "name": "@pvorona/not-implemented",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -14,9 +14,9 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./umd": {
+    "./es-2018": {
       "types": "./dist/index.d.ts",
-      "default": "./dist/umd/index.cjs"
+      "default": "./dist/es-2018/index.cjs"
     }
   },
   "files": [

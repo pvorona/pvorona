@@ -1,6 +1,6 @@
 {
   "name": "@pvorona/assert",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "ESM-only TypeScript assertions, restrictive guards, and narrowing helpers.",
   "keywords": [
     "assert",
@@ -35,9 +35,9 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./umd": {
+    "./es-2018": {
       "types": "./dist/index.d.ts",
-      "default": "./dist/umd/index.cjs"
+      "default": "./dist/es-2018/index.cjs"
     }
   },
   "files": [

@@ -1,6 +1,6 @@
 {
   "name": "@pvorona/failable",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "Typed success/failure results for expected failures in TypeScript.",
   "keywords": [
     "failable",
@@ -24,9 +24,9 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./umd": {
+    "./es-2018": {
       "types": "./dist/index.d.ts",
-      "default": "./dist/umd/index.cjs"
+      "default": "./dist/es-2018/index.cjs"
     }
   },
   "files": [

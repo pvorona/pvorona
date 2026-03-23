@@ -11,6 +11,8 @@ type CreatePackageViteConfigOptions = {
   testInclude: string[];
 };
 
+const LEGACY_BUILD_TARGET = 'es2018';
+
 function capitalize(value: string): string {
   if (value.length === 0) return value;
 
@@ -56,16 +58,19 @@ export function createPackageViteConfig({
     build: {
       outDir: './dist',
       emptyOutDir: true,
+      // Keep published artifacts parseable by older bundlers such as webpack 4.
+      target: LEGACY_BUILD_TARGET,
       reportCompressedSize: true,
       commonjsOptions: {
         transformMixedEsModules: true,
       },
       lib: {
         entry: 'src/index.ts',
-        // Keep ESM as the primary entrypoint and publish UMD on a subpath.
+        // Keep ESM as the primary entrypoint and publish the legacy-targeted
+        // compatibility bundle on a subpath named for its syntax target.
         name: toGlobalName(packageName),
         fileName(format) {
-          return format === 'es' ? 'index.js' : 'umd/index.cjs';
+          return format === 'es' ? 'index.js' : 'es-2018/index.cjs';
         },
         formats: ['es', 'umd'],
       },
