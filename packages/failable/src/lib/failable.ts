@@ -34,13 +34,6 @@ type Match<T, E> = <U>(
   onFailure: (error: E) => U
 ) => U;
 
-/**
- * Hydrated `Failable` values are sync-iterable only so `run(...)` can intercept
- * `yield* result` through its existing step protocol.
- *
- * Outside `run(...)`, treat them as result objects rather than as a
- * general-purpose collection API.
- */
 export type Failable<T, E> =
   | (Omit<Success<T>, 'orElse' | 'getOrElse' | 'map' | 'flatMap'> & {
       readonly orElse: <U>(fallback: Fallback<U, E>) => Success<T>;
