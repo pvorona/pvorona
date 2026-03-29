@@ -35,7 +35,7 @@ type FailableNormalizeErrorInput =
   | typeof NormalizedErrors
   | FailableNormalizeErrorOptions;
 
-type LazyFallback<U, E> = (error: E) => U;
+type Fallback<U, E> = (error: E) => U;
 
 type Match<T, E> = <U>(
   onSuccess: (data: T) => U,
@@ -51,15 +51,15 @@ type Match<T, E> = <U>(
  */
 export type Failable<T, E> =
   | (Omit<Success<T>, 'orElse' | 'getOrElse' | 'map' | 'flatMap'> & {
-      readonly orElse: <U>(getValue: LazyFallback<U, E>) => Success<T>;
-      readonly getOrElse: <U>(getValue: LazyFallback<U, E>) => T;
+      readonly orElse: <U>(fallback: Fallback<U, E>) => Success<T>;
+      readonly getOrElse: <U>(fallback: Fallback<U, E>) => T;
       readonly match: Match<T, E>;
       readonly map: FailableMap<T, E>;
       readonly flatMap: FailableFlatMap<T, E>;
     })
   | (Omit<Failure<E>, 'orElse' | 'getOrElse' | 'map' | 'flatMap'> & {
-      readonly orElse: <U>(getValue: LazyFallback<U, E>) => Success<U>;
-      readonly getOrElse: <U>(getValue: LazyFallback<U, E>) => U;
+      readonly orElse: <U>(fallback: Fallback<U, E>) => Success<U>;
+      readonly getOrElse: <U>(fallback: Fallback<U, E>) => U;
       readonly match: Match<T, E>;
       readonly map: FailableMap<T, E>;
       readonly flatMap: FailableFlatMap<T, E>;
@@ -127,9 +127,10 @@ type FailableMap<T, E> = {
 type FailableFlatMap<T, E> = {
   <Next>(fn: (data: T) => Success<Next>): Failable<Next, E>;
   <E2>(fn: (data: T) => Failure<E2>): Failure<E | E2>;
-  <Next, E2>(
-    fn: (data: T) => Success<Next> | Failure<E2>
-  ): Failable<Next, E | E2>;
+  <Next, E2>(fn: (data: T) => Success<Next> | Failure<E2>): Failable<
+    Next,
+    E | E2
+  >;
   <Next, E2>(fn: (data: T) => Failable<Next, E2>): Failable<Next, E | E2>;
 };
 
@@ -168,9 +169,9 @@ export type Success<T> = {
   readonly data: T;
   readonly error: null;
   readonly or: <U>(value: U) => Success<T>;
-  readonly orElse: <U>(getValue: LazyFallback<U, never>) => Success<T>;
+  readonly orElse: <U>(getValue: Fallback<U, never>) => Success<T>;
   readonly getOr: <U>(value: U) => T;
-  readonly getOrElse: <U>(getValue: LazyFallback<U, never>) => T;
+  readonly getOrElse: <U>(getValue: Fallback<U, never>) => T;
   readonly getOrThrow: (normalizeOption?: FailableNormalizeErrorInput) => T;
   readonly match: SuccessMatch<T>;
   readonly map: SuccessMap<T>;
@@ -190,9 +191,9 @@ export type Failure<E> = {
   readonly error: E;
   readonly data: null;
   readonly or: <U>(value: U) => Success<U>;
-  readonly orElse: <U>(getValue: LazyFallback<U, E>) => Success<U>;
+  readonly orElse: <U>(getValue: Fallback<U, E>) => Success<U>;
   readonly getOr: <U>(value: U) => U;
-  readonly getOrElse: <U>(getValue: LazyFallback<U, E>) => U;
+  readonly getOrElse: <U>(getValue: Fallback<U, E>) => U;
   readonly getOrThrow: (normalizeOption?: FailableNormalizeErrorInput) => never;
   readonly match: FailureMatch<E>;
   readonly map: FailureMap<E>;
@@ -208,15 +209,15 @@ export type Failure<E> = {
 type InternalSuccess<T> = Omit<Success<T>, 'orElse' | 'getOrElse'> & {
   readonly [FAILABLE_TAG]: true;
   readonly [SUCCESS_TAG]: true;
-  readonly orElse: <U>(getValue: LazyFallback<U, never>) => Success<T>;
-  readonly getOrElse: <U>(getValue: LazyFallback<U, never>) => T;
+  readonly orElse: <U>(getValue: Fallback<U, never>) => Success<T>;
+  readonly getOrElse: <U>(getValue: Fallback<U, never>) => T;
 };
 
 type InternalFailure<E> = Omit<Failure<E>, 'orElse' | 'getOrElse'> & {
   readonly [FAILABLE_TAG]: true;
   readonly [FAILURE_TAG]: true;
-  readonly orElse: <U>(getValue: LazyFallback<U, E>) => Success<U>;
-  readonly getOrElse: <U>(getValue: LazyFallback<U, E>) => U;
+  readonly orElse: <U>(getValue: Fallback<U, E>) => Success<U>;
+  readonly getOrElse: <U>(getValue: Fallback<U, E>) => U;
 };
 
 const BASE_FAILABLE = {
@@ -245,7 +246,7 @@ const BASE_FAILABLE = {
   },
 } as const;
 
-function resolveLazyFallback<U, E>(getValue: LazyFallback<U, E>, error: E): U {
+function resolveLazyFallback<U, E>(getValue: Fallback<U, E>, error: E): U {
   return getValue(error);
 }
 
@@ -328,14 +329,14 @@ const BASE_FAILURE = (() => {
   node.or = function orFailure(value) {
     return success(value);
   };
-  node.orElse = function orElseFailure<U>(getValue: LazyFallback<U, unknown>) {
+  node.orElse = function orElseFailure<U>(getValue: Fallback<U, unknown>) {
     return success(resolveLazyFallback(getValue, this.error));
   };
   node.getOr = function getOrFailure(value) {
     return value;
   };
   node.getOrElse = function getOrElseFailure<U>(
-    getValue: LazyFallback<U, unknown>
+    getValue: Fallback<U, unknown>
   ) {
     return resolveLazyFallback(getValue, this.error);
   };
@@ -544,10 +545,9 @@ type FailableSyncOnlyCallback<F extends () => unknown> = F &
     ? { readonly __failablePassPromiseDirectly: never }
     : unknown);
 
-type InferReturnTypeFromPromise<
-  P extends PromiseLike<unknown>,
-  E = unknown,
-> = [Awaited<P>] extends [never]
+type InferReturnTypeFromPromise<P extends PromiseLike<unknown>, E = unknown> = [
+  Awaited<P>
+] extends [never]
   ? Promise<Failure<E>>
   : Awaited<P> extends Success<infer A>
   ? Promise<Success<A>>
@@ -969,9 +969,7 @@ export function all<
  * rejects unchanged. Wrap that boundary with `failable(...)` first if you want
  * the rejection converted into `Failure`.
  */
-export function allSettled<
-  const T extends readonly unknown[]
->(
+export function allSettled<const T extends readonly unknown[]>(
   ...sources: T & AllSettledSources<T>
 ): TupleHasAsync<T> extends true
   ? Promise<AllSettledTuple<T>>
@@ -998,9 +996,9 @@ export function allSettled<
  * synchronously. When any source is promised, winner ordering follows normal
  * `Promise.race(...)` semantics for already-settled entries.
  */
-export function race<
-  const T extends readonly unknown[]
->(...sources: T & RaceSources<T>): RaceReturn<T> {
+export function race<const T extends readonly unknown[]>(
+  ...sources: T & RaceSources<T>
+): RaceReturn<T> {
   if (sources.length === 0) {
     return Promise.reject(
       new Error('`race()` requires at least one `Failable` source.')
@@ -1160,13 +1158,8 @@ export function run<
     _helpers: RunNoHelpers
   ) => AsyncGenerator<TYield, TResult, unknown>) &
     ValidateRunReturn<TResult>
-): Promise<
-  InferRunResult<TYield, Extract<TResult, RunReturn>>
->;
-export function run<
-  TYield extends RunYield = never,
-  TResult = RunReturn
->(
+): Promise<InferRunResult<TYield, Extract<TResult, RunReturn>>>;
+export function run<TYield extends RunYield = never, TResult = RunReturn>(
   builder: ((_helpers: RunNoHelpers) => Generator<TYield, TResult, unknown>) &
     ValidateRunReturn<TResult>
 ): InferRunResult<TYield, Extract<TResult, RunReturn>>;
@@ -1326,10 +1319,8 @@ function isPromiseReturningCallbackGuardError(
   if (!(error instanceof Error)) return false;
 
   return (
-    Object.getOwnPropertyDescriptor(
-      error,
-      FAILABLE_PROMISE_CALLBACK_GUARD_TAG
-    )?.value === true
+    Object.getOwnPropertyDescriptor(error, FAILABLE_PROMISE_CALLBACK_GUARD_TAG)
+      ?.value === true
   );
 }
 
@@ -1482,9 +1473,7 @@ function getPlainObjectErrorMessage(
     const serializedMessage = getSerializedPlainObjectErrorMessage(value);
     if (serializedMessage !== null) return serializedMessage;
 
-    return (
-      tryGetObjectTagErrorMessage(value) ?? UNSTRINGIFIABLE_ERROR_MESSAGE
-    );
+    return tryGetObjectTagErrorMessage(value) ?? UNSTRINGIFIABLE_ERROR_MESSAGE;
   }
 
   const message = tryGetStringErrorMessage(value);
