@@ -238,10 +238,6 @@ const BASE_FAILABLE = {
   },
 } as const;
 
-function resolveLazyFallback<U, E>(getValue: Fallback<U, E>, error: E): U {
-  return getValue(error);
-}
-
 function toThrownError(
   error: unknown,
   normalizeOption?: FailableNormalizeErrorInput
@@ -321,16 +317,16 @@ const BASE_FAILURE = (() => {
   node.or = function orFailure(value) {
     return success(value);
   };
-  node.orElse = function orElseFailure<U>(getValue: Fallback<U, unknown>) {
-    return success(resolveLazyFallback(getValue, this.error));
+  node.orElse = function orElseFailure<U>(fallback: Fallback<U, unknown>) {
+    return success(fallback(this.error));
   };
   node.getOr = function getOrFailure(value) {
     return value;
   };
   node.getOrElse = function getOrElseFailure<U>(
-    getValue: Fallback<U, unknown>
+    fallback: Fallback<U, unknown>
   ) {
-    return resolveLazyFallback(getValue, this.error);
+    return fallback(this.error);
   };
   node.getOrThrow = function getOrThrowFailure(
     normalizeOption?: FailableNormalizeErrorInput
