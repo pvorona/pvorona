@@ -5,21 +5,16 @@ import {
   isObject,
 } from '@pvorona/assert';
 import { notImplemented } from '@pvorona/not-implemented';
+import type { ValueOf, Mutable } from './types.js';
 
-type Mutable<T> = {
-  -readonly [P in keyof T]: T[P];
-};
-
-type ValueOf<T> = T[keyof T];
-
-const FAILABLE_TAG = Symbol('Failable');
-const SUCCESS_TAG = Symbol('Success');
-const FAILURE_TAG = Symbol('Failure');
+const FAILABLE_TAG = Symbol('failable');
+const SUCCESS_TAG = Symbol('success');
+const FAILURE_TAG = Symbol('failure');
 
 export const FailableStatus = Object.freeze({
   Success: 'success',
   Failure: 'failure',
-} as const);
+});
 
 export type FailableStatus = ValueOf<typeof FailableStatus>;
 
