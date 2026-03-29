@@ -572,14 +572,12 @@ type FailableInput =
   | (() => unknown)
   | PromiseLike<unknown>;
 
-const FAILABLE_PROMISE_CALLBACK_MESSAGE =
+const ASYNC_CALLBACK_MESSAGE =
   '`failable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await failable(promise)`.';
-const FAILABLE_PROMISE_CALLBACK_GUARD_TAG = Symbol(
-  'FailablePromiseCallbackGuard'
-);
+const ASYNC_CALLBACK_ERROR_TAG = Symbol('AsyncCallbackError');
 
-type FailablePromiseCallbackGuardError = Error & {
-  readonly [FAILABLE_PROMISE_CALLBACK_GUARD_TAG]: true;
+type AsyncCallbackError = Error & {
+  readonly [ASYNC_CALLBACK_ERROR_TAG]: true;
 };
 
 class RunStep<T, E, TSource = Failable<T, E>> {
@@ -1279,12 +1277,10 @@ function fromFailableLike<T, E>(
   return failure(failableLike.error);
 }
 
-function createPromiseReturningCallbackGuardError(): FailablePromiseCallbackGuardError {
-  const error = new Error(
-    FAILABLE_PROMISE_CALLBACK_MESSAGE
-  ) as FailablePromiseCallbackGuardError;
+function createAsyncCallbackError(): AsyncCallbackError {
+  const error = new Error(ASYNC_CALLBACK_MESSAGE) as AsyncCallbackError;
 
-  Object.defineProperty(error, FAILABLE_PROMISE_CALLBACK_GUARD_TAG, {
+  Object.defineProperty(error, ASYNC_CALLBACK_ERROR_TAG, {
     value: true,
     enumerable: false,
     configurable: false,
@@ -1294,18 +1290,16 @@ function createPromiseReturningCallbackGuardError(): FailablePromiseCallbackGuar
   return error;
 }
 
-function isPromiseReturningCallbackGuardError(
-  error: unknown
-): error is FailablePromiseCallbackGuardError {
+function isAsyncCallbackError(error: unknown): error is AsyncCallbackError {
   if (!(error instanceof Error)) return false;
 
   return (
-    Object.getOwnPropertyDescriptor(error, FAILABLE_PROMISE_CALLBACK_GUARD_TAG)
-      ?.value === true
+    Object.getOwnPropertyDescriptor(error, ASYNC_CALLBACK_ERROR_TAG)?.value ===
+    true
   );
 }
 
-function consumePromiseLikeRejection(value: PromiseLike<unknown>) {
+function ignorePromiseRejection(value: PromiseLike<unknown>) {
   void Promise.resolve(value).catch(() => undefined);
 }
 
@@ -1317,9 +1311,9 @@ function fromFunction<T extends () => U, E, U = ReturnType<T>>(
     const data = fun();
 
     if (isPromiseLike(data)) {
-      consumePromiseLikeRejection(data);
+      ignorePromiseRejection(data);
       return normalizeFailableResult(
-        failure(createPromiseReturningCallbackGuardError()),
+        failure(createAsyncCallbackError()),
         normalizeOption
       );
     }
@@ -1363,7 +1357,7 @@ function normalizeFailableResult<T, E>(
   normalizeOption?: FailableNormalizeErrorInput
 ) {
   if (result.status === FailableStatus.Success) return result;
-  if (isPromiseReturningCallbackGuardError(result.error)) return result;
+  if (isAsyncCallbackError(result.error)) return result;
 
   const normalizeError = resolveNormalizeError(normalizeOption);
   if (normalizeError === null) return result;
