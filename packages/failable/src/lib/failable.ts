@@ -88,17 +88,17 @@ export type FailableLikeFailure<Reason> = {
 };
 
 type SuccessMatch<Result> = {
-  <Output1, Output2>(
-    onSuccess: (data: Result) => Output1,
-    onFailure: (reason: never) => Output2
-  ): Output1;
+  <OnSuccessOutput, OnFailureOutput>(
+    onSuccess: (data: Result) => OnSuccessOutput,
+    onFailure: (reason: never) => OnFailureOutput
+  ): OnSuccessOutput;
 };
 
 type FailureMatch<Reason> = {
-  <Output1, Output2>(
-    onSuccess: (data: never) => Output1,
-    onFailure: (reason: Reason) => Output2
-  ): Output2;
+  <OnSuccessOutput, OnFailureOutput>(
+    onSuccess: (data: never) => OnSuccessOutput,
+    onFailure: (reason: Reason) => OnFailureOutput
+  ): OnFailureOutput;
 };
 
 type SuccessMap<Result> = {
@@ -545,29 +545,29 @@ export function toFailableLike<Result, Reason>(
   return { status: FailableStatus.Success, data: value.data };
 }
 
-type InferFailableFromValue<T, Reason = unknown> = [T] extends [never]
+type InferFailableFromValue<Value, Reason = unknown> = [Value] extends [never]
   ? Failure<Reason>
-  : T extends Success<infer InferredResult>
+  : Value extends Success<infer InferredResult>
   ? Success<InferredResult>
-  : T extends Failure<infer InferredReason>
+  : Value extends Failure<infer InferredReason>
   ? Failure<InferredReason>
-  : T extends FailableLikeSuccess<infer InferredResult>
+  : Value extends FailableLikeSuccess<infer InferredResult>
   ? Success<InferredResult>
-  : T extends FailableLikeFailure<infer InferredReason>
+  : Value extends FailableLikeFailure<infer InferredReason>
   ? Failure<InferredReason>
-  : T extends Failable<infer InferredResult, infer InferredReason>
+  : Value extends Failable<infer InferredResult, infer InferredReason>
   ? Failable<InferredResult, InferredReason>
-  : T extends FailableLike<infer InferredResult, infer InferredReason>
+  : Value extends FailableLike<infer InferredResult, infer InferredReason>
   ? Failable<InferredResult, InferredReason>
-  : Failable<T, Reason>;
+  : Failable<Value, Reason>;
 
-type IsAny<T> = 0 extends 1 & T ? true : false;
+type IsAny<Value> = 0 extends 1 & Value ? true : false;
 
-type HasKnownPromiseLikeReturn<T> = IsAny<T> extends true
+type HasKnownPromiseLikeReturn<ReturnValue> = IsAny<ReturnValue> extends true
   ? false
-  : unknown extends T
+  : unknown extends ReturnValue
   ? false
-  : [Extract<T, PromiseLike<unknown>>] extends [never]
+  : [Extract<ReturnValue, PromiseLike<unknown>>] extends [never]
   ? false
   : true;
 
@@ -595,21 +595,21 @@ type InferReturnTypeFromPromise<
   ? Promise<Failable<Data, FailureError>>
   : Promise<Failable<Awaited<PromiseSource>, InputError>>;
 
-type NormalizeFailableResult<T> = [T] extends [never]
+type NormalizeFailableResult<Value> = [Value] extends [never]
   ? Failure<Error>
-  : T extends Success<infer Data>
+  : Value extends Success<infer Data>
   ? Success<Data>
-  : T extends Failure<unknown>
+  : Value extends Failure<unknown>
   ? Failure<Error>
-  : T extends FailableLikeSuccess<infer Data>
+  : Value extends FailableLikeSuccess<infer Data>
   ? Success<Data>
-  : T extends FailableLikeFailure<unknown>
+  : Value extends FailableLikeFailure<unknown>
   ? Failure<Error>
-  : T extends Failable<infer Data, unknown>
+  : Value extends Failable<infer Data, unknown>
   ? Failable<Data, Error>
-  : T extends FailableLike<infer Data, unknown>
+  : Value extends FailableLike<infer Data, unknown>
   ? Failable<Data, Error>
-  : Failable<T, Error>;
+  : Failable<Value, Error>;
 
 type FailableInput =
   | FailableLike<unknown, unknown>
@@ -770,7 +770,9 @@ async function* getAsyncRunIterator<Result, Reason>(
   return (yield RunStep.create(source)) as Result;
 }
 
-function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
+function isPromiseLike<ResolvedValue>(
+  value: unknown
+): value is PromiseLike<ResolvedValue> {
   if (!isObject(value) && !isFunction(value)) {
     return false;
   }
@@ -801,14 +803,15 @@ type FailableSource<Result, Reason> =
  * Reject obvious bare `Promise.reject(...)` inputs (`PromiseLike<never>`) while
  * preserving the caller's original tuple types for valid sources.
  */
-type GuardedFailableSourceInput<T> = T extends PromiseLike<infer Resolved>
+type GuardedFailableSourceInput<Source> =
+  Source extends PromiseLike<infer Resolved>
   ? [Resolved] extends [never]
     ? never
-    : T extends PromiseLike<Failable<unknown, unknown>>
-    ? T
+    : Source extends PromiseLike<Failable<unknown, unknown>>
+    ? Source
     : never
-  : T extends Failable<unknown, unknown>
-  ? T
+  : Source extends Failable<unknown, unknown>
+  ? Source
   : never;
 
 type AllSettledSources<Sources extends readonly unknown[]> = {
@@ -823,31 +826,31 @@ type RaceSources<Sources extends readonly unknown[]> = {
   >;
 };
 
-type FailableSourceError<T> = T extends Success<unknown>
+type FailableSourceError<Source> = Source extends Success<unknown>
   ? never
-  : T extends Failure<infer SourceError>
+  : Source extends Failure<infer SourceError>
   ? SourceError
-  : T extends Failable<unknown, infer SourceError>
+  : Source extends Failable<unknown, infer SourceError>
   ? SourceError
-  : T extends PromiseLike<Success<unknown>>
+  : Source extends PromiseLike<Success<unknown>>
   ? never
-  : T extends PromiseLike<Failure<infer SourceError>>
+  : Source extends PromiseLike<Failure<infer SourceError>>
   ? SourceError
-  : T extends PromiseLike<Failable<unknown, infer SourceError>>
+  : Source extends PromiseLike<Failable<unknown, infer SourceError>>
   ? SourceError
   : never;
 
-type FailableSourceData<T> = T extends Success<infer Data>
+type FailableSourceData<Source> = Source extends Success<infer Data>
   ? Data
-  : T extends Failure<unknown>
+  : Source extends Failure<unknown>
   ? never
-  : T extends Failable<infer Data, unknown>
+  : Source extends Failable<infer Data, unknown>
   ? Data
-  : T extends PromiseLike<Success<infer Data>>
+  : Source extends PromiseLike<Success<infer Data>>
   ? Data
-  : T extends PromiseLike<Failure<unknown>>
+  : Source extends PromiseLike<Failure<unknown>>
   ? never
-  : T extends PromiseLike<Failable<infer Data, unknown>>
+  : Source extends PromiseLike<Failable<infer Data, unknown>>
   ? Data
   : never;
 
@@ -859,27 +862,27 @@ type AllTupleData<Sources> = {
   readonly [Index in keyof Sources]: FailableSourceData<Sources[Index]>;
 };
 
-type FailableSourceSettled<T> = T extends Success<infer Data>
+type FailableSourceSettled<Source> = Source extends Success<infer Data>
   ? Success<Data>
-  : T extends Failure<infer SourceError>
+  : Source extends Failure<infer SourceError>
   ? Failure<SourceError>
-  : T extends Failable<infer Data, infer SourceError>
+  : Source extends Failable<infer Data, infer SourceError>
   ? Failable<Data, SourceError>
-  : T extends PromiseLike<Success<infer Data>>
+  : Source extends PromiseLike<Success<infer Data>>
   ? Success<Data>
-  : T extends PromiseLike<Failure<infer SourceError>>
+  : Source extends PromiseLike<Failure<infer SourceError>>
   ? Failure<SourceError>
-  : T extends PromiseLike<Failable<infer Data, infer SourceError>>
+  : Source extends PromiseLike<Failable<infer Data, infer SourceError>>
   ? Failable<Data, SourceError>
   : never;
 
-type FailableSourceIsAsync<T> = [
-  Extract<T, PromiseLike<Failable<unknown, unknown>>>
+type FailableSourceIsAsync<Source> = [
+  Extract<Source, PromiseLike<Failable<unknown, unknown>>>
 ] extends [never]
   ? false
   : true;
 
-type FailableSourceHasGuaranteedFailure<T> = T extends
+type FailableSourceHasGuaranteedFailure<Source> = Source extends
   | Failure<unknown>
   | PromiseLike<Failure<unknown>>
   ? true
@@ -1111,14 +1114,14 @@ type RunIteration<
 
 type SyncRunController<Yield extends RunYield, Result extends RunReturn> = {
   readonly next: (value?: unknown) => RunIteration<Yield, Result>;
-  readonly return: (
+  readonly unwind: (
     result: Failable<unknown, unknown>
   ) => RunIteration<Yield, Result>;
 };
 
 type AsyncRunController<Yield extends RunYield, Result extends RunReturn> = {
   readonly next: (value?: unknown) => Promise<RunIteration<Yield, Result>>;
-  readonly return: (
+  readonly unwind: (
     result: Failable<unknown, unknown>
   ) => Promise<RunIteration<Yield, Result>>;
 };
@@ -1143,13 +1146,13 @@ function driveRunIterator<Yield extends RunYield, Result extends RunReturn>(
 
     const source = readRunSource(iteration.value);
     if (source.status === FailableStatus.Failure) {
-      return continueClose(controller.return(source), source);
+      return continueUnwind(controller.unwind(source), source);
     }
 
     return resolveStep(controller.next(source.data), continueRun);
   };
 
-  const continueClose = (
+  const continueUnwind = (
     step: RunIteration<Yield, Result> | Promise<RunIteration<Yield, Result>>,
     unwindResult: Failable<unknown, unknown>
   ): InferRunResult<Yield, Result> | Promise<InferRunResult<Yield, Result>> =>
@@ -1160,10 +1163,10 @@ function driveRunIterator<Yield extends RunYield, Result extends RunReturn>(
 
       const source = readRunSource(iteration.value);
       if (source.status === FailableStatus.Failure) {
-        return continueClose(controller.return(unwindResult), unwindResult);
+        return continueUnwind(controller.unwind(unwindResult), unwindResult);
       }
 
-      return continueClose(controller.next(source.data), unwindResult);
+      return continueUnwind(controller.next(source.data), unwindResult);
     });
 
   return resolveStep(controller.next(), continueRun);
@@ -1239,14 +1242,14 @@ export function run(
   if (isAsyncRunIterator(iterator)) {
     return driveRunIterator({
       next: (value) => iterator.next(value),
-      return: (result) => iterator.return(result as never),
+      unwind: (result) => iterator.return(result as never),
     });
   }
 
   return driveRunIterator({
     next: (value) =>
       (iterator as Generator<RunYield, RunReturn, unknown>).next(value),
-    return: (result) =>
+    unwind: (result) =>
       (iterator as Generator<RunYield, RunReturn, unknown>).return(
         result as never
       ),
