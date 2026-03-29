@@ -124,6 +124,12 @@ const okMatch = ok.match(
 );
 expectType<Equal<typeof okMatch, string>>(true);
 
+const okMixedMatch = ok.match(
+  (value) => value.toString(),
+  (error) => error
+);
+expectType<Equal<typeof okMixedMatch, string>>(true);
+
 const status: FailableStatus = ok.status;
 void status;
 void FailableStatus.Success;
@@ -178,7 +184,13 @@ const problemMatch = problem.match(
   () => 'unexpected',
   (error) => error
 );
-expectType<Equal<typeof problemMatch, string>>(true);
+expectType<Equal<typeof problemMatch, 'boom'>>(true);
+
+const problemMixedMatch = problem.match(
+  () => 123,
+  (error) => error.length
+);
+expectType<Equal<typeof problemMixedMatch, number>>(true);
 expectType<
   Equal<'isError' extends keyof Success<number> ? true : false, false>
 >(true);
@@ -241,6 +253,12 @@ const unionMatch = union.match(
   (error) => error
 );
 expectType<Equal<typeof unionMatch, string>>(true);
+
+const unionMixedMatch = union.match(
+  (value) => value.toString(),
+  (error) => error.length
+);
+expectType<Equal<typeof unionMixedMatch, string | number>>(true);
 
 const okMapped = ok.map((value) => value.toString());
 expectType<Equal<typeof okMapped, Success<string>>>(true);
@@ -782,12 +800,15 @@ void okOrElse;
 void okGetOrElse;
 void okGetOrThrow;
 void okMatch;
+void okMixedMatch;
 void explicitUndefinedOk;
 void voidOk;
 void problemOrElse;
 void problemOrElseFromError;
 void problemGetOrElse;
 void problemGetOrElseFromError;
+void problemMixedMatch;
+void unionMixedMatch;
 void problemGetOrThrow;
 void problemMatch;
 void explicitUndefinedProblem;

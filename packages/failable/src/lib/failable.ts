@@ -29,10 +29,10 @@ type FailableNormalizeErrorInput =
 
 type Fallback<U, E> = (error: E) => U;
 
-type Match<T, E> = <U>(
-  onSuccess: (data: T) => U,
-  onFailure: (error: E) => U
-) => U;
+type Match<T, E> = <R1, R2>(
+  onSuccess: (data: T) => R1,
+  onFailure: (error: E) => R2
+) => R1 | R2;
 
 export type Failable<T, E> =
   | (Omit<Success<T>, 'orElse' | 'getOrElse' | 'map' | 'flatMap'> & {
@@ -80,11 +80,17 @@ export type FailableLikeFailure<E> = {
 };
 
 type SuccessMatch<T> = {
-  <U>(onSuccess: (data: T) => U, onFailure: (error: never) => U): U;
+  <R1, R2>(
+    onSuccess: (data: T) => R1,
+    onFailure: (error: never) => R2
+  ): R1;
 };
 
 type FailureMatch<E> = {
-  <U>(onSuccess: (data: never) => U, onFailure: (error: E) => U): U;
+  <R1, R2>(
+    onSuccess: (data: never) => R1,
+    onFailure: (error: E) => R2
+  ): R2;
 };
 
 type SuccessMap<T> = {

@@ -1297,7 +1297,7 @@ describe('match()', () => {
   });
 
   describe('Failable receiver', () => {
-    it('infers the shared callback return type', () => {
+    it('infers the union of callback return types', () => {
       type ValueType = 123;
       type ErrorType = 'boom';
 
@@ -1306,10 +1306,10 @@ describe('match()', () => {
         'boom' as ErrorType
       ).match(
         (value) => value.toString(),
-        (error) => error.toUpperCase()
+        (error) => error.length
       );
 
-      expectTypeOf(result).toEqualTypeOf<string>();
+      expectTypeOf(result).toEqualTypeOf<string | number>();
     });
 
     it('infers callback parameter types for Success/Failure unions', () => {
@@ -1332,6 +1332,24 @@ describe('match()', () => {
       );
 
       expectTypeOf(status).toEqualTypeOf<string>();
+    });
+
+    it('keeps the concrete branch return type on Success receivers', () => {
+      const result = success(25).match(
+        (value) => value.toString(),
+        (error: string) => error.length
+      );
+
+      expectTypeOf(result).toEqualTypeOf<string>();
+    });
+
+    it('keeps the concrete branch return type on Failure receivers', () => {
+      const result = failure('boom').match(
+        (value: number) => value.toString(),
+        (error) => error.length
+      );
+
+      expectTypeOf(result).toEqualTypeOf<number>();
     });
   });
 });
