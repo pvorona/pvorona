@@ -3887,7 +3887,7 @@ describe('failable()', () => {
 
     describe('type inference', () => {
       it('defaults function wrapper failures to unknown', () => {
-        const result = failable(() => 123);
+        const result = failable(() => 123 as const);
 
         expectTypeOf(result).toEqualTypeOf<Failable<123, unknown>>();
       });
@@ -4155,7 +4155,7 @@ describe('failable()', () => {
 
     describe('type inference', () => {
       it('defaults promise wrapper failures to unknown', () => {
-        const result = failable(Promise.resolve(123));
+        const result = failable(Promise.resolve(123 as const));
 
         expectTypeOf(result).toEqualTypeOf<Promise<Failable<123, unknown>>>();
       });

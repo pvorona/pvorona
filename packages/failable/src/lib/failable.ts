@@ -652,6 +652,18 @@ type AsyncRunIterator<
 > = AsyncGenerator<RunStep<Result, Reason, Source>, Result, unknown>;
 
 type RunYield = RunStep<unknown, unknown, unknown>;
+type RunReturnSuccessLike<Data = unknown> = {
+  readonly isSuccess: true;
+  readonly isFailure: false;
+  readonly data: Data;
+  readonly error: null;
+};
+type RunReturnFailureLike<ReturnError = unknown> = {
+  readonly isSuccess: false;
+  readonly isFailure: true;
+  readonly data: null;
+  readonly error: ReturnError;
+};
 type RunReturn = void | Failable<unknown, unknown>;
 
 type InferRunYieldError<Yield> = Yield extends RunStep<
@@ -692,13 +704,7 @@ type InferRunNeverSuccessResult<Yield> = [InferRunYieldError<Yield>] extends [
 
 type InferRunUnionReturnData<Result> =
   | ([Extract<Result, void>] extends [never] ? never : void)
-  | (Extract<
-      Result,
-      {
-        readonly isSuccess: true;
-        readonly data: unknown;
-      }
-    > extends {
+  | (Extract<Result, RunReturnSuccessLike> extends {
       readonly data: infer Data;
     }
       ? Data
@@ -706,10 +712,7 @@ type InferRunUnionReturnData<Result> =
 
 type InferRunUnionReturnError<Result> = Extract<
   Result,
-  {
-    readonly isFailure: true;
-    readonly error: unknown;
-  }
+  RunReturnFailureLike
 > extends { readonly error: infer ReturnError }
   ? ReturnError
   : never;
@@ -720,11 +723,11 @@ type InferRunResult<Yield, Result> = [Result] extends [never]
     : Failure<InferRunYieldError<Yield>>
   : [Result] extends [void]
   ? InferRunSuccessResult<Yield, void>
-  : [Result] extends [Success<infer Data>]
+  : [Result] extends [RunReturnSuccessLike<infer Data>]
   ? [Data] extends [never]
     ? InferRunNeverSuccessResult<Yield>
     : InferRunSuccessResult<Yield, Data>
-  : [Result] extends [Failure<infer ReturnError>]
+  : [Result] extends [RunReturnFailureLike<infer ReturnError>]
   ? Failure<MergeRunErrors<Yield, ReturnError>>
   : [MergeRunErrors<Yield, InferRunUnionReturnError<Result>>] extends [never]
   ? Success<InferRunUnionReturnData<Result>>

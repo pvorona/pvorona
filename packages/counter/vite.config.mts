@@ -1,5 +1,5 @@
 /// <reference types='vitest' />
-import { createPackageViteConfig } from '../../tools/vite/create-package-vite-config';
+import { createPackageViteConfig } from '../../tools/vite/create-package-vite-config.js';
 
 export default createPackageViteConfig({
   packageDir: import.meta.dirname,
