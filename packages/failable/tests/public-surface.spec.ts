@@ -525,7 +525,7 @@ describe('public surface', () => {
     expect(result.data).toBe(5);
   });
 
-  it('supports the README `map(...)` / `flatMap(...)` example', () => {
+  it('supports the README `map(...)` / `mapError(...)` / `flatMap(...)` example', () => {
     const appPortResult = readPort('3000').flatMap((port) =>
       ensureApplicationPort(port)
     );
@@ -558,6 +558,14 @@ describe('public surface', () => {
       code: 'not_application_port',
       port: 8080,
     });
+
+    const invalidRangeCode = invalidRange.mapError((error) => error.code);
+
+    if (!invalidRangeCode.isFailure) {
+      throw new Error('Expected mapError to transform the failure value');
+    }
+
+    expect(invalidRangeCode.error).toBe('not_application_port');
   });
 
   it('normalizes string failures into Error values with `throwIfFailure(...)`', () => {

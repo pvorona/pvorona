@@ -269,6 +269,17 @@ expectType<Equal<typeof problemMapped, Failure<'boom'>>>(true);
 const unionMapped = union.map((value) => value.toString());
 expectType<Equal<typeof unionMapped, Failable<string, string>>>(true);
 
+const okMappedError = ok.mapError(() => ({ code: 'mapped-error' as const }));
+expectType<Equal<typeof okMappedError, Success<123>>>(true);
+
+const problemMappedError = problem.mapError((error) => error.length);
+expectType<Equal<typeof problemMappedError, Failure<number>>>(true);
+
+const unionMappedError = union.mapError((error) => ({ reason: error }));
+expectType<
+  Equal<typeof unionMappedError, Failable<number, { reason: string }>>
+>(true);
+
 const okFlatMapped = ok.flatMap((value) => success(value.toString()));
 expectType<Equal<typeof okFlatMapped, Success<string>>>(true);
 

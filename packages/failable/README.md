@@ -12,7 +12,8 @@ A `Failable<T, E>` is either `Success<T>` or `Failure<E>`.
 - `failable(...)` captures thrown or rejected boundaries
 - `run(...)` composes multiple `Failable` steps
 - `all(...)`, `allSettled(...)`, and `race(...)` combine multiple sources
-- `result.map(...)` / `result.flatMap(...)` transform and chain success values
+- `result.map(...)` / `result.mapError(...)` / `result.flatMap(...)` transform
+  and chain results
 
 ## Install
 
@@ -74,6 +75,7 @@ if (result.isFailure) {
 | Compose multiple `Failable` steps | `run(...)` |
 | Combine multiple `Failable` sources | `all(...)`, `allSettled(...)`, `race(...)` |
 | Transform a successful value only | `map(...)` |
+| Transform a failure value only | `mapError(...)` |
 | Chain another `Failable` step | `flatMap(...)` |
 | Cross a structured-clone boundary | `toFailableLike(...)` + `failable(...)` |
 | Validate `unknown` input | `isFailable(...)`, `isSuccess(...)`, `isFailure(...)`, `isFailableLike(...)` |
@@ -148,10 +150,14 @@ import { NormalizedErrors } from '@pvorona/failable';
 const port = readPort(process.env.PORT).getOrThrow(NormalizedErrors);
 ```
 
-## Transform And Chain With `map(...)` And `flatMap(...)`
+## Transform And Chain With `map(...)`, `mapError(...)`, And `flatMap(...)`
 
 Use `result.map(fn)` when you only need to change the success value. The callback
 runs on `Success` only; on `Failure`, the same failure is returned unchanged.
+
+Use `result.mapError(fn)` when you only need to change the failure value. The
+callback runs on `Failure` only; on `Success`, the same success is returned
+unchanged.
 
 Use `result.flatMap(fn)` when the next step can fail again. The callback must
 return another `Failable`. On `Success`, that result becomes the outcome; on
@@ -198,6 +204,10 @@ const appPortResult = readPort(process.env.PORT).flatMap((port) =>
 const labelResult = appPortResult.map(
   (port) => `Application listening on ${port}`,
 );
+
+const invalidRangeCode = readPort('8080')
+  .flatMap((port) => ensureApplicationPort(port))
+  .mapError((error) => error.code);
 ```
 
 When you pass object literals directly into `success(...)` or `failure(...)`,

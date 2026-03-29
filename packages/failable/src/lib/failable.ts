@@ -35,26 +35,34 @@ type Match<Result, Reason> = <OnSuccessOutput, OnFailureOutput>(
 ) => OnSuccessOutput | OnFailureOutput;
 
 export type Failable<Result, Reason> =
-  | (Omit<Success<Result>, 'orElse' | 'getOrElse' | 'map' | 'flatMap'> & {
-      readonly orElse: <Output>(
-        fallback: LazyFallback<Reason, Output>
+  | (Omit<
+      Success<Result>,
+      'orElse' | 'getOrElse' | 'map' | 'mapError' | 'flatMap'
+    > & {
+      readonly orElse: <Fallback>(
+        fallback: LazyFallback<Reason, Fallback>
       ) => Success<Result>;
-      readonly getOrElse: <Output>(
-        fallback: LazyFallback<Reason, Output>
+      readonly getOrElse: <Fallback>(
+        fallback: LazyFallback<Reason, Fallback>
       ) => Result;
       readonly match: Match<Result, Reason>;
       readonly map: FailableMap<Result, Reason>;
+      readonly mapError: FailableMapError<Result, Reason>;
       readonly flatMap: FailableFlatMap<Result, Reason>;
     })
-  | (Omit<Failure<Reason>, 'orElse' | 'getOrElse' | 'map' | 'flatMap'> & {
-      readonly orElse: <Output>(
-        fallback: LazyFallback<Reason, Output>
-      ) => Success<Output>;
-      readonly getOrElse: <Output>(
-        fallback: LazyFallback<Reason, Output>
-      ) => Output;
+  | (Omit<
+      Failure<Reason>,
+      'orElse' | 'getOrElse' | 'map' | 'mapError' | 'flatMap'
+    > & {
+      readonly orElse: <Fallback>(
+        fallback: LazyFallback<Reason, Fallback>
+      ) => Success<Fallback>;
+      readonly getOrElse: <Fallback>(
+        fallback: LazyFallback<Reason, Fallback>
+      ) => Fallback;
       readonly match: Match<Result, Reason>;
       readonly map: FailableMap<Result, Reason>;
+      readonly mapError: FailableMapError<Result, Reason>;
       readonly flatMap: FailableFlatMap<Result, Reason>;
     });
 
@@ -109,6 +117,16 @@ type FailureMap<Reason> = {
   <Output>(transform: (data: never) => Output): Failure<Reason>;
 };
 
+type SuccessMapError<Result> = {
+  <OutputError>(transform: (reason: never) => OutputError): Success<Result>;
+};
+
+type FailureMapError<Reason> = {
+  <OutputError>(
+    transform: (reason: Reason) => OutputError
+  ): Failure<OutputError>;
+};
+
 type SuccessFlatMap<Result> = {
   <Output>(transform: (data: Result) => Success<Output>): Success<Output>;
   <OutputError>(
@@ -127,6 +145,12 @@ type FailureFlatMap<Reason> = {
 
 type FailableMap<Result, Reason> = {
   <Output>(transform: (data: Result) => Output): Failable<Output, Reason>;
+};
+
+type FailableMapError<Result, Reason> = {
+  <OutputError>(
+    transform: (reason: Reason) => OutputError
+  ): Failable<Result, OutputError>;
 };
 
 type FailableFlatMap<Result, Reason> = {
@@ -188,6 +212,7 @@ export type Success<Result> = {
   readonly getOrThrow: (normalize?: FailableNormalizeErrorInput) => Result;
   readonly match: SuccessMatch<Result>;
   readonly map: SuccessMap<Result>;
+  readonly mapError: SuccessMapError<Result>;
   readonly flatMap: SuccessFlatMap<Result>;
   readonly [Symbol.iterator]: () => RunIterator<Result, never, Success<Result>>;
   readonly [Symbol.asyncIterator]: () => AsyncRunIterator<
@@ -214,6 +239,7 @@ export type Failure<Reason> = {
   readonly getOrThrow: (normalize?: FailableNormalizeErrorInput) => never;
   readonly match: FailureMatch<Reason>;
   readonly map: FailureMap<Reason>;
+  readonly mapError: FailureMapError<Reason>;
   readonly flatMap: FailureFlatMap<Reason>;
   readonly [Symbol.iterator]: () => RunIterator<never, Reason, Failure<Reason>>;
   readonly [Symbol.asyncIterator]: () => AsyncRunIterator<
@@ -256,6 +282,7 @@ const BASE_FAILABLE = {
   getOrThrow: notImplemented,
   match: notImplemented,
   map: notImplemented,
+  mapError: notImplemented,
   flatMap: notImplemented,
   [Symbol.iterator]: function failableIterator(
     this: Failable<unknown, unknown>
@@ -333,6 +360,9 @@ const BASE_SUCCESS = (() => {
   ) {
     return success(transform(this.data));
   } as SuccessMap<unknown>;
+  node.mapError = function mapErrorSuccess(this: InternalSuccess<unknown>) {
+    return this;
+  } as SuccessMapError<unknown>;
   node.flatMap = function flatMapSuccess(
     this: InternalSuccess<unknown>,
     transform: (data: unknown) => unknown
@@ -378,6 +408,12 @@ const BASE_FAILURE = (() => {
   node.map = function mapFailure(this: InternalFailure<unknown>) {
     return this;
   } as FailureMap<unknown>;
+  node.mapError = function mapErrorFailure(
+    this: InternalFailure<unknown>,
+    transform: (reason: unknown) => unknown
+  ) {
+    return failure(transform(this.error));
+  } as FailureMapError<unknown>;
   node.flatMap = function flatMapFailure(this: InternalFailure<unknown>) {
     return this;
   } as FailureFlatMap<unknown>;

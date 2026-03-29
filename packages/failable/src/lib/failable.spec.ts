@@ -1044,6 +1044,43 @@ describe('map()', () => {
   });
 });
 
+describe('mapError()', () => {
+  describe('Success receiver', () => {
+    it('returns the original Success unchanged', () => {
+      const source = success(123);
+
+      const result = source.mapError(() => 'boom');
+
+      expect(result).toBe(source);
+    });
+  });
+
+  describe('Failure receiver', () => {
+    it('returns Failure with transformed error', () => {
+      const source = failure('boom');
+
+      const result = source.mapError((error) => error.length);
+
+      expect(result).toStrictEqual(failure(4));
+    });
+
+    it('rethrows callback errors unchanged', () => {
+      const thrown = new Error('mapError boom');
+
+      try {
+        failure('boom').mapError(() => {
+          throw thrown;
+        });
+      } catch (error) {
+        expect(error).toBe(thrown);
+        return;
+      }
+
+      throw new Error('Expected `mapError()` to rethrow the callback error');
+    });
+  });
+});
+
 describe('flatMap()', () => {
   describe('Success receiver', () => {
     it('returns the callback result unchanged', () => {
