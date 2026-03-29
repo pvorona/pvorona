@@ -582,10 +582,7 @@ type FailablePromiseCallbackGuardError = Error & {
   readonly [FAILABLE_PROMISE_CALLBACK_GUARD_TAG]: true;
 };
 
-const RUN_GET_TAG = Symbol('RunGet');
-
 class RunGet<T, E, TSource = Failable<T, E>> {
-  readonly [RUN_GET_TAG] = true;
   public readonly source: TSource;
 
   private constructor(source: TSource) {
