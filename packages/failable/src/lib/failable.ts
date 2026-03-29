@@ -1007,73 +1007,21 @@ type AsyncRunBuilder<
   TResult extends RunReturn = RunReturn
 > = (_helpers: RunNoHelpers) => AsyncGenerator<TYield, TResult, unknown>;
 
+function readRunGet(yielded: unknown): RunGet<unknown, unknown, unknown> {
+  if (!(yielded instanceof RunGet)) {
+    throw new Error(RUN_INVALID_YIELD_MESSAGE);
+  }
+
+  return yielded;
+}
+
 function readRunGetSource(yielded: unknown): Failable<unknown, unknown> {
-  if (!(yielded instanceof RunGet)) {
-    throw new Error(RUN_INVALID_YIELD_MESSAGE);
-  }
-
-  const source = yielded.source;
+  const source = readRunGet(yielded).source;
   if (!isFailable(source)) {
     throw new Error(RUN_INVALID_YIELD_MESSAGE);
   }
 
   return source;
-}
-
-async function readAsyncRunGetSource(
-  yielded: unknown
-): Promise<Failable<unknown, unknown>> {
-  if (!(yielded instanceof RunGet)) {
-    throw new Error(RUN_INVALID_YIELD_MESSAGE);
-  }
-
-  const source = await yielded.source;
-  if (!isFailable(source)) {
-    throw new Error(RUN_INVALID_YIELD_MESSAGE);
-  }
-
-  return source;
-}
-
-function closeRunIterator<TYield extends RunYield, TResult extends RunReturn>(
-  iterator: Generator<TYield, TResult, unknown>,
-  result: Failable<unknown, unknown>
-): InferRunResult<TYield, TResult> {
-  let closing = iterator.return(result as never);
-
-  while (!closing.done) {
-    const source = readRunGetSource(closing.value);
-    if (source.status === FailableStatus.Failure) {
-      closing = iterator.return(result as never);
-      continue;
-    }
-
-    closing = iterator.next(source.data);
-  }
-
-  return finalizeRunResult<TYield, TResult>(closing.value);
-}
-
-async function closeAsyncRunIterator<
-  TYield extends RunGet<unknown, unknown, unknown>,
-  TResult extends RunReturn
->(
-  iterator: AsyncGenerator<TYield, TResult, unknown>,
-  result: Failable<unknown, unknown>
-): Promise<InferRunResult<TYield, TResult>> {
-  let closing = await iterator.return(result as never);
-
-  while (!closing.done) {
-    const source = await readAsyncRunGetSource(closing.value);
-    if (source.status === FailableStatus.Failure) {
-      closing = await iterator.return(result as never);
-      continue;
-    }
-
-    closing = await iterator.next(source.data);
-  }
-
-  return finalizeRunResult<TYield, TResult>(closing.value);
 }
 
 function finalizeRunResult<TYield, TResult extends RunReturn>(
@@ -1100,41 +1048,80 @@ function isAsyncRunIterator(
   return Symbol.asyncIterator in iterator;
 }
 
-function runSyncIterator<TYield extends RunYield, TResult extends RunReturn>(
-  iterator: Generator<TYield, TResult, unknown>
-): InferRunResult<TYield, TResult> {
-  let iteration = iterator.next();
+type RunIteration<TYield extends RunYield, TResult extends RunReturn> =
+  IteratorResult<TYield, TResult>;
 
-  while (!iteration.done) {
+type SyncRunController<TYield extends RunYield, TResult extends RunReturn> = {
+  readonly next: (value?: unknown) => RunIteration<TYield, TResult>;
+  readonly return: (
+    result: Failable<unknown, unknown>
+  ) => RunIteration<TYield, TResult>;
+};
+
+type AsyncRunController<TYield extends RunYield, TResult extends RunReturn> = {
+  readonly next: (value?: unknown) => Promise<RunIteration<TYield, TResult>>;
+  readonly return: (
+    result: Failable<unknown, unknown>
+  ) => Promise<RunIteration<TYield, TResult>>;
+};
+
+function driveRunIterator<TYield extends RunYield, TResult extends RunReturn>(
+  controller: SyncRunController<TYield, TResult>
+): InferRunResult<TYield, TResult>;
+function driveRunIterator<TYield extends RunYield, TResult extends RunReturn>(
+  controller: AsyncRunController<TYield, TResult>
+): Promise<InferRunResult<TYield, TResult>>;
+function driveRunIterator<TYield extends RunYield, TResult extends RunReturn>(
+  controller:
+    | SyncRunController<TYield, TResult>
+    | AsyncRunController<TYield, TResult>
+): InferRunResult<TYield, TResult> | Promise<InferRunResult<TYield, TResult>> {
+  const continueRun = (
+    iteration: RunIteration<TYield, TResult>
+  ): InferRunResult<TYield, TResult> | Promise<InferRunResult<TYield, TResult>> => {
+    if (iteration.done) {
+      return finalizeRunResult<TYield, TResult>(iteration.value);
+    }
+
     const source = readRunGetSource(iteration.value);
     if (source.status === FailableStatus.Failure) {
-      return closeRunIterator(iterator, source);
+      return continueClose(controller.return(source), source);
     }
 
-    iteration = iterator.next(source.data);
-  }
+    return resolveStep(controller.next(source.data), continueRun);
+  };
 
-  return finalizeRunResult<TYield, TResult>(iteration.value);
+  const continueClose = (
+    step:
+      | RunIteration<TYield, TResult>
+      | Promise<RunIteration<TYield, TResult>>,
+    unwindResult: Failable<unknown, unknown>
+  ): InferRunResult<TYield, TResult> | Promise<InferRunResult<TYield, TResult>> =>
+    resolveStep(step, (iteration) => {
+      if (iteration.done) {
+        return finalizeRunResult<TYield, TResult>(iteration.value);
+      }
+
+      const source = readRunGetSource(iteration.value);
+      if (source.status === FailableStatus.Failure) {
+        return continueClose(controller.return(unwindResult), unwindResult);
+      }
+
+      return continueClose(controller.next(source.data), unwindResult);
+    });
+
+  return resolveStep(controller.next(), continueRun);
 }
 
-async function runAsyncIterator<
-  TYield extends RunGet<unknown, unknown, unknown>,
-  TResult extends RunReturn
->(
-  iterator: AsyncGenerator<TYield, TResult, unknown>
-): Promise<InferRunResult<TYield, TResult>> {
-  let iteration = await iterator.next();
-
-  while (!iteration.done) {
-    const source = await readAsyncRunGetSource(iteration.value);
-    if (source.status === FailableStatus.Failure) {
-      return closeAsyncRunIterator(iterator, source);
-    }
-
-    iteration = await iterator.next(source.data);
+function resolveStep<TStep, TResult>(
+  step: TStep | Promise<TStep>,
+  onResolved: (value: TStep) => TResult | Promise<TResult>
+): TResult | Promise<TResult> {
+  if (isPromiseLike(step)) {
+    return step.then((value) => onResolved(value));
   }
 
-  return finalizeRunResult<TYield, TResult>(iteration.value);
+  return onResolved(step);
 }
 
 export function run<
@@ -1194,10 +1181,20 @@ export function run(
   )(RUN_NO_HELPERS);
 
   if (isAsyncRunIterator(iterator)) {
-    return runAsyncIterator(iterator);
+    return driveRunIterator({
+      next: (value) => iterator.next(value),
+      return: (result) => iterator.return(result as never),
+    });
   }
 
-  return runSyncIterator(iterator as Generator<RunYield, RunReturn, unknown>);
+  return driveRunIterator({
+    next: (value) =>
+      (iterator as Generator<RunYield, RunReturn, unknown>).next(value),
+    return: (result) =>
+      (iterator as Generator<RunYield, RunReturn, unknown>).return(
+        result as never
+      ),
+  });
 }
 
 export function failable<T>(value: Success<T>): Success<T>;
