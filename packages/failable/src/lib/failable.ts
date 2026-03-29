@@ -6,10 +6,7 @@ import {
 } from '@pvorona/assert';
 import { notImplemented } from '@pvorona/not-implemented';
 import type { ValueOf, Mutable } from './types.js';
-
-const FAILABLE_TAG = Symbol('failable');
-const SUCCESS_TAG = Symbol('success');
-const FAILURE_TAG = Symbol('failure');
+import { FAILABLE_TAG, SUCCESS_TAG, FAILURE_TAG } from './constants.js';
 
 export const FailableStatus = Object.freeze({
   Success: 'success',
