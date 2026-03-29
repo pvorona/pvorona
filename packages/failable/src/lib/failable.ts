@@ -160,10 +160,10 @@ export type Success<T> = {
   readonly data: T;
   readonly error: null;
   readonly or: <U>(value: U) => Success<T>;
-  readonly orElse: <U>(getValue: Fallback<U, never>) => Success<T>;
+  readonly orElse: <U>(fallback: Fallback<U, never>) => Success<T>;
   readonly getOr: <U>(value: U) => T;
-  readonly getOrElse: <U>(getValue: Fallback<U, never>) => T;
-  readonly getOrThrow: (normalizeOption?: FailableNormalizeErrorInput) => T;
+  readonly getOrElse: <U>(fallback: Fallback<U, never>) => T;
+  readonly getOrThrow: (normalize?: FailableNormalizeErrorInput) => T;
   readonly match: SuccessMatch<T>;
   readonly map: SuccessMap<T>;
   readonly flatMap: SuccessFlatMap<T>;
@@ -182,10 +182,10 @@ export type Failure<E> = {
   readonly error: E;
   readonly data: null;
   readonly or: <U>(value: U) => Success<U>;
-  readonly orElse: <U>(getValue: Fallback<U, E>) => Success<U>;
+  readonly orElse: <U>(fallback: Fallback<U, E>) => Success<U>;
   readonly getOr: <U>(value: U) => U;
-  readonly getOrElse: <U>(getValue: Fallback<U, E>) => U;
-  readonly getOrThrow: (normalizeOption?: FailableNormalizeErrorInput) => never;
+  readonly getOrElse: <U>(fallback: Fallback<U, E>) => U;
+  readonly getOrThrow: (normalize?: FailableNormalizeErrorInput) => never;
   readonly match: FailureMatch<E>;
   readonly map: FailureMap<E>;
   readonly flatMap: FailureFlatMap<E>;
@@ -200,15 +200,15 @@ export type Failure<E> = {
 type InternalSuccess<T> = Omit<Success<T>, 'orElse' | 'getOrElse'> & {
   readonly [FAILABLE_TAG]: true;
   readonly [SUCCESS_TAG]: true;
-  readonly orElse: <U>(getValue: Fallback<U, never>) => Success<T>;
-  readonly getOrElse: <U>(getValue: Fallback<U, never>) => T;
+  readonly orElse: <U>(fallback: Fallback<U, never>) => Success<T>;
+  readonly getOrElse: <U>(fallback: Fallback<U, never>) => T;
 };
 
 type InternalFailure<E> = Omit<Failure<E>, 'orElse' | 'getOrElse'> & {
   readonly [FAILABLE_TAG]: true;
   readonly [FAILURE_TAG]: true;
-  readonly orElse: <U>(getValue: Fallback<U, E>) => Success<U>;
-  readonly getOrElse: <U>(getValue: Fallback<U, E>) => U;
+  readonly orElse: <U>(fallback: Fallback<U, E>) => Success<U>;
+  readonly getOrElse: <U>(fallback: Fallback<U, E>) => U;
 };
 
 const BASE_FAILABLE = {
@@ -239,18 +239,18 @@ const BASE_FAILABLE = {
 
 function toThrownError(
   error: unknown,
-  normalizeOption?: FailableNormalizeErrorInput
+  normalize?: FailableNormalizeErrorInput
 ): Error {
-  if (normalizeOption === undefined) {
+  if (normalize === undefined) {
     return normalizeUnknownError(error);
   }
 
-  const normalizeError = resolveNormalizeError(normalizeOption);
+  const normalizeError = resolveNormalizeError(normalize);
   if (normalizeError === null) {
     return normalizeUnknownError(error);
   }
 
-  if (error instanceof Error && isNormalizedErrorsPreset(normalizeOption)) {
+  if (error instanceof Error && isNormalizedErrorsPreset(normalize)) {
     return error;
   }
 
@@ -259,9 +259,9 @@ function toThrownError(
 
 function throwNormalizedFailure(
   error: unknown,
-  normalizeOption?: FailableNormalizeErrorInput
+  normalize?: FailableNormalizeErrorInput
 ): never {
-  throw toThrownError(error, normalizeOption);
+  throw toThrownError(error, normalize);
 }
 
 const BASE_SUCCESS = (() => {
@@ -282,9 +282,9 @@ const BASE_SUCCESS = (() => {
     return this.data;
   };
   node.getOrThrow = function getOrThrowSuccess(
-    _normalizeOption?: FailableNormalizeErrorInput
+    _normalize?: FailableNormalizeErrorInput
   ) {
-    void _normalizeOption;
+    void _normalize;
     return this.data;
   };
   node.match = function matchSuccess(
@@ -328,9 +328,9 @@ const BASE_FAILURE = (() => {
     return fallback(this.error);
   };
   node.getOrThrow = function getOrThrowFailure(
-    normalizeOption?: FailableNormalizeErrorInput
+    normalize?: FailableNormalizeErrorInput
   ) {
-    throwNormalizedFailure(this.error, normalizeOption);
+    throwNormalizedFailure(this.error, normalize);
   };
   node.match = function matchFailure(
     this: InternalFailure<unknown>,
@@ -368,9 +368,9 @@ const BASE_FAILURE = (() => {
  * - `failable(() => value)`: capture synchronous throws from throwy code.
  * - `await failable(promise)`: capture async rejections when you already hold a promise.
  * - `run(...)`: compose steps that already return `Failable`.
- * - `throwIfFailure(result, normalizeOption?)`: keep using the same `result`
+ * - `throwIfFailure(result, normalize?)`: keep using the same `result`
  *   variable after narrowing, with optional throw-boundary normalization.
- * - `result.getOrThrow(normalizeOption?)`: unwrap the success value in
+ * - `result.getOrThrow(normalize?)`: unwrap the success value in
  *   expression or return position, with optional throw-boundary normalization.
  *
  * Design goals:
@@ -481,10 +481,10 @@ export function failure<const E>(error?: E): Failure<E | void> {
  */
 export function throwIfFailure<T, E>(
   result: Failable<T, E>,
-  normalizeOption?: FailableNormalizeErrorInput
+  normalize?: FailableNormalizeErrorInput
 ): asserts result is Success<T> {
   if (result.status === FailableStatus.Failure) {
-    throwNormalizedFailure(result.error, normalizeOption);
+    throwNormalizedFailure(result.error, normalize);
   }
 }
 
@@ -1200,27 +1200,27 @@ export function failable<E>(value: FailableLikeFailure<E>): Failure<E>;
 export function failable<T, E>(value: FailableLike<T, E>): Failable<T, E>;
 export function failable<T>(
   value: Success<T>,
-  normalizeOption: FailableNormalizeErrorInput
+  normalize: FailableNormalizeErrorInput
 ): Success<T>;
 export function failable<E>(
   value: Failure<E>,
-  normalizeOption: FailableNormalizeErrorInput
+  normalize: FailableNormalizeErrorInput
 ): Failure<Error>;
 export function failable<T, E>(
   value: Failable<T, E>,
-  normalizeOption: FailableNormalizeErrorInput
+  normalize: FailableNormalizeErrorInput
 ): Failable<T, Error>;
 export function failable<T>(
   value: FailableLikeSuccess<T>,
-  normalizeOption: FailableNormalizeErrorInput
+  normalize: FailableNormalizeErrorInput
 ): Success<T>;
 export function failable<E>(
   value: FailableLikeFailure<E>,
-  normalizeOption: FailableNormalizeErrorInput
+  normalize: FailableNormalizeErrorInput
 ): Failure<Error>;
 export function failable<T, E>(
   value: FailableLike<T, E>,
-  normalizeOption: FailableNormalizeErrorInput
+  normalize: FailableNormalizeErrorInput
 ): Failable<T, Error>;
 /**
  * Capture the boundary you actually have:
@@ -1236,35 +1236,35 @@ export function failable<T, E>(
  */
 export function failable<P extends PromiseLike<unknown>>(
   promise: P,
-  normalizeOption: FailableNormalizeErrorInput
+  normalize: FailableNormalizeErrorInput
 ): Promise<NormalizeFailableResult<Awaited<P>>>;
 export function failable<P extends PromiseLike<unknown>, E = unknown>(
   promise: P
 ): InferReturnTypeFromPromise<P, E>;
 export function failable<F extends () => unknown>(
-  fun: FailableSyncOnlyCallback<F>,
-  normalizeOption: FailableNormalizeErrorInput
+  callback: FailableSyncOnlyCallback<F>,
+  normalize: FailableNormalizeErrorInput
 ): NormalizeFailableResult<ReturnType<F>>;
 export function failable<F extends () => unknown, E = unknown>(
-  fun: FailableSyncOnlyCallback<F>
+  callback: FailableSyncOnlyCallback<F>
 ): InferFailableFromValue<ReturnType<F>, E>;
 export function failable(
   value: FailableInput,
-  normalizeOption?: FailableNormalizeErrorInput
+  normalize?: FailableNormalizeErrorInput
 ) {
   if (isFailable(value)) {
-    return normalizeFailableResult(value, normalizeOption);
+    return normalizeFailableResult(value, normalize);
   }
 
   if (isFailableLike(value)) {
-    return normalizeFailableResult(fromFailableLike(value), normalizeOption);
+    return normalizeFailableResult(fromFailableLike(value), normalize);
   }
 
   if (isFunction(value)) {
-    return fromFunction(value, normalizeOption);
+    return fromFunction(value, normalize);
   }
 
-  return fromPromise(value, normalizeOption);
+  return fromPromise(value, normalize);
 }
 
 function fromFailableLike<T, E>(
@@ -1304,67 +1304,67 @@ function ignorePromiseRejection(value: PromiseLike<unknown>) {
 }
 
 function fromFunction<T extends () => U, E, U = ReturnType<T>>(
-  fun: T,
-  normalizeOption?: FailableNormalizeErrorInput
+  callback: T,
+  normalize?: FailableNormalizeErrorInput
 ) {
   try {
-    const data = fun();
+    const data = callback();
 
     if (isPromiseLike(data)) {
       ignorePromiseRejection(data);
       return normalizeFailableResult(
         failure(createAsyncCallbackError()),
-        normalizeOption
+        normalize
       );
     }
 
     if (isFailable(data)) {
-      return normalizeFailableResult(data, normalizeOption);
+      return normalizeFailableResult(data, normalize);
     }
 
     if (isFailableLike(data)) {
-      return normalizeFailableResult(fromFailableLike(data), normalizeOption);
+      return normalizeFailableResult(fromFailableLike(data), normalize);
     }
 
     return success(data);
   } catch (error) {
-    return normalizeFailableResult(failure(error as E), normalizeOption);
+    return normalizeFailableResult(failure(error as E), normalize);
   }
 }
 
 function fromPromise<T extends PromiseLike<unknown>>(
   promise: T,
-  normalizeOption?: FailableNormalizeErrorInput
+  normalize?: FailableNormalizeErrorInput
 ) {
   return Promise.resolve(promise).then(
     (data) => {
       if (isFailable(data)) {
-        return normalizeFailableResult(data, normalizeOption);
+        return normalizeFailableResult(data, normalize);
       }
 
       if (isFailableLike(data)) {
-        return normalizeFailableResult(fromFailableLike(data), normalizeOption);
+        return normalizeFailableResult(fromFailableLike(data), normalize);
       }
 
       return success(data);
     },
-    (error) => normalizeFailableResult(failure(error), normalizeOption)
+    (error) => normalizeFailableResult(failure(error), normalize)
   );
 }
 
 function normalizeFailableResult<T, E>(
   result: Failable<T, E>,
-  normalizeOption?: FailableNormalizeErrorInput
+  normalize?: FailableNormalizeErrorInput
 ) {
   if (result.status === FailableStatus.Success) return result;
   if (isAsyncCallbackError(result.error)) return result;
 
-  const normalizeError = resolveNormalizeError(normalizeOption);
+  const normalizeError = resolveNormalizeError(normalize);
   if (normalizeError === null) return result;
   if (
     result.error instanceof Error &&
-    normalizeOption !== undefined &&
-    isNormalizedErrorsPreset(normalizeOption)
+    normalize !== undefined &&
+    isNormalizedErrorsPreset(normalize)
   ) {
     return result;
   }
@@ -1372,12 +1372,12 @@ function normalizeFailableResult<T, E>(
   return failure(normalizeError(result.error));
 }
 
-function resolveNormalizeError(normalizeOption?: FailableNormalizeErrorInput) {
-  if (normalizeOption === undefined) return null;
-  if (isNormalizedErrorsPreset(normalizeOption)) return normalizeUnknownError;
-  if (!isFailableNormalizeErrorOptions(normalizeOption)) return null;
+function resolveNormalizeError(normalize?: FailableNormalizeErrorInput) {
+  if (normalize === undefined) return null;
+  if (isNormalizedErrorsPreset(normalize)) return normalizeUnknownError;
+  if (!isFailableNormalizeErrorOptions(normalize)) return null;
 
-  return normalizeOption.normalizeError;
+  return normalize.normalizeError;
 }
 
 function isNormalizedErrorsPreset(
