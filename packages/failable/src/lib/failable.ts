@@ -20,34 +20,42 @@ export const NormalizedErrors = Object.freeze({
 } as const);
 
 export type FailableNormalizeErrorOptions = {
-  readonly normalizeError: (error: unknown) => Error;
+  readonly normalizeError: (reason: unknown) => Error;
 };
 
 type FailableNormalizeErrorInput =
   | typeof NormalizedErrors
   | FailableNormalizeErrorOptions;
 
-type Fallback<U, E> = (error: E) => U;
+type LazyFallback<Reason, Output> = (reason: Reason) => Output;
 
-type Match<T, E> = <R1, R2>(
-  onSuccess: (data: T) => R1,
-  onFailure: (error: E) => R2
-) => R1 | R2;
+type Match<Result, Reason> = <OnSuccessOutput, OnFailureOutput>(
+  onSuccess: (data: Result) => OnSuccessOutput,
+  onFailure: (reason: Reason) => OnFailureOutput
+) => OnSuccessOutput | OnFailureOutput;
 
-export type Failable<T, E> =
-  | (Omit<Success<T>, 'orElse' | 'getOrElse' | 'map' | 'flatMap'> & {
-      readonly orElse: <U>(fallback: Fallback<U, E>) => Success<T>;
-      readonly getOrElse: <U>(fallback: Fallback<U, E>) => T;
-      readonly match: Match<T, E>;
-      readonly map: FailableMap<T, E>;
-      readonly flatMap: FailableFlatMap<T, E>;
+export type Failable<Result, Reason> =
+  | (Omit<Success<Result>, 'orElse' | 'getOrElse' | 'map' | 'flatMap'> & {
+      readonly orElse: <Output>(
+        fallback: LazyFallback<Reason, Output>
+      ) => Success<Result>;
+      readonly getOrElse: <Output>(
+        fallback: LazyFallback<Reason, Output>
+      ) => Result;
+      readonly match: Match<Result, Reason>;
+      readonly map: FailableMap<Result, Reason>;
+      readonly flatMap: FailableFlatMap<Result, Reason>;
     })
-  | (Omit<Failure<E>, 'orElse' | 'getOrElse' | 'map' | 'flatMap'> & {
-      readonly orElse: <U>(fallback: Fallback<U, E>) => Success<U>;
-      readonly getOrElse: <U>(fallback: Fallback<U, E>) => U;
-      readonly match: Match<T, E>;
-      readonly map: FailableMap<T, E>;
-      readonly flatMap: FailableFlatMap<T, E>;
+  | (Omit<Failure<Reason>, 'orElse' | 'getOrElse' | 'map' | 'flatMap'> & {
+      readonly orElse: <Output>(
+        fallback: LazyFallback<Reason, Output>
+      ) => Success<Output>;
+      readonly getOrElse: <Output>(
+        fallback: LazyFallback<Reason, Output>
+      ) => Output;
+      readonly match: Match<Result, Reason>;
+      readonly map: FailableMap<Result, Reason>;
+      readonly flatMap: FailableFlatMap<Result, Reason>;
     });
 
 /**
@@ -65,64 +73,76 @@ export type Failable<T, E> =
  *
  * Note: `data` / `error` must themselves be structured-cloneable.
  */
-export type FailableLike<T, E> =
-  | FailableLikeSuccess<T>
-  | FailableLikeFailure<E>;
+export type FailableLike<Result, Reason> =
+  | FailableLikeSuccess<Result>
+  | FailableLikeFailure<Reason>;
 
-export type FailableLikeSuccess<T> = {
+export type FailableLikeSuccess<Result> = {
   readonly status: typeof FailableStatus.Success;
-  readonly data: T;
+  readonly data: Result;
 };
 
-export type FailableLikeFailure<E> = {
+export type FailableLikeFailure<Reason> = {
   readonly status: typeof FailableStatus.Failure;
-  readonly error: E;
+  readonly error: Reason;
 };
 
-type SuccessMatch<T> = {
-  <R1, R2>(
-    onSuccess: (data: T) => R1,
-    onFailure: (error: never) => R2
-  ): R1;
+type SuccessMatch<Result> = {
+  <Output1, Output2>(
+    onSuccess: (data: Result) => Output1,
+    onFailure: (reason: never) => Output2
+  ): Output1;
 };
 
-type FailureMatch<E> = {
-  <R1, R2>(
-    onSuccess: (data: never) => R1,
-    onFailure: (error: E) => R2
-  ): R2;
+type FailureMatch<Reason> = {
+  <Output1, Output2>(
+    onSuccess: (data: never) => Output1,
+    onFailure: (reason: Reason) => Output2
+  ): Output2;
 };
 
-type SuccessMap<T> = {
-  <U>(fn: (data: T) => U): Success<U>;
+type SuccessMap<Result> = {
+  <Output>(transform: (data: Result) => Output): Success<Output>;
 };
 
-type FailureMap<E> = {
-  <U>(fn: (data: never) => U): Failure<E>;
+type FailureMap<Reason> = {
+  <Output>(transform: (data: never) => Output): Failure<Reason>;
 };
 
-type SuccessFlatMap<T> = {
-  <Next>(fn: (data: T) => Success<Next>): Success<Next>;
-  <E2>(fn: (data: T) => Failure<E2>): Failure<E2>;
-  <Next, E2>(fn: (data: T) => Failable<Next, E2>): Failable<Next, E2>;
+type SuccessFlatMap<Result> = {
+  <Output>(transform: (data: Result) => Success<Output>): Success<Output>;
+  <OutputError>(
+    transform: (data: Result) => Failure<OutputError>
+  ): Failure<OutputError>;
+  <Output, OutputError>(
+    transform: (data: Result) => Failable<Output, OutputError>
+  ): Failable<Output, OutputError>;
 };
 
-type FailureFlatMap<E> = {
-  <Next, E2>(fn: (data: never) => Failable<Next, E2>): Failure<E>;
+type FailureFlatMap<Reason> = {
+  <Output, OutputError>(
+    transform: (data: never) => Failable<Output, OutputError>
+  ): Failure<Reason>;
 };
 
-type FailableMap<T, E> = {
-  <U>(fn: (data: T) => U): Failable<U, E>;
+type FailableMap<Result, Reason> = {
+  <Output>(transform: (data: Result) => Output): Failable<Output, Reason>;
 };
 
-type FailableFlatMap<T, E> = {
-  <Next>(fn: (data: T) => Success<Next>): Failable<Next, E>;
-  <E2>(fn: (data: T) => Failure<E2>): Failure<E | E2>;
-  <Next, E2>(fn: (data: T) => Success<Next> | Failure<E2>): Failable<
-    Next,
-    E | E2
+type FailableFlatMap<Result, Reason> = {
+  <Output>(transform: (data: Result) => Success<Output>): Failable<
+    Output,
+    Reason
   >;
-  <Next, E2>(fn: (data: T) => Failable<Next, E2>): Failable<Next, E | E2>;
+  <OutputError>(transform: (data: Result) => Failure<OutputError>): Failure<
+    Reason | OutputError
+  >;
+  <Output, OutputError>(
+    transform: (data: Result) => Success<Output> | Failure<OutputError>
+  ): Failable<Output, Reason | OutputError>;
+  <Output, OutputError>(
+    transform: (data: Result) => Failable<Output, OutputError>
+  ): Failable<Output, Reason | OutputError>;
 };
 
 function isFailableLikeSuccess(
@@ -153,62 +173,74 @@ export function isFailableLike(
   return isFailableLikeFailure(value) || isFailableLikeSuccess(value);
 }
 
-export type Success<T> = {
+export type Success<Result> = {
   readonly status: typeof FailableStatus.Success;
   readonly isSuccess: true;
   readonly isFailure: false;
-  readonly data: T;
+  readonly data: Result;
   readonly error: null;
-  readonly or: <U>(value: U) => Success<T>;
-  readonly orElse: <U>(fallback: Fallback<U, never>) => Success<T>;
-  readonly getOr: <U>(value: U) => T;
-  readonly getOrElse: <U>(fallback: Fallback<U, never>) => T;
-  readonly getOrThrow: (normalize?: FailableNormalizeErrorInput) => T;
-  readonly match: SuccessMatch<T>;
-  readonly map: SuccessMap<T>;
-  readonly flatMap: SuccessFlatMap<T>;
-  readonly [Symbol.iterator]: () => RunIterator<T, never, Success<T>>;
+  readonly or: <Fallback>(fallback: Fallback) => Success<Result>;
+  readonly orElse: <Output>(
+    fallback: LazyFallback<never, Output>
+  ) => Success<Result>;
+  readonly getOr: <Fallback>(fallback: Fallback) => Result;
+  readonly getOrElse: <Output>(fallback: LazyFallback<never, Output>) => Result;
+  readonly getOrThrow: (normalize?: FailableNormalizeErrorInput) => Result;
+  readonly match: SuccessMatch<Result>;
+  readonly map: SuccessMap<Result>;
+  readonly flatMap: SuccessFlatMap<Result>;
+  readonly [Symbol.iterator]: () => RunIterator<Result, never, Success<Result>>;
   readonly [Symbol.asyncIterator]: () => AsyncRunIterator<
-    T,
+    Result,
     never,
-    Success<T>
+    Success<Result>
   >;
 };
 
-export type Failure<E> = {
+export type Failure<Reason> = {
   readonly status: typeof FailableStatus.Failure;
   readonly isSuccess: false;
   readonly isFailure: true;
-  readonly error: E;
+  readonly error: Reason;
   readonly data: null;
-  readonly or: <U>(value: U) => Success<U>;
-  readonly orElse: <U>(fallback: Fallback<U, E>) => Success<U>;
-  readonly getOr: <U>(value: U) => U;
-  readonly getOrElse: <U>(fallback: Fallback<U, E>) => U;
+  readonly or: <Fallback>(fallback: Fallback) => Success<Fallback>;
+  readonly orElse: <Output>(
+    fallback: LazyFallback<Reason, Output>
+  ) => Success<Output>;
+  readonly getOr: <Fallback>(fallback: Fallback) => Fallback;
+  readonly getOrElse: <Output>(
+    fallback: LazyFallback<Reason, Output>
+  ) => Output;
   readonly getOrThrow: (normalize?: FailableNormalizeErrorInput) => never;
-  readonly match: FailureMatch<E>;
-  readonly map: FailureMap<E>;
-  readonly flatMap: FailureFlatMap<E>;
-  readonly [Symbol.iterator]: () => RunIterator<never, E, Failure<E>>;
+  readonly match: FailureMatch<Reason>;
+  readonly map: FailureMap<Reason>;
+  readonly flatMap: FailureFlatMap<Reason>;
+  readonly [Symbol.iterator]: () => RunIterator<never, Reason, Failure<Reason>>;
   readonly [Symbol.asyncIterator]: () => AsyncRunIterator<
     never,
-    E,
-    Failure<E>
+    Reason,
+    Failure<Reason>
   >;
 };
 
-type InternalSuccess<T> = Omit<Success<T>, 'orElse' | 'getOrElse'> & {
+type InternalSuccess<Result> = Omit<Success<Result>, 'orElse' | 'getOrElse'> & {
   readonly [FAILABLE_TAG]: true;
   readonly [SUCCESS_TAG]: true;
-  readonly orElse: <U>(fallback: Fallback<U, never>) => Success<T>;
-  readonly getOrElse: <U>(fallback: Fallback<U, never>) => T;
+  readonly orElse: <Output>(
+    fallback: LazyFallback<never, Output>
+  ) => Success<Result>;
+  readonly getOrElse: <Output>(fallback: LazyFallback<never, Output>) => Result;
 };
 
-type InternalFailure<E> = Omit<Failure<E>, 'orElse' | 'getOrElse'> & {
+type InternalFailure<Reason> = Omit<Failure<Reason>, 'orElse' | 'getOrElse'> & {
   readonly [FAILABLE_TAG]: true;
   readonly [FAILURE_TAG]: true;
-  readonly orElse: <U>(fallback: Fallback<U, E>) => Success<U>;
-  readonly getOrElse: <U>(fallback: Fallback<U, E>) => U;
+  readonly orElse: <Output>(
+    fallback: LazyFallback<Reason, Output>
+  ) => Success<Output>;
+  readonly getOrElse: <Output>(
+    fallback: LazyFallback<Reason, Output>
+  ) => Output;
 };
 
 const BASE_FAILABLE = {
@@ -238,30 +270,30 @@ const BASE_FAILABLE = {
 } as const;
 
 function toThrownError(
-  error: unknown,
+  reason: unknown,
   normalize?: FailableNormalizeErrorInput
 ): Error {
   if (normalize === undefined) {
-    return normalizeUnknownError(error);
+    return normalizeUnknownError(reason);
   }
 
   const normalizeError = resolveNormalizeError(normalize);
   if (normalizeError === null) {
-    return normalizeUnknownError(error);
+    return normalizeUnknownError(reason);
   }
 
-  if (error instanceof Error && isNormalizedErrorsPreset(normalize)) {
-    return error;
+  if (reason instanceof Error && isNormalizedErrorsPreset(normalize)) {
+    return reason;
   }
 
-  return normalizeError(error);
+  return normalizeError(reason);
 }
 
 function throwNormalizedFailure(
-  error: unknown,
+  reason: unknown,
   normalize?: FailableNormalizeErrorInput
 ): never {
-  throw toThrownError(error, normalize);
+  throw toThrownError(reason, normalize);
 }
 
 const BASE_SUCCESS = (() => {
@@ -269,13 +301,15 @@ const BASE_SUCCESS = (() => {
   node[SUCCESS_TAG] = true;
   node.status = FailableStatus.Success;
   node.isSuccess = true;
-  node.or = function orSuccess() {
+  node.or = function orSuccess(fallback) {
+    void fallback;
     return this as Success<unknown>;
   };
   node.orElse = function orElseSuccess() {
     return this as Success<unknown>;
   };
-  node.getOr = function getOrSuccess() {
+  node.getOr = function getOrSuccess(fallback) {
+    void fallback;
     return this.data;
   };
   node.getOrElse = function getOrElseSuccess() {
@@ -295,15 +329,15 @@ const BASE_SUCCESS = (() => {
   } as SuccessMatch<unknown>;
   node.map = function mapSuccess(
     this: InternalSuccess<unknown>,
-    fn: (data: unknown) => unknown
+    transform: (data: unknown) => unknown
   ) {
-    return success(fn(this.data));
+    return success(transform(this.data));
   } as SuccessMap<unknown>;
   node.flatMap = function flatMapSuccess(
     this: InternalSuccess<unknown>,
-    fn: (data: unknown) => unknown
+    transform: (data: unknown) => unknown
   ) {
-    return fn(this.data);
+    return transform(this.data);
   } as SuccessFlatMap<unknown>;
   return Object.freeze(node);
 })();
@@ -313,17 +347,19 @@ const BASE_FAILURE = (() => {
   node[FAILURE_TAG] = true;
   node.status = FailableStatus.Failure;
   node.isFailure = true;
-  node.or = function orFailure(value) {
-    return success(value);
+  node.or = function orFailure(fallback) {
+    return success(fallback);
   };
-  node.orElse = function orElseFailure<U>(fallback: Fallback<U, unknown>) {
+  node.orElse = function orElseFailure<Output>(
+    fallback: LazyFallback<unknown, Output>
+  ) {
     return success(fallback(this.error));
   };
-  node.getOr = function getOrFailure(value) {
-    return value;
+  node.getOr = function getOrFailure(fallback) {
+    return fallback;
   };
-  node.getOrElse = function getOrElseFailure<U>(
-    fallback: Fallback<U, unknown>
+  node.getOrElse = function getOrElseFailure<Output>(
+    fallback: LazyFallback<unknown, Output>
   ) {
     return fallback(this.error);
   };
@@ -335,7 +371,7 @@ const BASE_FAILURE = (() => {
   node.match = function matchFailure(
     this: InternalFailure<unknown>,
     _onSuccess: (data: unknown) => unknown,
-    onFailure: (error: unknown) => unknown
+    onFailure: (reason: unknown) => unknown
   ) {
     return onFailure(this.error);
   } as FailureMatch<unknown>;
@@ -351,12 +387,12 @@ const BASE_FAILURE = (() => {
 /**
  * Factory + utilities for the {@link Failable} result type.
  *
- * `Failable<T, E>` is a discriminated union of:
- * - {@link Success}: `{ status: 'success', isSuccess: true, data: T, error: null }`
- * - {@link Failure}: `{ status: 'failure', isFailure: true, error: E, data: null }`
+ * `Failable<Result, Reason>` is a discriminated union of:
+ * - {@link Success}: `{ status: 'success', isSuccess: true, data: Result, error: null }`
+ * - {@link Failure}: `{ status: 'failure', isFailure: true, error: Reason, data: null }`
  *
  * Function-first exports:
- * - `success()` / `success(data)` / `failure()` / `failure(error)` create hydrated results.
+ * - `success()` / `success(data)` / `failure()` / `failure(reason)` create hydrated results.
  * - `throwIfFailure(result)` throws on failure and narrows the same result on success.
  * - `failable(...)` captures synchronous throws, async rejections, and wire shapes.
  * - `run(...)` composes existing `Failable` values with `yield* result` for hydrated
@@ -456,19 +492,21 @@ export function isFailure(value: unknown): value is Failure<unknown> {
 }
 
 export function success(): Success<void>;
-export function success<const T>(data: T): Success<T>;
-export function success<const T>(data?: T): Success<T | void> {
-  const node: Mutable<InternalSuccess<T | void>> = Object.create(BASE_SUCCESS);
+export function success<const Result>(data: Result): Success<Result>;
+export function success<const Result>(data?: Result): Success<Result | void> {
+  const node: Mutable<InternalSuccess<Result | void>> =
+    Object.create(BASE_SUCCESS);
   node.data = data;
-  return Object.freeze(node) as Success<T | void>;
+  return Object.freeze(node) as Success<Result | void>;
 }
 
 export function failure(): Failure<void>;
-export function failure<const E>(error: E): Failure<E>;
-export function failure<const E>(error?: E): Failure<E | void> {
-  const node: Mutable<InternalFailure<E | void>> = Object.create(BASE_FAILURE);
-  node.error = error;
-  return Object.freeze(node) as Failure<E | void>;
+export function failure<const Reason>(reason: Reason): Failure<Reason>;
+export function failure<const Reason>(reason?: Reason): Failure<Reason | void> {
+  const node: Mutable<InternalFailure<Reason | void>> =
+    Object.create(BASE_FAILURE);
+  node.error = reason;
+  return Object.freeze(node) as Failure<Reason | void>;
 }
 
 /**
@@ -479,21 +517,27 @@ export function failure<const E>(error?: E): Failure<E | void> {
  * Existing `Error` instances are thrown unchanged by default. Pass `NormalizedErrors`
  * or `{ normalizeError }` when you need a specific `Error` shape at the throw boundary.
  */
-export function throwIfFailure<T, E>(
-  result: Failable<T, E>,
+export function throwIfFailure<Result, Reason>(
+  result: Failable<Result, Reason>,
   normalize?: FailableNormalizeErrorInput
-): asserts result is Success<T> {
+): asserts result is Success<Result> {
   if (result.status === FailableStatus.Failure) {
     throwNormalizedFailure(result.error, normalize);
   }
 }
 
-export function toFailableLike<T>(value: Success<T>): FailableLikeSuccess<T>;
-export function toFailableLike<E>(value: Failure<E>): FailableLikeFailure<E>;
-export function toFailableLike<T, E>(value: Failable<T, E>): FailableLike<T, E>;
-export function toFailableLike<T, E>(
-  value: Failable<T, E>
-): FailableLike<T, E> {
+export function toFailableLike<Result>(
+  value: Success<Result>
+): FailableLikeSuccess<Result>;
+export function toFailableLike<Reason>(
+  value: Failure<Reason>
+): FailableLikeFailure<Reason>;
+export function toFailableLike<Result, Reason>(
+  value: Failable<Result, Reason>
+): FailableLike<Result, Reason>;
+export function toFailableLike<Result, Reason>(
+  value: Failable<Result, Reason>
+): FailableLike<Result, Reason> {
   if (value.status === FailableStatus.Failure) {
     return { status: FailableStatus.Failure, error: value.error };
   }
@@ -501,21 +545,21 @@ export function toFailableLike<T, E>(
   return { status: FailableStatus.Success, data: value.data };
 }
 
-type InferFailableFromValue<T, E = unknown> = [T] extends [never]
-  ? Failure<E>
-  : T extends Success<infer A>
-  ? Success<A>
-  : T extends Failure<infer A>
-  ? Failure<A>
-  : T extends FailableLikeSuccess<infer A>
-  ? Success<A>
-  : T extends FailableLikeFailure<infer A>
-  ? Failure<A>
-  : T extends Failable<infer A, infer B>
-  ? Failable<A, B>
-  : T extends FailableLike<infer A, infer B>
-  ? Failable<A, B>
-  : Failable<T, E>;
+type InferFailableFromValue<T, Reason = unknown> = [T] extends [never]
+  ? Failure<Reason>
+  : T extends Success<infer InferredResult>
+  ? Success<InferredResult>
+  : T extends Failure<infer InferredReason>
+  ? Failure<InferredReason>
+  : T extends FailableLikeSuccess<infer InferredResult>
+  ? Success<InferredResult>
+  : T extends FailableLikeFailure<infer InferredReason>
+  ? Failure<InferredReason>
+  : T extends Failable<infer InferredResult, infer InferredReason>
+  ? Failable<InferredResult, InferredReason>
+  : T extends FailableLike<infer InferredResult, infer InferredReason>
+  ? Failable<InferredResult, InferredReason>
+  : Failable<T, Reason>;
 
 type IsAny<T> = 0 extends 1 & T ? true : false;
 
@@ -527,43 +571,44 @@ type HasKnownPromiseLikeReturn<T> = IsAny<T> extends true
   ? false
   : true;
 
-type FailableSyncOnlyCallback<F extends () => unknown> = F &
-  (HasKnownPromiseLikeReturn<ReturnType<F>> extends true
+type FailableSyncOnlyCallback<Callback extends () => unknown> = Callback &
+  (HasKnownPromiseLikeReturn<ReturnType<Callback>> extends true
     ? { readonly __failablePassPromiseDirectly: never }
     : unknown);
 
-type InferReturnTypeFromPromise<P extends PromiseLike<unknown>, E = unknown> = [
-  Awaited<P>
-] extends [never]
-  ? Promise<Failure<E>>
-  : Awaited<P> extends Success<infer A>
-  ? Promise<Success<A>>
-  : Awaited<P> extends Failure<infer A>
-  ? Promise<Failure<A>>
-  : Awaited<P> extends Failable<unknown, unknown>
-  ? Promise<Awaited<P>>
-  : Awaited<P> extends FailableLikeSuccess<infer A>
-  ? Promise<Success<A>>
-  : Awaited<P> extends FailableLikeFailure<infer A>
-  ? Promise<Failure<A>>
-  : Awaited<P> extends FailableLike<infer A, infer B>
-  ? Promise<Failable<A, B>>
-  : Promise<Failable<Awaited<P>, E>>;
+type InferReturnTypeFromPromise<
+  PromiseSource extends PromiseLike<unknown>,
+  InputError = unknown
+> = [Awaited<PromiseSource>] extends [never]
+  ? Promise<Failure<InputError>>
+  : Awaited<PromiseSource> extends Success<infer Data>
+  ? Promise<Success<Data>>
+  : Awaited<PromiseSource> extends Failure<infer FailureError>
+  ? Promise<Failure<FailureError>>
+  : Awaited<PromiseSource> extends Failable<unknown, unknown>
+  ? Promise<Awaited<PromiseSource>>
+  : Awaited<PromiseSource> extends FailableLikeSuccess<infer Data>
+  ? Promise<Success<Data>>
+  : Awaited<PromiseSource> extends FailableLikeFailure<infer FailureError>
+  ? Promise<Failure<FailureError>>
+  : Awaited<PromiseSource> extends FailableLike<infer Data, infer FailureError>
+  ? Promise<Failable<Data, FailureError>>
+  : Promise<Failable<Awaited<PromiseSource>, InputError>>;
 
 type NormalizeFailableResult<T> = [T] extends [never]
   ? Failure<Error>
-  : T extends Success<infer A>
-  ? Success<A>
+  : T extends Success<infer Data>
+  ? Success<Data>
   : T extends Failure<unknown>
   ? Failure<Error>
-  : T extends FailableLikeSuccess<infer A>
-  ? Success<A>
+  : T extends FailableLikeSuccess<infer Data>
+  ? Success<Data>
   : T extends FailableLikeFailure<unknown>
   ? Failure<Error>
-  : T extends Failable<infer A, unknown>
-  ? Failable<A, Error>
-  : T extends FailableLike<infer A, unknown>
-  ? Failable<A, Error>
+  : T extends Failable<infer Data, unknown>
+  ? Failable<Data, Error>
+  : T extends FailableLike<infer Data, unknown>
+  ? Failable<Data, Error>
   : Failable<T, Error>;
 
 type FailableInput =
@@ -580,110 +625,112 @@ type AsyncCallbackError = Error & {
   readonly [ASYNC_CALLBACK_ERROR_TAG]: true;
 };
 
-class RunStep<T, E, TSource = Failable<T, E>> {
-  public readonly source: TSource;
+class RunStep<Result, Reason, Source = Failable<Result, Reason>> {
+  public readonly source: Source;
 
-  private constructor(source: TSource) {
+  private constructor(source: Source) {
     this.source = source;
   }
 
-  static create<T, E, TSource extends Failable<T, E>>(
-    source: TSource
-  ): RunStep<T, E, TSource> {
-    return new RunStep<T, E, TSource>(source);
+  static create<Result, Reason, Source extends Failable<Result, Reason>>(
+    source: Source
+  ): RunStep<Result, Reason, Source> {
+    return new RunStep<Result, Reason, Source>(source);
   }
 }
 
 type RunIterator<
-  T,
-  E,
-  TSource extends Failable<T, E> = Failable<T, E>
-> = Generator<RunStep<T, E, TSource>, T, unknown>;
+  Result,
+  Reason,
+  Source extends Failable<Result, Reason> = Failable<Result, Reason>
+> = Generator<RunStep<Result, Reason, Source>, Result, unknown>;
 
 type AsyncRunIterator<
-  T,
-  E,
-  TSource extends Failable<T, E> = Failable<T, E>
-> = AsyncGenerator<RunStep<T, E, TSource>, T, unknown>;
+  Result,
+  Reason,
+  Source extends Failable<Result, Reason> = Failable<Result, Reason>
+> = AsyncGenerator<RunStep<Result, Reason, Source>, Result, unknown>;
 
 type RunYield = RunStep<unknown, unknown, unknown>;
 type RunReturn = void | Failable<unknown, unknown>;
 
-type InferRunYieldError<TYield> = TYield extends RunStep<
+type InferRunYieldError<Yield> = Yield extends RunStep<
   unknown,
-  infer TError,
+  infer YieldError,
   unknown
 >
-  ? TError
+  ? YieldError
   : never;
 
-type InferRunGuaranteedFailureError<TYield> = TYield extends RunStep<
+type InferRunGuaranteedFailureError<Yield> = Yield extends RunStep<
   unknown,
-  infer TError,
-  infer TSource
+  infer YieldError,
+  infer Source
 >
-  ? [TSource] extends [Failure<TError>]
-    ? TError
+  ? [Source] extends [Failure<YieldError>]
+    ? YieldError
     : never
   : never;
 
-type MergeRunErrors<TYield, TError> = InferRunYieldError<TYield> | TError;
+type MergeRunErrors<Yield, ReturnError> =
+  | InferRunYieldError<Yield>
+  | ReturnError;
 
-type InferRunSuccessResult<TYield, TData> = [
-  InferRunYieldError<TYield>
-] extends [never]
-  ? Success<TData>
-  : Failable<TData, InferRunYieldError<TYield>>;
+type InferRunSuccessResult<Yield, Data> = [InferRunYieldError<Yield>] extends [
+  never
+]
+  ? Success<Data>
+  : Failable<Data, InferRunYieldError<Yield>>;
 
-type InferRunNeverSuccessResult<TYield> = [InferRunYieldError<TYield>] extends [
+type InferRunNeverSuccessResult<Yield> = [InferRunYieldError<Yield>] extends [
   never
 ]
   ? Success<never>
-  : [InferRunGuaranteedFailureError<TYield>] extends [never]
-  ? Failable<never, InferRunYieldError<TYield>>
-  : Failure<InferRunYieldError<TYield>>;
+  : [InferRunGuaranteedFailureError<Yield>] extends [never]
+  ? Failable<never, InferRunYieldError<Yield>>
+  : Failure<InferRunYieldError<Yield>>;
 
-type InferRunUnionReturnData<TResult> =
-  | ([Extract<TResult, void>] extends [never] ? never : void)
+type InferRunUnionReturnData<Result> =
+  | ([Extract<Result, void>] extends [never] ? never : void)
   | (Extract<
-      TResult,
+      Result,
       {
         readonly isSuccess: true;
         readonly data: unknown;
       }
     > extends {
-      readonly data: infer TData;
+      readonly data: infer Data;
     }
-      ? TData
+      ? Data
       : never);
 
-type InferRunUnionReturnError<TResult> = Extract<
-  TResult,
+type InferRunUnionReturnError<Result> = Extract<
+  Result,
   {
     readonly isFailure: true;
     readonly error: unknown;
   }
-> extends { readonly error: infer TError }
-  ? TError
+> extends { readonly error: infer ReturnError }
+  ? ReturnError
   : never;
 
-type InferRunResult<TYield, TResult> = [TResult] extends [never]
-  ? [InferRunYieldError<TYield>] extends [never]
+type InferRunResult<Yield, Result> = [Result] extends [never]
+  ? [InferRunYieldError<Yield>] extends [never]
     ? never
-    : Failure<InferRunYieldError<TYield>>
-  : [TResult] extends [void]
-  ? InferRunSuccessResult<TYield, void>
-  : [TResult] extends [Success<infer TData>]
-  ? [TData] extends [never]
-    ? InferRunNeverSuccessResult<TYield>
-    : InferRunSuccessResult<TYield, TData>
-  : [TResult] extends [Failure<infer TError>]
-  ? Failure<MergeRunErrors<TYield, TError>>
-  : [MergeRunErrors<TYield, InferRunUnionReturnError<TResult>>] extends [never]
-  ? Success<InferRunUnionReturnData<TResult>>
+    : Failure<InferRunYieldError<Yield>>
+  : [Result] extends [void]
+  ? InferRunSuccessResult<Yield, void>
+  : [Result] extends [Success<infer Data>]
+  ? [Data] extends [never]
+    ? InferRunNeverSuccessResult<Yield>
+    : InferRunSuccessResult<Yield, Data>
+  : [Result] extends [Failure<infer ReturnError>]
+  ? Failure<MergeRunErrors<Yield, ReturnError>>
+  : [MergeRunErrors<Yield, InferRunUnionReturnError<Result>>] extends [never]
+  ? Success<InferRunUnionReturnData<Result>>
   : Failable<
-      InferRunUnionReturnData<TResult>,
-      MergeRunErrors<TYield, InferRunUnionReturnError<TResult>>
+      InferRunUnionReturnData<Result>,
+      MergeRunErrors<Yield, InferRunUnionReturnError<Result>>
     >;
 
 const RUN_INVALID_YIELD_MESSAGE =
@@ -691,34 +738,36 @@ const RUN_INVALID_YIELD_MESSAGE =
 const RUN_INVALID_RETURN_MESSAGE =
   '`run()` generators must return a `Failable` or finish without returning a value.';
 
-function getRunIterator<T>(
-  source: Success<T>
-): RunIterator<T, never, Success<T>>;
-function getRunIterator<E>(
-  source: Failure<E>
-): RunIterator<never, E, Failure<E>>;
-function getRunIterator<T, E>(
-  source: Failable<T, E>
-): RunIterator<T, E, Failable<T, E>>;
-function* getRunIterator<T, E>(
-  source: Failable<T, E>
-): RunIterator<T, E, Failable<T, E>> {
-  return (yield RunStep.create<T, E, Failable<T, E>>(source)) as T;
+function getRunIterator<Result>(
+  source: Success<Result>
+): RunIterator<Result, never, Success<Result>>;
+function getRunIterator<Reason>(
+  source: Failure<Reason>
+): RunIterator<never, Reason, Failure<Reason>>;
+function getRunIterator<Result, Reason>(
+  source: Failable<Result, Reason>
+): RunIterator<Result, Reason, Failable<Result, Reason>>;
+function* getRunIterator<Result, Reason>(
+  source: Failable<Result, Reason>
+): RunIterator<Result, Reason, Failable<Result, Reason>> {
+  return (yield RunStep.create<Result, Reason, Failable<Result, Reason>>(
+    source
+  )) as Result;
 }
 
-function getAsyncRunIterator<T>(
-  source: Success<T>
-): AsyncRunIterator<T, never, Success<T>>;
-function getAsyncRunIterator<E>(
-  source: Failure<E>
-): AsyncRunIterator<never, E, Failure<E>>;
-function getAsyncRunIterator<T, E>(
-  source: Failable<T, E>
-): AsyncRunIterator<T, E, Failable<T, E>>;
-async function* getAsyncRunIterator<T, E>(
-  source: Failable<T, E>
-): AsyncRunIterator<T, E, Failable<T, E>> {
-  return (yield RunStep.create(source)) as T;
+function getAsyncRunIterator<Result>(
+  source: Success<Result>
+): AsyncRunIterator<Result, never, Success<Result>>;
+function getAsyncRunIterator<Reason>(
+  source: Failure<Reason>
+): AsyncRunIterator<never, Reason, Failure<Reason>>;
+function getAsyncRunIterator<Result, Reason>(
+  source: Failable<Result, Reason>
+): AsyncRunIterator<Result, Reason, Failable<Result, Reason>>;
+async function* getAsyncRunIterator<Result, Reason>(
+  source: Failable<Result, Reason>
+): AsyncRunIterator<Result, Reason, Failable<Result, Reason>> {
+  return (yield RunStep.create(source)) as Result;
 }
 
 function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
@@ -731,27 +780,29 @@ function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
 }
 
 type SyncRunBuilder<
-  TYield extends RunYield = never,
-  TResult extends RunReturn = RunReturn
-> = (_helpers: RunNoHelpers) => Generator<TYield, TResult, unknown>;
+  Yield extends RunYield = never,
+  Result extends RunReturn = RunReturn
+> = (_helpers: RunNoHelpers) => Generator<Yield, Result, unknown>;
 
 type RunNoHelpers = {
   readonly __runNoHelpers?: never;
 };
 
 const RUN_NO_HELPERS: RunNoHelpers = Object.freeze({});
-type ValidateRunReturn<TResult> = [TResult] extends [RunReturn]
+type ValidateRunReturn<Result> = [Result] extends [RunReturn]
   ? unknown
   : { readonly __runInvalidReturn: never };
 
-type FailableSource<T, E> = Failable<T, E> | PromiseLike<Failable<T, E>>;
+type FailableSource<Result, Reason> =
+  | Failable<Result, Reason>
+  | PromiseLike<Failable<Result, Reason>>;
 
 /**
  * Reject obvious bare `Promise.reject(...)` inputs (`PromiseLike<never>`) while
  * preserving the caller's original tuple types for valid sources.
  */
-type GuardedFailableSourceInput<T> = T extends PromiseLike<infer U>
-  ? [U] extends [never]
+type GuardedFailableSourceInput<T> = T extends PromiseLike<infer Resolved>
+  ? [Resolved] extends [never]
     ? never
     : T extends PromiseLike<Failable<unknown, unknown>>
     ? T
@@ -760,62 +811,66 @@ type GuardedFailableSourceInput<T> = T extends PromiseLike<infer U>
   ? T
   : never;
 
-type AllSettledSources<T extends readonly unknown[]> = {
-  readonly [K in keyof T]: GuardedFailableSourceInput<T[K]>;
+type AllSettledSources<Sources extends readonly unknown[]> = {
+  readonly [Index in keyof Sources]: GuardedFailableSourceInput<
+    Sources[Index]
+  >;
 };
 
-type RaceSources<T extends readonly unknown[]> = {
-  readonly [K in keyof T]: GuardedFailableSourceInput<T[K]>;
+type RaceSources<Sources extends readonly unknown[]> = {
+  readonly [Index in keyof Sources]: GuardedFailableSourceInput<
+    Sources[Index]
+  >;
 };
 
 type FailableSourceError<T> = T extends Success<unknown>
   ? never
-  : T extends Failure<infer E>
-  ? E
-  : T extends Failable<unknown, infer E>
-  ? E
+  : T extends Failure<infer SourceError>
+  ? SourceError
+  : T extends Failable<unknown, infer SourceError>
+  ? SourceError
   : T extends PromiseLike<Success<unknown>>
   ? never
-  : T extends PromiseLike<Failure<infer E>>
-  ? E
-  : T extends PromiseLike<Failable<unknown, infer E>>
-  ? E
+  : T extends PromiseLike<Failure<infer SourceError>>
+  ? SourceError
+  : T extends PromiseLike<Failable<unknown, infer SourceError>>
+  ? SourceError
   : never;
 
-type FailableSourceData<T> = T extends Success<infer D>
-  ? D
+type FailableSourceData<T> = T extends Success<infer Data>
+  ? Data
   : T extends Failure<unknown>
   ? never
-  : T extends Failable<infer D, unknown>
-  ? D
-  : T extends PromiseLike<Success<infer D>>
-  ? D
+  : T extends Failable<infer Data, unknown>
+  ? Data
+  : T extends PromiseLike<Success<infer Data>>
+  ? Data
   : T extends PromiseLike<Failure<unknown>>
   ? never
-  : T extends PromiseLike<Failable<infer D, unknown>>
-  ? D
+  : T extends PromiseLike<Failable<infer Data, unknown>>
+  ? Data
   : never;
 
-type AllTupleError<T> = T extends readonly (infer P)[]
-  ? FailableSourceError<P>
+type AllTupleError<Sources> = Sources extends readonly (infer Source)[]
+  ? FailableSourceError<Source>
   : never;
 
-type AllTupleData<T> = {
-  readonly [K in keyof T]: FailableSourceData<T[K]>;
+type AllTupleData<Sources> = {
+  readonly [Index in keyof Sources]: FailableSourceData<Sources[Index]>;
 };
 
-type FailableSourceSettled<T> = T extends Success<infer D>
-  ? Success<D>
-  : T extends Failure<infer E>
-  ? Failure<E>
-  : T extends Failable<infer D, infer E>
-  ? Failable<D, E>
-  : T extends PromiseLike<Success<infer D>>
-  ? Success<D>
-  : T extends PromiseLike<Failure<infer E>>
-  ? Failure<E>
-  : T extends PromiseLike<Failable<infer D, infer E>>
-  ? Failable<D, E>
+type FailableSourceSettled<T> = T extends Success<infer Data>
+  ? Success<Data>
+  : T extends Failure<infer SourceError>
+  ? Failure<SourceError>
+  : T extends Failable<infer Data, infer SourceError>
+  ? Failable<Data, SourceError>
+  : T extends PromiseLike<Success<infer Data>>
+  ? Success<Data>
+  : T extends PromiseLike<Failure<infer SourceError>>
+  ? Failure<SourceError>
+  : T extends PromiseLike<Failable<infer Data, infer SourceError>>
+  ? Failable<Data, SourceError>
   : never;
 
 type FailableSourceIsAsync<T> = [
@@ -830,7 +885,10 @@ type FailableSourceHasGuaranteedFailure<T> = T extends
   ? true
   : false;
 
-type TupleHasAsync<T> = T extends readonly [infer First, ...infer Rest]
+type TupleHasAsync<Sources> = Sources extends readonly [
+  infer First,
+  ...infer Rest
+]
   ? FailableSourceIsAsync<First> extends true
     ? true
     : Rest extends readonly unknown[]
@@ -838,8 +896,8 @@ type TupleHasAsync<T> = T extends readonly [infer First, ...infer Rest]
     : false
   : false;
 
-/** True when at least one element of T is Failure<...> or PromiseLike<Failure<...>>. */
-type AllTupleHasGuaranteedFailure<T> = T extends readonly [
+/** True when at least one element of Sources is Failure<...> or PromiseLike<Failure<...>>. */
+type AllTupleHasGuaranteedFailure<Sources> = Sources extends readonly [
   infer First,
   ...infer Rest
 ]
@@ -850,27 +908,27 @@ type AllTupleHasGuaranteedFailure<T> = T extends readonly [
     : false
   : false;
 
-type AllReturnData<T> = AllTupleHasGuaranteedFailure<T> extends true
+type AllReturnData<Sources> = AllTupleHasGuaranteedFailure<Sources> extends true
   ? never
-  : AllTupleData<T>;
+  : AllTupleData<Sources>;
 
-type AllSettledTuple<T> = {
-  readonly [K in keyof T]: FailableSourceSettled<T[K]>;
+type AllSettledTuple<Sources> = {
+  readonly [Index in keyof Sources]: FailableSourceSettled<Sources[Index]>;
 };
 
-type RaceData<T> = T extends readonly (infer P)[]
-  ? FailableSourceData<P>
+type RaceData<Sources> = Sources extends readonly (infer Source)[]
+  ? FailableSourceData<Source>
   : never;
 
-type RaceError<T> = T extends readonly (infer P)[]
-  ? FailableSourceError<P>
+type RaceError<Sources> = Sources extends readonly (infer Source)[]
+  ? FailableSourceError<Source>
   : never;
 
-type RaceReturn<T extends readonly unknown[]> = T extends readonly []
-  ? Promise<Failable<RaceData<T>, RaceError<T>>>
-  : TupleHasAsync<T> extends true
-  ? Promise<Failable<RaceData<T>, RaceError<T>>>
-  : Failable<RaceData<T>, RaceError<T>>;
+type RaceReturn<Sources extends readonly unknown[]> = Sources extends readonly []
+  ? Promise<Failable<RaceData<Sources>, RaceError<Sources>>>
+  : TupleHasAsync<Sources> extends true
+  ? Promise<Failable<RaceData<Sources>, RaceError<Sources>>>
+  : Failable<RaceData<Sources>, RaceError<Sources>>;
 
 function toValidatedFailable(source: unknown): Failable<unknown, unknown> {
   if (isFailable(source)) return source;
@@ -896,51 +954,51 @@ async function resolveFailableSources(
   return results.map((result) => toValidatedFailable(result));
 }
 
-function combineAllResults<T extends readonly unknown[]>(
+function combineAllResults<Sources extends readonly unknown[]>(
   results: readonly Failable<unknown, unknown>[]
-): Failable<AllReturnData<T>, AllTupleError<T>> {
+): Failable<AllReturnData<Sources>, AllTupleError<Sources>> {
   for (const result of results) {
     if (result.status === FailableStatus.Failure) {
-      return result as Failure<AllTupleError<T>>;
+      return result as Failure<AllTupleError<Sources>>;
     }
   }
 
   const tuple = results.map(
     (result) => (result as Success<unknown>).data
-  ) as AllTupleData<T>;
+  ) as AllTupleData<Sources>;
 
   return success(tuple) as unknown as Failable<
-    AllReturnData<T>,
-    AllTupleError<T>
+    AllReturnData<Sources>,
+    AllTupleError<Sources>
   >;
 }
 
-function combineAllSettledResults<T extends readonly unknown[]>(
+function combineAllSettledResults<Sources extends readonly unknown[]>(
   results: readonly Failable<unknown, unknown>[]
-): AllSettledTuple<T> {
-  return results as AllSettledTuple<T>;
+): AllSettledTuple<Sources> {
+  return results as AllSettledTuple<Sources>;
 }
 
 export function all<
-  const T extends readonly FailableSource<unknown, unknown>[]
+  const Sources extends readonly FailableSource<unknown, unknown>[]
 >(
-  ...sources: T
-): TupleHasAsync<T> extends true
-  ? Promise<Failable<AllReturnData<T>, AllTupleError<T>>>
-  : Failable<AllReturnData<T>, AllTupleError<T>> {
+  ...sources: Sources
+): TupleHasAsync<Sources> extends true
+  ? Promise<Failable<AllReturnData<Sources>, AllTupleError<Sources>>>
+  : Failable<AllReturnData<Sources>, AllTupleError<Sources>> {
   if (!hasPromiseLikeSources(sources)) {
-    return combineAllResults<T>(
+    return combineAllResults<Sources>(
       sources.map((source) => toValidatedFailable(source))
-    ) as TupleHasAsync<T> extends true
-      ? Promise<Failable<AllReturnData<T>, AllTupleError<T>>>
-      : Failable<AllReturnData<T>, AllTupleError<T>>;
+    ) as TupleHasAsync<Sources> extends true
+      ? Promise<Failable<AllReturnData<Sources>, AllTupleError<Sources>>>
+      : Failable<AllReturnData<Sources>, AllTupleError<Sources>>;
   }
 
   return resolveFailableSources(sources).then((results) =>
-    combineAllResults<T>(results)
-  ) as TupleHasAsync<T> extends true
-    ? Promise<Failable<AllReturnData<T>, AllTupleError<T>>>
-    : Failable<AllReturnData<T>, AllTupleError<T>>;
+    combineAllResults<Sources>(results)
+  ) as TupleHasAsync<Sources> extends true
+    ? Promise<Failable<AllReturnData<Sources>, AllTupleError<Sources>>>
+    : Failable<AllReturnData<Sources>, AllTupleError<Sources>>;
 }
 
 /**
@@ -951,24 +1009,24 @@ export function all<
  * rejects unchanged. Wrap that boundary with `failable(...)` first if you want
  * the rejection converted into `Failure`.
  */
-export function allSettled<const T extends readonly unknown[]>(
-  ...sources: T & AllSettledSources<T>
-): TupleHasAsync<T> extends true
-  ? Promise<AllSettledTuple<T>>
-  : AllSettledTuple<T> {
+export function allSettled<const Sources extends readonly unknown[]>(
+  ...sources: Sources & AllSettledSources<Sources>
+): TupleHasAsync<Sources> extends true
+  ? Promise<AllSettledTuple<Sources>>
+  : AllSettledTuple<Sources> {
   if (!hasPromiseLikeSources(sources)) {
-    return combineAllSettledResults<T>(
+    return combineAllSettledResults<Sources>(
       sources.map((source) => toValidatedFailable(source))
-    ) as TupleHasAsync<T> extends true
-      ? Promise<AllSettledTuple<T>>
-      : AllSettledTuple<T>;
+    ) as TupleHasAsync<Sources> extends true
+      ? Promise<AllSettledTuple<Sources>>
+      : AllSettledTuple<Sources>;
   }
 
   return resolveFailableSources(sources).then((results) =>
-    combineAllSettledResults<T>(results)
-  ) as TupleHasAsync<T> extends true
-    ? Promise<AllSettledTuple<T>>
-    : AllSettledTuple<T>;
+    combineAllSettledResults<Sources>(results)
+  ) as TupleHasAsync<Sources> extends true
+    ? Promise<AllSettledTuple<Sources>>
+    : AllSettledTuple<Sources>;
 }
 
 /**
@@ -978,29 +1036,32 @@ export function allSettled<const T extends readonly unknown[]>(
  * synchronously. When any source is promised, winner ordering follows normal
  * `Promise.race(...)` semantics for already-settled entries.
  */
-export function race<const T extends readonly unknown[]>(
-  ...sources: T & RaceSources<T>
-): RaceReturn<T> {
+export function race<const Sources extends readonly unknown[]>(
+  ...sources: Sources & RaceSources<Sources>
+): RaceReturn<Sources> {
   if (sources.length === 0) {
     return Promise.reject(
       new Error('`race()` requires at least one `Failable` source.')
-    ) as RaceReturn<T>;
+    ) as RaceReturn<Sources>;
   }
 
   if (!hasPromiseLikeSources(sources)) {
-    return toValidatedFailable(sources[0]) as RaceReturn<T>;
+    return toValidatedFailable(sources[0]) as RaceReturn<Sources>;
   }
 
   return Promise.race(sources.map((source) => Promise.resolve(source))).then(
     (result) =>
-      toValidatedFailable(result) as Failable<RaceData<T>, RaceError<T>>
-  ) as RaceReturn<T>;
+      toValidatedFailable(result) as Failable<
+        RaceData<Sources>,
+        RaceError<Sources>
+      >
+  ) as RaceReturn<Sources>;
 }
 
 type AsyncRunBuilder<
-  TYield extends RunStep<unknown, unknown, unknown> = never,
-  TResult extends RunReturn = RunReturn
-> = (_helpers: RunNoHelpers) => AsyncGenerator<TYield, TResult, unknown>;
+  Yield extends RunStep<unknown, unknown, unknown> = never,
+  Result extends RunReturn = RunReturn
+> = (_helpers: RunNoHelpers) => AsyncGenerator<Yield, Result, unknown>;
 
 function readRunStep(yielded: unknown): RunStep<unknown, unknown, unknown> {
   if (!(yielded instanceof RunStep)) {
@@ -1019,15 +1080,15 @@ function readRunSource(yielded: unknown): Failable<unknown, unknown> {
   return source;
 }
 
-function finalizeRunResult<TYield, TResult extends RunReturn>(
-  result: TResult
-): InferRunResult<TYield, TResult> {
+function finalizeRunResult<Yield, Result extends RunReturn>(
+  result: Result
+): InferRunResult<Yield, Result> {
   if (isFailable(result)) {
-    return result as InferRunResult<TYield, TResult>;
+    return result as InferRunResult<Yield, Result>;
   }
 
   if (result === undefined) {
-    return success() as InferRunResult<TYield, TResult>;
+    return success() as InferRunResult<Yield, Result>;
   }
 
   throw new Error(RUN_INVALID_RETURN_MESSAGE);
@@ -1043,39 +1104,41 @@ function isAsyncRunIterator(
   return Symbol.asyncIterator in iterator;
 }
 
-type RunIteration<TYield extends RunYield, TResult extends RunReturn> =
-  IteratorResult<TYield, TResult>;
+type RunIteration<
+  Yield extends RunYield,
+  Result extends RunReturn
+> = IteratorResult<Yield, Result>;
 
-type SyncRunController<TYield extends RunYield, TResult extends RunReturn> = {
-  readonly next: (value?: unknown) => RunIteration<TYield, TResult>;
+type SyncRunController<Yield extends RunYield, Result extends RunReturn> = {
+  readonly next: (value?: unknown) => RunIteration<Yield, Result>;
   readonly return: (
     result: Failable<unknown, unknown>
-  ) => RunIteration<TYield, TResult>;
+  ) => RunIteration<Yield, Result>;
 };
 
-type AsyncRunController<TYield extends RunYield, TResult extends RunReturn> = {
-  readonly next: (value?: unknown) => Promise<RunIteration<TYield, TResult>>;
+type AsyncRunController<Yield extends RunYield, Result extends RunReturn> = {
+  readonly next: (value?: unknown) => Promise<RunIteration<Yield, Result>>;
   readonly return: (
     result: Failable<unknown, unknown>
-  ) => Promise<RunIteration<TYield, TResult>>;
+  ) => Promise<RunIteration<Yield, Result>>;
 };
 
-function driveRunIterator<TYield extends RunYield, TResult extends RunReturn>(
-  controller: SyncRunController<TYield, TResult>
-): InferRunResult<TYield, TResult>;
-function driveRunIterator<TYield extends RunYield, TResult extends RunReturn>(
-  controller: AsyncRunController<TYield, TResult>
-): Promise<InferRunResult<TYield, TResult>>;
-function driveRunIterator<TYield extends RunYield, TResult extends RunReturn>(
+function driveRunIterator<Yield extends RunYield, Result extends RunReturn>(
+  controller: SyncRunController<Yield, Result>
+): InferRunResult<Yield, Result>;
+function driveRunIterator<Yield extends RunYield, Result extends RunReturn>(
+  controller: AsyncRunController<Yield, Result>
+): Promise<InferRunResult<Yield, Result>>;
+function driveRunIterator<Yield extends RunYield, Result extends RunReturn>(
   controller:
-    | SyncRunController<TYield, TResult>
-    | AsyncRunController<TYield, TResult>
-): InferRunResult<TYield, TResult> | Promise<InferRunResult<TYield, TResult>> {
+    | SyncRunController<Yield, Result>
+    | AsyncRunController<Yield, Result>
+): InferRunResult<Yield, Result> | Promise<InferRunResult<Yield, Result>> {
   const continueRun = (
-    iteration: RunIteration<TYield, TResult>
-  ): InferRunResult<TYield, TResult> | Promise<InferRunResult<TYield, TResult>> => {
+    iteration: RunIteration<Yield, Result>
+  ): InferRunResult<Yield, Result> | Promise<InferRunResult<Yield, Result>> => {
     if (iteration.done) {
-      return finalizeRunResult<TYield, TResult>(iteration.value);
+      return finalizeRunResult<Yield, Result>(iteration.value);
     }
 
     const source = readRunSource(iteration.value);
@@ -1087,14 +1150,12 @@ function driveRunIterator<TYield extends RunYield, TResult extends RunReturn>(
   };
 
   const continueClose = (
-    step:
-      | RunIteration<TYield, TResult>
-      | Promise<RunIteration<TYield, TResult>>,
+    step: RunIteration<Yield, Result> | Promise<RunIteration<Yield, Result>>,
     unwindResult: Failable<unknown, unknown>
-  ): InferRunResult<TYield, TResult> | Promise<InferRunResult<TYield, TResult>> =>
+  ): InferRunResult<Yield, Result> | Promise<InferRunResult<Yield, Result>> =>
     resolveStep(step, (iteration) => {
       if (iteration.done) {
-        return finalizeRunResult<TYield, TResult>(iteration.value);
+        return finalizeRunResult<Yield, Result>(iteration.value);
       }
 
       const source = readRunSource(iteration.value);
@@ -1108,10 +1169,10 @@ function driveRunIterator<TYield extends RunYield, TResult extends RunReturn>(
   return resolveStep(controller.next(), continueRun);
 }
 
-function resolveStep<TStep, TResult>(
-  step: TStep | Promise<TStep>,
-  onResolved: (value: TStep) => TResult | Promise<TResult>
-): TResult | Promise<TResult> {
+function resolveStep<Step, Result>(
+  step: Step | Promise<Step>,
+  onResolved: (value: Step) => Result | Promise<Result>
+): Result | Promise<Result> {
   if (isPromiseLike(step)) {
     return step.then((value) => onResolved(value));
   }
@@ -1120,18 +1181,18 @@ function resolveStep<TStep, TResult>(
 }
 
 export function run<
-  TYield extends RunStep<unknown, unknown, unknown> = never,
-  TResult = RunReturn
+  Yield extends RunStep<unknown, unknown, unknown> = never,
+  Result = RunReturn
 >(
   builder: ((
     _helpers: RunNoHelpers
-  ) => AsyncGenerator<TYield, TResult, unknown>) &
-    ValidateRunReturn<TResult>
-): Promise<InferRunResult<TYield, Extract<TResult, RunReturn>>>;
-export function run<TYield extends RunYield = never, TResult = RunReturn>(
-  builder: ((_helpers: RunNoHelpers) => Generator<TYield, TResult, unknown>) &
-    ValidateRunReturn<TResult>
-): InferRunResult<TYield, Extract<TResult, RunReturn>>;
+  ) => AsyncGenerator<Yield, Result, unknown>) &
+    ValidateRunReturn<Result>
+): Promise<InferRunResult<Yield, Extract<Result, RunReturn>>>;
+export function run<Yield extends RunYield = never, Result = RunReturn>(
+  builder: ((_helpers: RunNoHelpers) => Generator<Yield, Result, unknown>) &
+    ValidateRunReturn<Result>
+): InferRunResult<Yield, Extract<Result, RunReturn>>;
 /**
  * Compose steps that already return `Failable`.
  *
@@ -1192,36 +1253,44 @@ export function run(
   });
 }
 
-export function failable<T>(value: Success<T>): Success<T>;
-export function failable<E>(value: Failure<E>): Failure<E>;
-export function failable<T, E>(value: Failable<T, E>): Failable<T, E>;
-export function failable<T>(value: FailableLikeSuccess<T>): Success<T>;
-export function failable<E>(value: FailableLikeFailure<E>): Failure<E>;
-export function failable<T, E>(value: FailableLike<T, E>): Failable<T, E>;
-export function failable<T>(
-  value: Success<T>,
+export function failable<Result>(value: Success<Result>): Success<Result>;
+export function failable<Reason>(value: Failure<Reason>): Failure<Reason>;
+export function failable<Result, Reason>(
+  value: Failable<Result, Reason>
+): Failable<Result, Reason>;
+export function failable<Result>(
+  value: FailableLikeSuccess<Result>
+): Success<Result>;
+export function failable<Reason>(
+  value: FailableLikeFailure<Reason>
+): Failure<Reason>;
+export function failable<Result, Reason>(
+  value: FailableLike<Result, Reason>
+): Failable<Result, Reason>;
+export function failable<Result>(
+  value: Success<Result>,
   normalize: FailableNormalizeErrorInput
-): Success<T>;
-export function failable<E>(
-  value: Failure<E>,
-  normalize: FailableNormalizeErrorInput
-): Failure<Error>;
-export function failable<T, E>(
-  value: Failable<T, E>,
-  normalize: FailableNormalizeErrorInput
-): Failable<T, Error>;
-export function failable<T>(
-  value: FailableLikeSuccess<T>,
-  normalize: FailableNormalizeErrorInput
-): Success<T>;
-export function failable<E>(
-  value: FailableLikeFailure<E>,
+): Success<Result>;
+export function failable<Reason>(
+  value: Failure<Reason>,
   normalize: FailableNormalizeErrorInput
 ): Failure<Error>;
-export function failable<T, E>(
-  value: FailableLike<T, E>,
+export function failable<Result, Reason>(
+  value: Failable<Result, Reason>,
   normalize: FailableNormalizeErrorInput
-): Failable<T, Error>;
+): Failable<Result, Error>;
+export function failable<Result>(
+  value: FailableLikeSuccess<Result>,
+  normalize: FailableNormalizeErrorInput
+): Success<Result>;
+export function failable<Reason>(
+  value: FailableLikeFailure<Reason>,
+  normalize: FailableNormalizeErrorInput
+): Failure<Error>;
+export function failable<Result, Reason>(
+  value: FailableLike<Result, Reason>,
+  normalize: FailableNormalizeErrorInput
+): Failable<Result, Error>;
 /**
  * Capture the boundary you actually have:
  * - `failable(() => value)` for synchronous callbacks that may throw
@@ -1234,20 +1303,21 @@ export function failable<T, E>(
  * them to pass the promise directly instead. That guard error is preserved even when
  * a custom `normalizeError` callback is provided.
  */
-export function failable<P extends PromiseLike<unknown>>(
-  promise: P,
+export function failable<PromiseSource extends PromiseLike<unknown>>(
+  promise: PromiseSource,
   normalize: FailableNormalizeErrorInput
-): Promise<NormalizeFailableResult<Awaited<P>>>;
-export function failable<P extends PromiseLike<unknown>, E = unknown>(
-  promise: P
-): InferReturnTypeFromPromise<P, E>;
-export function failable<F extends () => unknown>(
-  callback: FailableSyncOnlyCallback<F>,
+): Promise<NormalizeFailableResult<Awaited<PromiseSource>>>;
+export function failable<
+  PromiseSource extends PromiseLike<unknown>,
+  Reason = unknown
+>(promise: PromiseSource): InferReturnTypeFromPromise<PromiseSource, Reason>;
+export function failable<Callback extends () => unknown>(
+  callback: FailableSyncOnlyCallback<Callback>,
   normalize: FailableNormalizeErrorInput
-): NormalizeFailableResult<ReturnType<F>>;
-export function failable<F extends () => unknown, E = unknown>(
-  callback: FailableSyncOnlyCallback<F>
-): InferFailableFromValue<ReturnType<F>, E>;
+): NormalizeFailableResult<ReturnType<Callback>>;
+export function failable<Callback extends () => unknown, Reason = unknown>(
+  callback: FailableSyncOnlyCallback<Callback>
+): InferFailableFromValue<ReturnType<Callback>, Reason>;
 export function failable(
   value: FailableInput,
   normalize?: FailableNormalizeErrorInput
@@ -1267,9 +1337,9 @@ export function failable(
   return fromPromise(value, normalize);
 }
 
-function fromFailableLike<T, E>(
-  failableLike: FailableLike<T, E>
-): Failable<T, E> {
+function fromFailableLike<Result, Reason>(
+  failableLike: FailableLike<Result, Reason>
+): Failable<Result, Reason> {
   if (failableLike.status === FailableStatus.Success) {
     return success(failableLike.data);
   }
@@ -1278,23 +1348,23 @@ function fromFailableLike<T, E>(
 }
 
 function createAsyncCallbackError(): AsyncCallbackError {
-  const error = new Error(ASYNC_CALLBACK_MESSAGE) as AsyncCallbackError;
+  const reason = new Error(ASYNC_CALLBACK_MESSAGE) as AsyncCallbackError;
 
-  Object.defineProperty(error, ASYNC_CALLBACK_ERROR_TAG, {
+  Object.defineProperty(reason, ASYNC_CALLBACK_ERROR_TAG, {
     value: true,
     enumerable: false,
     configurable: false,
     writable: false,
   });
 
-  return error;
+  return reason;
 }
 
-function isAsyncCallbackError(error: unknown): error is AsyncCallbackError {
-  if (!(error instanceof Error)) return false;
+function isAsyncCallbackError(reason: unknown): reason is AsyncCallbackError {
+  if (!(reason instanceof Error)) return false;
 
   return (
-    Object.getOwnPropertyDescriptor(error, ASYNC_CALLBACK_ERROR_TAG)?.value ===
+    Object.getOwnPropertyDescriptor(reason, ASYNC_CALLBACK_ERROR_TAG)?.value ===
     true
   );
 }
@@ -1303,8 +1373,12 @@ function ignorePromiseRejection(value: PromiseLike<unknown>) {
   void Promise.resolve(value).catch(() => undefined);
 }
 
-function fromFunction<T extends () => U, E, U = ReturnType<T>>(
-  callback: T,
+function fromFunction<
+  Callback extends () => CallbackResult,
+  Reason,
+  CallbackResult = ReturnType<Callback>
+>(
+  callback: Callback,
   normalize?: FailableNormalizeErrorInput
 ) {
   try {
@@ -1327,13 +1401,13 @@ function fromFunction<T extends () => U, E, U = ReturnType<T>>(
     }
 
     return success(data);
-  } catch (error) {
-    return normalizeFailableResult(failure(error as E), normalize);
+  } catch (reason) {
+    return normalizeFailableResult(failure(reason as Reason), normalize);
   }
 }
 
-function fromPromise<T extends PromiseLike<unknown>>(
-  promise: T,
+function fromPromise<PromiseSource extends PromiseLike<unknown>>(
+  promise: PromiseSource,
   normalize?: FailableNormalizeErrorInput
 ) {
   return Promise.resolve(promise).then(
@@ -1348,12 +1422,12 @@ function fromPromise<T extends PromiseLike<unknown>>(
 
       return success(data);
     },
-    (error) => normalizeFailableResult(failure(error), normalize)
+    (reason) => normalizeFailableResult(failure(reason), normalize)
   );
 }
 
-function normalizeFailableResult<T, E>(
-  result: Failable<T, E>,
+function normalizeFailableResult<Result, Reason>(
+  result: Failable<Result, Reason>,
   normalize?: FailableNormalizeErrorInput
 ) {
   if (result.status === FailableStatus.Success) return result;
@@ -1460,18 +1534,18 @@ function getPlainObjectErrorMessage(
   return message ?? UNSTRINGIFIABLE_ERROR_MESSAGE;
 }
 
-function normalizeUnknownError(error: unknown): Error {
-  if (error instanceof Error) return error;
-  if (Array.isArray(error)) {
-    return new AggregateError(error, 'Multiple errors', { cause: error });
+function normalizeUnknownError(reason: unknown): Error {
+  if (reason instanceof Error) return reason;
+  if (Array.isArray(reason)) {
+    return new AggregateError(reason, 'Multiple errors', { cause: reason });
   }
 
-  if (isPlainObjectErrorValue(error)) {
-    return new Error(getPlainObjectErrorMessage(error), { cause: error });
+  if (isPlainObjectErrorValue(reason)) {
+    return new Error(getPlainObjectErrorMessage(reason), { cause: reason });
   }
 
   return new Error(
-    tryGetStringErrorMessage(error) ?? UNSTRINGIFIABLE_ERROR_MESSAGE,
-    { cause: error }
+    tryGetStringErrorMessage(reason) ?? UNSTRINGIFIABLE_ERROR_MESSAGE,
+    { cause: reason }
   );
 }
