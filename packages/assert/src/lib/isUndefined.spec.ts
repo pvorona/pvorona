@@ -58,7 +58,7 @@ test('isUndefined', () => {
   const explicitGenericUndefined = undefined as string | undefined;
   if (
     isUndefined<string | undefined, string | undefined>(
-      explicitGenericUndefined,
+      explicitGenericUndefined
     )
   ) {
     expectTypeOf(explicitGenericUndefined).toEqualTypeOf<undefined>();

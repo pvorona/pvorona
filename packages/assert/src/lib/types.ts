@@ -24,13 +24,13 @@ type IncludesBroadOrLiteral<T, Broad, Message extends string> = Broad extends T
   : ConstraintDiagnostic<Message, T>;
 
 type IncludesAllMembers<T, Members, Message extends string> = [
-  Members,
+  Members
 ] extends [T]
   ? T
   : ConstraintDiagnostic<Message, T>;
 
 export type DisplayDiagnostics<T, V = T> = [T] extends [
-  ConstraintDiagnostic<infer Message, unknown>,
+  ConstraintDiagnostic<infer Message, unknown>
 ]
   ? Message
   : V;
@@ -120,7 +120,7 @@ type InferErrorsArguments<T> = ConstraintDiagnostic<any, any> extends T
   : T;
 
 export type AtLeastOneValid<T> = [T] extends [
-  ConstraintDiagnostic<string, unknown>,
+  ConstraintDiagnostic<string, unknown>
 ]
   ? T
   : InferErrorsArguments<T>;

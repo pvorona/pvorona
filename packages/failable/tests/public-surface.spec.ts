@@ -61,7 +61,7 @@ function createUnstringifiableErrorValue() {
 
 function expectThrowBoundaryToNormalizeFailure(
   runThrowBoundary: () => unknown,
-  rawError: unknown,
+  rawError: unknown
 ): void {
   try {
     runThrowBoundary();
@@ -75,15 +75,13 @@ function expectThrowBoundaryToNormalizeFailure(
 
     const thrown = error as Error & { cause?: unknown };
     expect(thrown.message).toBe(
-      `Expected value to be Success. Received Failure(${
-        (() => {
-          try {
-            return String(rawError);
-          } catch {
-            return 'Unstringifiable error value';
-          }
-        })()
-      }).`
+      `Expected value to be Success. Received Failure(${(() => {
+        try {
+          return String(rawError);
+        } catch {
+          return 'Unstringifiable error value';
+        }
+      })()}).`
     );
     expect(thrown.cause).toBe(rawError);
 
@@ -201,7 +199,10 @@ type Account = {
 type TransferPlanningError =
   | TransferError
   | { readonly code: 'source_account_not_found'; readonly accountId: string }
-  | { readonly code: 'destination_account_not_found'; readonly accountId: string };
+  | {
+      readonly code: 'destination_account_not_found';
+      readonly accountId: string;
+    };
 
 function readSourceAccount(
   accountId: string
@@ -280,12 +281,7 @@ async function planTransferWithRunAsync(request: {
   readonly fromAccountId: string;
   readonly toAccountId: string;
   readonly amountCents: number;
-}): Promise<
-  Failable<
-    TransferPlan,
-    TransferAsyncError
-  >
-> {
+}): Promise<Failable<TransferPlan, TransferAsyncError>> {
   return await run(async function* () {
     const source = yield* readSourceAccount(request.fromAccountId);
     const destination = yield* readDestinationAccount(request.toAccountId);
@@ -421,10 +417,7 @@ describe('public surface', () => {
       Promise.resolve(failure('missing-profile'))
     );
 
-    expect(result).toStrictEqual([
-      success(1),
-      failure('missing-profile'),
-    ]);
+    expect(result).toStrictEqual([success(1), failure('missing-profile')]);
   });
 
   it('rejects top-level allSettled() when a source promise rejects', async () => {
@@ -434,18 +427,12 @@ describe('public surface', () => {
       });
 
     await expect(
-      allSettled(
-        Promise.resolve(success(1)),
-        missingProfileSource
-      )
+      allSettled(Promise.resolve(success(1)), missingProfileSource)
     ).rejects.toBe('missing-profile');
   });
 
   it('supports top-level race() for sync or promised sources', async () => {
-    const syncResult = race(
-      success('cached'),
-      success('stale')
-    );
+    const syncResult = race(success('cached'), success('stale'));
     expect(syncResult).toStrictEqual(success('cached'));
 
     const mixedResult = await race(
@@ -460,7 +447,9 @@ describe('public surface', () => {
     const candidate: unknown = divide(10, 0);
 
     if (!isFailure(candidate)) {
-      throw new Error('Expected the unknown candidate to be a hydrated failure');
+      throw new Error(
+        'Expected the unknown candidate to be a hydrated failure'
+      );
     }
 
     expect(candidate.error).toBe('Cannot divide by zero');
@@ -528,7 +517,9 @@ describe('public surface', () => {
     );
 
     if (appPortResult.isFailure) {
-      throw new Error('Expected flatMap to pass through a valid application port');
+      throw new Error(
+        'Expected flatMap to pass through a valid application port'
+      );
     }
 
     expect(appPortResult.data).toBe(3000);
@@ -570,7 +561,7 @@ describe('public surface', () => {
 
     expectThrowBoundaryToNormalizeFailure(
       () => throwIfFailure(result),
-      'Cannot divide by zero',
+      'Cannot divide by zero'
     );
   });
 
@@ -585,7 +576,9 @@ describe('public surface', () => {
   it('supports direct string throw-boundary customization with `throwIfFailure(...)`', () => {
     const result = divide(10, 0);
 
-    expect(() => throwIfFailure(result, 'Cannot divide')).toThrow('Cannot divide');
+    expect(() => throwIfFailure(result, 'Cannot divide')).toThrow(
+      'Cannot divide'
+    );
   });
 
   it('supports Error-returning throw-boundary customization with `throwIfFailure(...)`', () => {
@@ -602,9 +595,9 @@ describe('public surface', () => {
   it('supports string-returning throw-boundary customization with `getOrThrow()`', () => {
     const result = divide(10, 0);
 
-    expect(() => result.getOrThrow((reason) => `Cannot divide: ${reason}`)).toThrow(
-      'Cannot divide: Cannot divide by zero',
-    );
+    expect(() =>
+      result.getOrThrow((reason) => `Cannot divide: ${reason}`)
+    ).toThrow('Cannot divide: Cannot divide by zero');
   });
 
   it('supports direct string throw-boundary customization with `getOrThrow()`', () => {
@@ -626,7 +619,7 @@ describe('public surface', () => {
 
     expectThrowBoundaryToNormalizeFailure(
       () => result.getOrThrow(),
-      'Cannot divide by zero',
+      'Cannot divide by zero'
     );
   });
 
@@ -643,7 +636,7 @@ describe('public surface', () => {
   it('normalizes `failure().getOrThrow()` into an Error value', () => {
     expectThrowBoundaryToNormalizeFailure(
       () => failure().getOrThrow(),
-      undefined,
+      undefined
     );
   });
 
@@ -656,7 +649,8 @@ describe('public surface', () => {
       expect(thrown).toBeInstanceOf(Error);
       expect(thrown).not.toBe('coercion boom');
       expect(thrown).toMatchObject({
-        message: 'Expected value to be Success. Received Failure(Unstringifiable error value).',
+        message:
+          'Expected value to be Success. Received Failure(Unstringifiable error value).',
         cause: rawError,
       });
       return;
@@ -698,22 +692,23 @@ describe('public surface', () => {
 
   it('supports constant shorthand for capture-time reasons', () => {
     const rawError = { code: 'bad_request' } as const;
-    const result = failable(
-      () => {
-        throw rawError;
-      },
-      'invalid_request'
-    );
+    const result = failable(() => {
+      throw rawError;
+    }, 'invalid_request');
 
     if (!result.isFailure) {
-      throw new Error('Expected capture-time shorthand to store a fixed reason');
+      throw new Error(
+        'Expected capture-time shorthand to store a fixed reason'
+      );
     }
 
     expect(result.error).toBe('invalid_request');
   });
 
   it('supports object shorthand for capture-time reasons', () => {
-    const rawError = createNullPrototypeObject({ code: 'bad_request' as const });
+    const rawError = createNullPrototypeObject({
+      code: 'bad_request' as const,
+    });
     const result = failable(
       () => {
         throw rawError;
@@ -722,7 +717,9 @@ describe('public surface', () => {
     );
 
     if (!result.isFailure) {
-      throw new Error('Expected capture-time shorthand to store a fixed object reason');
+      throw new Error(
+        'Expected capture-time shorthand to store a fixed object reason'
+      );
     }
 
     expect(result.error).toStrictEqual({ code: 'invalid_request' });
@@ -738,7 +735,9 @@ describe('public surface', () => {
     );
 
     if (!result.isFailure) {
-      throw new Error('Expected mapper-based capture-time normalization to run');
+      throw new Error(
+        'Expected mapper-based capture-time normalization to run'
+      );
     }
 
     expect(result.error).toStrictEqual({
@@ -752,11 +751,15 @@ describe('public surface', () => {
     const asyncResult = await failable(Promise.resolve(5));
 
     if (!syncResult.isFailure) {
-      throw new Error('Expected the sync callback example to capture a thrown error');
+      throw new Error(
+        'Expected the sync callback example to capture a thrown error'
+      );
     }
 
     if (asyncResult.isFailure) {
-      throw new Error('Expected the direct promise example to capture async success');
+      throw new Error(
+        'Expected the direct promise example to capture async success'
+      );
     }
 
     expect(syncResult.error).toBeInstanceOf(SyntaxError);
@@ -764,9 +767,8 @@ describe('public surface', () => {
   });
 
   it('keeps `failable(() => promise)` in the success channel', async () => {
-    const result = failable(
-      (() => Promise.resolve(5)) as unknown as () => number
-    );
+    const result = failable((() =>
+      Promise.resolve(5)) as unknown as () => number);
 
     if (!result.isSuccess) {
       throw new Error('Expected `failable(() => promise)` to return a Success');

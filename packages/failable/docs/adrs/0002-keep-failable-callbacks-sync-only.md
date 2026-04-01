@@ -41,7 +41,7 @@ the returned shape must follow that same runtime branch:
 That makes callbacks typed as `any`, `unknown`, or `T | Promise<T>` surface as:
 
 ```ts
-Failable<T, E> | Promise<Failable<T, E>>
+Failable<T, E> | Promise<Failable<T, E>>;
 ```
 
 This is type-systemically correct, but unpleasant in normal use.
@@ -106,7 +106,7 @@ introduced for safe callers.
 The package already had a direct async capture API:
 
 ```ts
-await failable(promise)
+await failable(promise);
 ```
 
 That form is explicit about the async boundary and does not require any sync vs

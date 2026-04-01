@@ -23,7 +23,10 @@ export default [
     },
   },
   {
-    files: ['tests/public-surface.spec.{ts,tsx,js,jsx}', 'tests/consumer/**/*.{ts,tsx,js,jsx}'],
+    files: [
+      'tests/public-surface.spec.{ts,tsx,js,jsx}',
+      'tests/consumer/**/*.{ts,tsx,js,jsx}',
+    ],
     rules: {
       '@nx/enforce-module-boundaries': 'off',
     },

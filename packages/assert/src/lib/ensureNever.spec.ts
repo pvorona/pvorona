@@ -3,7 +3,7 @@ import { ensureNever } from './ensureNever.js';
 test('ensureNever', () => {
   expect(() =>
     // @ts-expect-error "ensureNever only accepts never"
-    ensureNever('value'),
+    ensureNever('value')
   ).toThrow('Expected value to be never');
 
   const value =

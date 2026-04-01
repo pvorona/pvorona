@@ -13,14 +13,13 @@ import {
   type AssertionFailure,
 } from '@pvorona/assert';
 
-type Equal<Left, Right> =
-  (<T>() => T extends Left ? 1 : 2) extends
-  (<T>() => T extends Right ? 1 : 2)
-    ? (<T>() => T extends Right ? 1 : 2) extends
-        (<T>() => T extends Left ? 1 : 2)
-      ? true
-      : false
-    : false;
+type Equal<Left, Right> = (<T>() => T extends Left ? 1 : 2) extends <
+  T
+>() => T extends Right ? 1 : 2
+  ? (<T>() => T extends Right ? 1 : 2) extends <T>() => T extends Left ? 1 : 2
+    ? true
+    : false
+  : false;
 
 function expectType<Condition extends true>(condition: Condition): void {
   void condition;
@@ -28,7 +27,10 @@ function expectType<Condition extends true>(condition: Condition): void {
 
 type ConsumerModule = typeof import('@pvorona/assert');
 expectType<
-  Equal<'ensureNonEmptyArray' extends keyof ConsumerModule ? true : false, false>
+  Equal<
+    'ensureNonEmptyArray' extends keyof ConsumerModule ? true : false,
+    false
+  >
 >(true);
 
 describe('public surface', () => {
@@ -49,7 +51,7 @@ describe('public surface', () => {
   it('keeps ensureNever throwing by default', () => {
     expect(() =>
       // @ts-expect-error public surface should reject non-never inputs
-      ensureNever('value'),
+      ensureNever('value')
     ).toThrow('Expected value to be never');
 
     const value =
@@ -91,7 +93,9 @@ describe('public surface', () => {
       expectType<Equal<typeof maybeNull, null>>(true);
     }
 
-    const maybeUndefined = (Math.random() > 0.5 ? undefined : 'value') as unknown;
+    const maybeUndefined = (
+      Math.random() > 0.5 ? undefined : 'value'
+    ) as unknown;
     if (isUndefined(maybeUndefined)) {
       expectType<Equal<typeof maybeUndefined, undefined>>(true);
     }
@@ -130,9 +134,7 @@ describe('public surface', () => {
     }
 
     const maybeUndefined = undefined as string | undefined;
-    if (
-      isUndefined<string | undefined, string | undefined>(maybeUndefined)
-    ) {
+    if (isUndefined<string | undefined, string | undefined>(maybeUndefined)) {
       expectType<Equal<typeof maybeUndefined, undefined>>(true);
     } else {
       expectType<Equal<typeof maybeUndefined, string>>(true);
@@ -140,10 +142,9 @@ describe('public surface', () => {
 
     const maybeNullish = undefined as string | null | undefined;
     if (
-      isNullOrUndefined<
-        string | null | undefined,
-        string | null | undefined
-      >(maybeNullish)
+      isNullOrUndefined<string | null | undefined, string | null | undefined>(
+        maybeNullish
+      )
     ) {
       expectType<Equal<typeof maybeNullish, null | undefined>>(true);
     } else {

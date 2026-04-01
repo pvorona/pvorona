@@ -40,7 +40,7 @@ async function main() {
         'subtractFrom(start, value).getTime();',
         'duration(1, TimeUnit.Hour).toSeconds();',
         '',
-      ].join('\n'),
+      ].join('\n')
     );
 
     await writeFile(
@@ -59,8 +59,8 @@ async function main() {
           include: ['./index.ts'],
         },
         null,
-        2,
-      ),
+        2
+      )
     );
 
     const configFile = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
@@ -75,16 +75,21 @@ async function main() {
       ts.sys,
       consumerRoot,
       undefined,
-      tsconfigPath,
+      tsconfigPath
     );
 
     if (parsedConfig.errors.length > 0) {
-      process.stderr.write(formatDiagnostics(parsedConfig.errors, consumerRoot));
+      process.stderr.write(
+        formatDiagnostics(parsedConfig.errors, consumerRoot)
+      );
       process.exitCode = 1;
       return;
     }
 
-    const program = ts.createProgram(parsedConfig.fileNames, parsedConfig.options);
+    const program = ts.createProgram(
+      parsedConfig.fileNames,
+      parsedConfig.options
+    );
     const diagnostics = ts.getPreEmitDiagnostics(program);
 
     if (diagnostics.length > 0) {

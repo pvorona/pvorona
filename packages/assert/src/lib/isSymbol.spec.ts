@@ -30,9 +30,7 @@ test('isSymbol', () => {
   }
 
   const explicitGenericSymbol = Symbol('value') as string | symbol;
-  if (
-    isSymbol<string | symbol, string | symbol>(explicitGenericSymbol)
-  ) {
+  if (isSymbol<string | symbol, string | symbol>(explicitGenericSymbol)) {
     expectTypeOf(explicitGenericSymbol).toEqualTypeOf<symbol>();
   } else {
     expectTypeOf(explicitGenericSymbol).toEqualTypeOf<string>();

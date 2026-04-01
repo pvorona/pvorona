@@ -13,6 +13,7 @@
 ### Task 1: Rewrite the README
 
 **Files:**
+
 - Modify: `packages/counter/README.md`
 
 **Step 1: Review the current README**
@@ -22,6 +23,7 @@ Read `packages/counter/README.md` and identify text that is harder to understand
 **Step 2: Replace the usage example**
 
 Use one short example that shows:
+
 - the initial value
 - `increment()` with the default amount
 - `increment(amount)` with a custom amount
@@ -32,10 +34,12 @@ Use one short example that shows:
 **Step 3: Tighten the API section**
 
 Document:
+
 - `Counter`
 - `createCounter(initialValue?: number): Counter`
 
 Make sure the README says:
+
 - `increment(amount?)` returns the updated value
 - `decrement(amount?)` returns the updated value
 - `set(value)` updates the current value
@@ -49,15 +53,18 @@ Keep the final README close in tone and size to the other small package READMEs 
 ### Task 2: Verify the docs change
 
 **Files:**
+
 - Modify: `packages/counter/README.md`
 
 **Step 1: Run available verification**
 
 Run:
+
 - `git diff --check`
 - `npm exec nx test counter`
 
 Expected:
+
 - `git diff --check` reports no whitespace or merge-marker issues
 - `npm exec nx test counter` passes if the workspace dependencies are installed
 
@@ -68,5 +75,6 @@ If `npm exec nx test counter` cannot run because the workspace is not installed,
 **Step 3: Commit**
 
 Run:
+
 - `git add packages/counter/README.md docs/plans/2026-03-06-counter-readme-design.md docs/plans/2026-03-06-counter-readme.md`
 - `git commit -m "Update \`@pvorona/counter\` README"`

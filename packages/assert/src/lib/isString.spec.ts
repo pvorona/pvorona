@@ -53,9 +53,7 @@ test('isString', () => {
   }
 
   const explicitGenericString = 'value' as string | number;
-  if (
-    isString<string | number, string | number>(explicitGenericString)
-  ) {
+  if (isString<string | number, string | number>(explicitGenericString)) {
     expectTypeOf(explicitGenericString).toEqualTypeOf<string>();
   } else {
     expectTypeOf(explicitGenericString).toEqualTypeOf<number>();

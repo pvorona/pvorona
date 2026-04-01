@@ -13,12 +13,14 @@
 ### Task 1: Rebuild the README structure
 
 **Files:**
+
 - Modify: `packages/assert/README.md`
 - Test: `packages/assert/src/index.ts`
 
 **Step 1: Rewrite the opening summary**
 
 Replace the current one-line description with a plain-language summary that says the package is for:
+
 - runtime assertions
 - nullish narrowing
 - object and property checks
@@ -31,6 +33,7 @@ Keep the summary focused on what a new user can do after importing the package.
 Combine `Install` and `ESM and tooling` into one short setup section.
 
 Make the wording explicit:
+
 - the published package contract is ESM-only
 - the published package requires Node `>=20`
 - TypeScript `5.9+` is the current repo baseline used to verify the package, not a published `engines` constraint
@@ -40,6 +43,7 @@ Make the wording explicit:
 Rename the section to something like `When this package fits` or `How these helpers are meant to be used`.
 
 This section should explain:
+
 - these helpers are mainly for narrowing existing unions, not for loose `unknown -> whatever` casts
 - which helpers are for `undefined`, `null`, and `null | undefined`
 - when to use this package and when a local one-off check is enough
@@ -53,6 +57,7 @@ Keep only the current public API in the main path.
 **Step 5: Commit the structural rewrite**
 
 Run:
+
 - `git add packages/assert/README.md`
 - `git commit -m "Restructure \`@pvorona/assert\` README"`
 
@@ -61,6 +66,7 @@ Run:
 ### Task 2: Rewrite the quick start with beginner-first examples
 
 **Files:**
+
 - Modify: `packages/assert/README.md`
 - Test: `packages/assert/src/lib/assert.spec.ts`
 - Test: `packages/assert/src/lib/ensureNotNullOrUndefined.spec.ts`
@@ -73,6 +79,7 @@ Run:
 Use one compact example that is easy to scan in under a minute.
 
 Make sure the surrounding text says:
+
 - `assert(...)` expects a boolean condition
 - failed assertions throw `AssertionError`
 - the message can be a string or a lazy getter
@@ -82,6 +89,7 @@ Make sure the surrounding text says:
 Replace the current `ensureNotNull(...)` quick-start example with a minimal `ensureNotNullOrUndefined(...)` example.
 
 Show:
+
 - the allowed input shape is `T | null | undefined`
 - the returned value is narrowed to `T`
 - one-sided alternatives such as `ensureDefined(...)` and `ensureNotNull(...)` exist for `T | undefined` and `T | null`
@@ -93,6 +101,7 @@ If you still want to keep the DOM example, move it to a later note instead of th
 Replace or demote the symbol-branded `hasOwnKey(...)` example.
 
 Add one simpler `hasOwnPropertyValue(...)` example with a plain object shape such as:
+
 - a `status` discriminant
 - a success/error branch
 - one obvious narrowed property read after the check
@@ -106,6 +115,7 @@ Also add one tiny allowed/disallowed note so the reader sees the restriction bef
 **Step 5: Commit the new quick start**
 
 Run:
+
 - `git add packages/assert/README.md`
 - `git commit -m "Rewrite \`@pvorona/assert\` README quick start"`
 
@@ -114,6 +124,7 @@ Run:
 ### Task 3: Add a grouped API map and helper behavior notes
 
 **Files:**
+
 - Modify: `packages/assert/README.md`
 - Test: `packages/assert/src/index.ts`
 - Test: `packages/assert/src/lib/assert.spec.ts`
@@ -130,6 +141,7 @@ Run:
 **Step 1: Add a grouped API reference**
 
 Create a scan-friendly API section with groups such as:
+
 - core assertion helpers
 - nullish helpers
 - string and number helpers
@@ -144,6 +156,7 @@ List the actual exported names from `packages/assert/src/index.ts`.
 **Step 2: Mark what each helper does**
 
 For each entry, say whether it:
+
 - returns a boolean
 - narrows a type
 - throws on failure
@@ -153,6 +166,7 @@ Keep each description to one line.
 **Step 3: Add helper-specific caveats**
 
 Document the non-obvious behaviors that the current README misses:
+
 - `ensureNever(...)` has a `silent` flag and throws plain `Error`
 - `ensureNumber(...)` is an exception to the blanket restrictive-helper story
 - `isNullOrUndefined(...)` and `ensureNotNullOrUndefined(...)` require unions containing both `null` and `undefined`
@@ -165,6 +179,7 @@ Document the non-obvious behaviors that the current README misses:
 **Step 4: Add one explicit allowed/disallowed snippet**
 
 Use one small snippet that shows:
+
 - an allowed union-narrowing case
 - a disallowed case that the package intentionally rejects at compile time
 
@@ -173,6 +188,7 @@ Keep the snippet small enough to support the explanation instead of becoming a n
 **Step 5: Commit the API reference pass**
 
 Run:
+
 - `git add packages/assert/README.md`
 - `git commit -m "Document \`@pvorona/assert\` helper semantics"`
 
@@ -181,6 +197,7 @@ Run:
 ### Task 4: Fix the array and public type documentation
 
 **Files:**
+
 - Modify: `packages/assert/README.md`
 - Test: `packages/assert/src/lib/isArray.spec.ts`
 - Test: `packages/assert/src/lib/ensureArray.spec.ts`
@@ -193,6 +210,7 @@ Run:
 Rename `Non-empty arrays preserve readonlyness` to a broader section that actually matches the public array and type surface.
 
 Use wording that covers:
+
 - `isArray(...)`
 - `ensureArray(...)`
 - `isEmptyArray(...)`
@@ -204,6 +222,7 @@ Use wording that covers:
 **Step 2: Document the readonly contract differences**
 
 Add a short note that:
+
 - `isArray(...)` and `ensureArray(...)` are typed around mutable arrays
 - `isEmptyArray(...)`, `isNonEmptyArray(...)`, and `ensureNonEmptyArray(...)` also accept readonly arrays
 - narrowing or ensuring a readonly non-empty array preserves readonlyness
@@ -217,6 +236,7 @@ Add one minimal readonly example that shows `ensureNonEmptyArray(...)` returning
 **Step 4: Document the `map(...)` behavior on public types**
 
 Add one short example showing that:
+
 - `NonEmptyArray` and `ReadonlyNonEmptyArray` preserve non-empty-ness through `map(...)`
 - mapping a `ReadonlyNonEmptyArray` returns a mutable `NonEmptyArray`
 
@@ -225,6 +245,7 @@ Spell out that this is why the public types exist, instead of treating them as t
 **Step 5: Commit the array/type rewrite**
 
 Run:
+
 - `git add packages/assert/README.md`
 - `git commit -m "Clarify \`@pvorona/assert\` array helper docs"`
 
@@ -233,12 +254,14 @@ Run:
 ### Task 5: Final verification and polish
 
 **Files:**
+
 - Modify: `packages/assert/README.md`
 - Test: `packages/assert/src/index.ts`
 
 **Step 1: Do a final export-to-README sweep**
 
 Compare the README against `packages/assert/src/index.ts` and make sure every public export is either:
+
 - documented in the API map
 - covered by an example
 - intentionally grouped with a clear one-line description
@@ -248,6 +271,7 @@ Remove any wording that still points readers at removed helpers before they unde
 **Step 2: Read the README as a first-time user**
 
 Read the file top-to-bottom and remove:
+
 - repeated caveats
 - jargon that the API table already explains
 - examples that are longer than the point they teach
@@ -256,10 +280,12 @@ Read the file top-to-bottom and remove:
 **Step 3: Run the available verification**
 
 Run:
+
 - `git diff --check`
 - `npm exec nx run @pvorona/assert:test`
 
 Expected:
+
 - `git diff --check` prints no whitespace or merge-marker issues
 - `npm exec nx run @pvorona/assert:test` passes if the workspace dependencies are installed
 
@@ -270,5 +296,6 @@ If `npm exec nx run @pvorona/assert:test` fails because dependencies are missing
 **Step 5: Commit the final README rewrite**
 
 Run:
+
 - `git add packages/assert/README.md docs/plans/2026-03-06-assert-readme.md`
 - `git commit -m "Rewrite \`@pvorona/assert\` README"`

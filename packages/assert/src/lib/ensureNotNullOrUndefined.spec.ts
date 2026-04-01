@@ -3,7 +3,7 @@ import { ensureNotNullOrUndefined } from './ensureNotNullOrUndefined.js';
 test('ensureNotNullOrUndefined', () => {
   expect(
     // @ts-expect-error "Must not be (null | undefined) only type"
-    () => ensureNotNullOrUndefined(null as null | undefined),
+    () => ensureNotNullOrUndefined(null as null | undefined)
   ).toThrow();
 
   // @ts-expect-error "Must include (null | undefined)"
@@ -43,8 +43,9 @@ test('ensureNotNullOrUndefined', () => {
   const a4 = ensureNotNullOrUndefined('' as string | null | undefined);
   expectTypeOf(a4).toEqualTypeOf<string>();
 
-  const a5 = ensureNotNullOrUndefined(
-    [1, 2] as [number, number] | null | undefined,
-  );
+  const a5 = ensureNotNullOrUndefined([1, 2] as
+    | [number, number]
+    | null
+    | undefined);
   expectTypeOf(a5).toEqualTypeOf<[number, number]>();
 });

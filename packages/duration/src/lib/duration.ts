@@ -52,7 +52,7 @@ export type DurationParts = RequireAtLeastOne<{
 const millisecondsTag = Symbol('milliseconds');
 const TIME_UNITS = new Set<TimeUnit>(Object.values(TimeUnit));
 const DURATION_PART_KEYS = new Set<DurationPartKey>(
-  Object.keys(DURATION_PART_TIME_UNITS) as DurationPartKey[],
+  Object.keys(DURATION_PART_TIME_UNITS) as DurationPartKey[]
 );
 
 /** Immutable duration value with conversions, comparisons, and state flags. */
@@ -138,7 +138,7 @@ function durationPartsToMilliseconds(parts: DurationParts): number {
 
   if (entries.length === 0) {
     throw new TypeError(
-      'Expected `parts` to include at least one duration part.',
+      'Expected `parts` to include at least one duration part.'
     );
   }
 
@@ -158,7 +158,7 @@ function durationPartsToMilliseconds(parts: DurationParts): number {
     }
     if (nonZeroSign !== sign) {
       throw new TypeError(
-        'Expected non-zero duration parts to share the same sign.',
+        'Expected non-zero duration parts to share the same sign.'
       );
     }
 
@@ -170,11 +170,11 @@ function durationPartsToMilliseconds(parts: DurationParts): number {
 
 function normalizeMilliseconds(
   milliseconds: number,
-  options?: { readonly allowInfinite?: boolean },
+  options?: { readonly allowInfinite?: boolean }
 ): number {
   if (Number.isNaN(milliseconds) || milliseconds === Number.NEGATIVE_INFINITY) {
     throw new TypeError(
-      'Expected duration milliseconds to be finite or `Infinity`.',
+      'Expected duration milliseconds to be finite or `Infinity`.'
     );
   }
 
@@ -246,7 +246,7 @@ const BASE_DURATION: Duration = {
 
 function createDuration(
   milliseconds: number,
-  options?: { readonly allowInfinite?: boolean },
+  options?: { readonly allowInfinite?: boolean }
 ): Duration {
   const normalizedMilliseconds = normalizeMilliseconds(milliseconds, options);
   const result: MutableDuration = Object.create(BASE_DURATION);
@@ -265,7 +265,7 @@ export function duration(parts: DurationParts): Duration;
 
 export function duration(
   valueOrParts: number | DurationParts,
-  unit?: TimeUnit,
+  unit?: TimeUnit
 ): Duration {
   if (isObject(valueOrParts)) {
     return createDuration(durationPartsToMilliseconds(valueOrParts));
@@ -377,7 +377,7 @@ export function multiply(a: Duration, b: number): Duration {
   }
 
   throw new TypeError(
-    'Cannot multiply `infinite` by zero or a negative number.',
+    'Cannot multiply `infinite` by zero or a negative number.'
   );
 }
 

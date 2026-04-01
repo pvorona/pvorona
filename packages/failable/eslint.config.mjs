@@ -48,9 +48,7 @@ export default [
             '@pvorona/not-implemented',
             '@pvorona/types',
           ],
-          depConstraints: [
-            { sourceTag: '*', onlyDependOnLibsWithTags: ['*'] },
-          ],
+          depConstraints: [{ sourceTag: '*', onlyDependOnLibsWithTags: ['*'] }],
         },
       ],
     },

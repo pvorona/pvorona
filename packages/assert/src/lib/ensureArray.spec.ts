@@ -9,35 +9,35 @@ test('ensureArray', () => {
 
   expect(() =>
     // @ts-expect-error "Must include array or array literal"
-    ensureArray(1),
+    ensureArray(1)
   ).toThrow();
   expect(() =>
     // @ts-expect-error "Must include array or array literal"
-    ensureArray(true),
+    ensureArray(true)
   ).toThrow();
   expect(() =>
     // @ts-expect-error "Must include array or array literal"
-    ensureArray(''),
+    ensureArray('')
   ).toThrow();
   expect(() =>
     // @ts-expect-error "Must include array or array literal"
-    ensureArray(Symbol()),
+    ensureArray(Symbol())
   ).toThrow();
   expect(() =>
     // @ts-expect-error "Must include array or array literal"
-    ensureArray(0n),
+    ensureArray(0n)
   ).toThrow();
   expect(() =>
     // @ts-expect-error "Must include array or array literal"
-    ensureArray(undefined),
+    ensureArray(undefined)
   ).toThrow();
   expect(() =>
     // @ts-expect-error "Must include array or array literal"
-    ensureArray(null),
+    ensureArray(null)
   ).toThrow();
   expect(() =>
     // @ts-expect-error "Must include array or array literal"
-    ensureArray({ a: 1 }),
+    ensureArray({ a: 1 })
   ).toThrow();
 
   const a1 = ensureArray([1] as number[] | null);

@@ -16,15 +16,15 @@ type NullOrUndefinedInput<T> = [unknown] extends [T]
 
 export function isNullOrUndefined<
   T extends V,
-  V = NullOrUndefinedConstraint<T>,
+  V = NullOrUndefinedConstraint<T>
 >(
-  value: T,
+  value: T
 ): value is  // @ts-expect-error TS can't express this predicate precisely for all `T`
   | Extract<T, null | undefined>
   | ([unknown] extends [T] ? null | undefined : never);
 
 export function isNullOrUndefined<T>(
-  value: T & NullOrUndefinedInput<T>,
+  value: T & NullOrUndefinedInput<T>
 ): value is  // @ts-expect-error TS can't express this predicate precisely for all `T`
   | Extract<T, null | undefined>
   | ([unknown] extends [T] ? null | undefined : never) {

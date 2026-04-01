@@ -6,22 +6,18 @@ import {
 
 export function ensureNotNullOrUndefined<
   T extends V,
-  V = NullOrUndefinedConstraint<T>,
+  V = NullOrUndefinedConstraint<T>
 >(value: T, message?: AssertionFailure): Exclude<T, null | undefined>;
 
 export function ensureNotNullOrUndefined<
   T extends V,
-  V = NullOrUndefinedConstraint<T>,
+  V = NullOrUndefinedConstraint<T>
 >(
   value: T,
   message: AssertionFailure = () =>
-    `Expected ${String(value)} not to be null or undefined`,
+    `Expected ${String(value)} not to be null or undefined`
 ) {
-  assert(
-    !isNullOrUndefined<T, V>(value),
-    message,
-    ensureNotNullOrUndefined,
-  );
+  assert(!isNullOrUndefined<T, V>(value), message, ensureNotNullOrUndefined);
 
   return value;
 }

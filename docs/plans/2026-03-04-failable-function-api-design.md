@@ -52,4 +52,3 @@ This is a **breaking** export-surface change:
 - `Failable.from(v)` → `createFailable(v)`
 - `Failable.isSuccess(v)` → `isSuccess(v)` (same for `isFailure`, `isFailable`, `isFailableLike`)
 - `Failable.toFailableLike(r)` → `toFailableLike(r)`
-

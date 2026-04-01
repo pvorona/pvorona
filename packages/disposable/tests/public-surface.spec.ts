@@ -1,7 +1,4 @@
-import {
-  createDisposable,
-  type DisposeResult,
-} from '../dist/index.js';
+import { createDisposable, type DisposeResult } from '../dist/index.js';
 
 describe('public surface', () => {
   it('supports sync cleanup and unsubscribe semantics', () => {

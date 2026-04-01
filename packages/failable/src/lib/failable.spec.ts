@@ -183,15 +183,13 @@ function expectThrowBoundaryToNormalizeFailure(
 
     const actual = thrown as Error & { cause?: unknown };
     expect(actual.message).toBe(
-      `Expected value to be Success. Received Failure(${
-        (() => {
-          try {
-            return String(rawError);
-          } catch {
-            return 'Unstringifiable error value';
-          }
-        })()
-      }).`
+      `Expected value to be Success. Received Failure(${(() => {
+        try {
+          return String(rawError);
+        } catch {
+          return 'Unstringifiable error value';
+        }
+      })()}).`
     );
     expect(actual.cause).toBe(rawError);
     expect(thrown).not.toBe(rawError);
@@ -925,9 +923,7 @@ describe('getOrThrow()', () => {
       const rawError = { code: faker.string.uuid() } as const;
 
       expect(() =>
-        failure(rawError).getOrThrow(
-          (error) => `normalized: ${error.code}`
-        )
+        failure(rawError).getOrThrow((error) => `normalized: ${error.code}`)
       ).toThrow('normalized:');
     });
 
@@ -1157,7 +1153,9 @@ describe('throwIfFailure()', () => {
       return normalized;
     });
 
-    expect(() => throwIfFailure(failure(rawError), toError)).toThrow(normalized);
+    expect(() => throwIfFailure(failure(rawError), toError)).toThrow(
+      normalized
+    );
     expect(toError).toHaveBeenCalledWith(rawError);
   });
 
@@ -1189,11 +1187,13 @@ describe('throwIfFailure()', () => {
     const rawError = new Error(faker.string.uuid());
     const normalized = new Error('normalized', { cause: rawError });
     const toError = vi.fn((error: Error) => {
-        expect(error).toBe(rawError);
+      expect(error).toBe(rawError);
       return normalized;
     });
 
-    expect(() => throwIfFailure(failure(rawError), toError)).toThrow(normalized);
+    expect(() => throwIfFailure(failure(rawError), toError)).toThrow(
+      normalized
+    );
     expect(toError).toHaveBeenCalledWith(rawError);
   });
 
@@ -3695,9 +3695,12 @@ describe('failable()', () => {
 
       it('supports object shorthand for thrown values', () => {
         const error = { code: 'bad_request' } as const;
-        const result = failable(() => {
-          throw error;
-        }, { code: 'invalid_request' });
+        const result = failable(
+          () => {
+            throw error;
+          },
+          { code: 'invalid_request' }
+        );
 
         const typedResult: Failure<{ readonly code: 'invalid_request' }> =
           result;
@@ -3708,12 +3711,15 @@ describe('failable()', () => {
 
       it('captures unstringifiable thrown values with mapper-based toReason', () => {
         const error = createUnstringifiableErrorValue();
-        const result = failable(() => {
-          throw error;
-        }, (reason: unknown) => ({
-          code: 'invalid_request',
-          cause: reason,
-        }));
+        const result = failable(
+          () => {
+            throw error;
+          },
+          (reason: unknown) => ({
+            code: 'invalid_request',
+            cause: reason,
+          })
+        );
 
         const typedResult: Failure<{
           readonly code: 'invalid_request';
@@ -3902,10 +3908,9 @@ describe('failable()', () => {
         const error = createNullPrototypeObject({
           code: 'bad_request' as const,
         });
-        const result = failable(
-          Promise.reject(error),
-          { code: 'invalid_request' }
-        );
+        const result = failable(Promise.reject(error), {
+          code: 'invalid_request',
+        });
 
         const typedResult: Promise<
           Failure<{ readonly code: 'invalid_request' }>
@@ -3919,10 +3924,10 @@ describe('failable()', () => {
 
       it('captures unstringifiable rejected values with mapper-based toReason', async () => {
         const error = createUnstringifiableErrorValue();
-        const result = failable(
-          Promise.reject(error),
-          (reason: unknown) => ({ code: 'invalid_request', cause: reason })
-        );
+        const result = failable(Promise.reject(error), (reason: unknown) => ({
+          code: 'invalid_request',
+          cause: reason,
+        }));
 
         const typedResult: Promise<
           Failure<{
@@ -3971,10 +3976,10 @@ describe('failable()', () => {
           code: faker.string.uuid(),
           retryable: faker.datatype.boolean(),
         };
-        const result = failable(
-          Promise.reject(error),
-          (rawError: unknown) => ({ code: 'normalized', cause: rawError })
-        );
+        const result = failable(Promise.reject(error), (rawError: unknown) => ({
+          code: 'normalized',
+          cause: rawError,
+        }));
 
         const typedResult: Promise<
           Failure<{
@@ -3997,10 +4002,14 @@ describe('failable()', () => {
           code: faker.string.uuid(),
           retryable: faker.datatype.boolean(),
         };
-        const toReason = vi.fn(
-          (rawError: unknown) => ({ code: 'normalized', cause: rawError })
+        const toReason = vi.fn((rawError: unknown) => ({
+          code: 'normalized',
+          cause: rawError,
+        }));
+        const result = failable(
+          createRejectingThenable<number>(error),
+          toReason
         );
-        const result = failable(createRejectingThenable<number>(error), toReason);
 
         const resolved = await result;
         ensureFailure(resolved);

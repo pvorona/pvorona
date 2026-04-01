@@ -816,7 +816,9 @@ describe('Disposable', () => {
         }
       );
       expectTypeOf(onDisposedUnsubscribe).toEqualTypeOf<() => void>();
-      expectTypeOf<Parameters<OnDisposedListener>[0]>().toEqualTypeOf<DisposeResult>();
+      expectTypeOf<
+        Parameters<OnDisposedListener>[0]
+      >().toEqualTypeOf<DisposeResult>();
 
       const onDisposeListener: OnDisposeListener = async () => undefined;
       expectTypeOf(onDisposeListener).toEqualTypeOf<OnDisposeListener>();

@@ -1,7 +1,4 @@
-import {
-  NotImplementedError,
-  notImplemented,
-} from '../dist/index.js';
+import { NotImplementedError, notImplemented } from '../dist/index.js';
 
 describe('public surface', () => {
   it('throws the default error shape', () => {

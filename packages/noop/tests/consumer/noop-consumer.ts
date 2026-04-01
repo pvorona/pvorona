@@ -1,9 +1,6 @@
 import { noop } from '@pvorona/noop';
 
-export function withFinally(
-  run: () => void,
-  onFinally: () => void = noop
-) {
+export function withFinally(run: () => void, onFinally: () => void = noop) {
   try {
     run();
   } finally {

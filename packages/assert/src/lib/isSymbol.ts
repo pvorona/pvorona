@@ -11,14 +11,10 @@ export type SymbolConstraint<T> = DisplayDiagnostics<
 type SymbolInput<T> = [unknown] extends [T] ? T : SymbolConstraint<T>;
 
 export function isSymbol<T extends V, V = SymbolConstraint<T>>(
-  value: T,
-): value is  // @ts-expect-error TS can't express this predicate precisely for all `T`
-  | Extract<T, symbol>
-  | ([unknown] extends [T] ? symbol : never);
+  value: T
+): value is Extract<T, symbol> | ([unknown] extends [T] ? symbol : never); // @ts-expect-error TS can't express this predicate precisely for all `T`
 
-export function isSymbol<T>(
-  value: T & SymbolInput<T>,
-): value is  // @ts-expect-error TS can't express this predicate precisely for all `T`
+export function isSymbol<T>(value: T & SymbolInput<T>): value is  // @ts-expect-error TS can't express this predicate precisely for all `T`
   | Extract<T, symbol>
   | ([unknown] extends [T] ? symbol : never) {
   return typeof value === 'symbol';

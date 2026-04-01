@@ -3,7 +3,7 @@ import { ensureDefined } from './ensureDefined.js';
 test('ensureDefined', () => {
   expect(() =>
     // @ts-expect-error "Must not be undefined only type"
-    ensureDefined(undefined),
+    ensureDefined(undefined)
   ).toThrow();
 
   // @ts-expect-error "Must include undefined"

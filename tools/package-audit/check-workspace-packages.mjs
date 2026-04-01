@@ -23,7 +23,9 @@ function isInternalPackageName(name) {
 }
 
 function isRangeSpec(spec) {
-  return typeof spec === 'string' && (spec.startsWith('^') || spec.startsWith('~'));
+  return (
+    typeof spec === 'string' && (spec.startsWith('^') || spec.startsWith('~'))
+  );
 }
 
 async function readJson(filePath) {
@@ -57,7 +59,9 @@ async function main() {
     if (!isInternalPackageName(pkg.name)) {
       push(
         violations,
-        `${dir}: package.json name is not an internal @pvorona/* package: ${String(pkg.name)}`,
+        `${dir}: package.json name is not an internal @pvorona/* package: ${String(
+          pkg.name
+        )}`
       );
     }
 
@@ -70,7 +74,7 @@ async function main() {
     if (!publishConfig || publishConfig.access !== 'public') {
       push(
         violations,
-        `${dir}: missing publishConfig.access="public" (scoped packages default to private on npm)`,
+        `${dir}: missing publishConfig.access="public" (scoped packages default to private on npm)`
       );
     }
 
@@ -84,12 +88,19 @@ async function main() {
       if (isRangeSpec(depSpec)) continue;
       push(
         violations,
-        `${dir}: dependency ${depName} uses a non-range spec (${JSON.stringify(depSpec)}); prefer ~ or ^`,
+        `${dir}: dependency ${depName} uses a non-range spec (${JSON.stringify(
+          depSpec
+        )}); prefer ~ or ^`
       );
     }
 
     // Vite library builds should externalize dependencies to avoid bundling them
-    const viteConfigCandidates = ['vite.config.mts', 'vite.config.ts', 'vite.config.mjs', 'vite.config.js'];
+    const viteConfigCandidates = [
+      'vite.config.mts',
+      'vite.config.ts',
+      'vite.config.mjs',
+      'vite.config.js',
+    ];
     let viteConfigText = null;
     for (const candidate of viteConfigCandidates) {
       const p = path.join(packagesRoot, dir, candidate);
@@ -109,7 +120,10 @@ async function main() {
         const depNames = Object.keys(allRuntimeDeps);
         for (const depName of depNames) {
           if (!viteConfigText.includes(depName)) {
-            push(violations, `${dir}: vite rollup externals missing dependency ${depName} (risk: bundling)`);
+            push(
+              violations,
+              `${dir}: vite rollup externals missing dependency ${depName} (risk: bundling)`
+            );
           }
         }
       }

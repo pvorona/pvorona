@@ -8,8 +8,9 @@ type IsUnknown<T> = unknown extends T
     : false
   : false;
 
-type NarrowFunction<T> =
-  IsUnknown<T> extends true ? T & AnyFunction : Extract<T, AnyFunction>;
+type NarrowFunction<T> = IsUnknown<T> extends true
+  ? T & AnyFunction
+  : Extract<T, AnyFunction>;
 
 export function isFunction<T>(value: T): value is NarrowFunction<T> {
   return typeof value === 'function';

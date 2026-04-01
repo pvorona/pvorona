@@ -9,10 +9,7 @@ describe('public surface', () => {
   it('works as a default optional callback', () => {
     const calls: string[] = [];
 
-    function withFinally(
-      run: () => void,
-      onFinally: () => void = noop
-    ) {
+    function withFinally(run: () => void, onFinally: () => void = noop) {
       try {
         run();
       } finally {

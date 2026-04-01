@@ -5,7 +5,7 @@ test('isPromiseLike', () => {
   expect(
     isPromiseLike({
       then: () => undefined,
-    }),
+    })
   ).toBe(true);
 
   const callableThenable = Object.assign(() => 'value', {

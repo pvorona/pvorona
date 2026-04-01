@@ -25,7 +25,7 @@ function collectExportTargets(exportsValue, ignoredConditionNames) {
 
   if (Array.isArray(exportsValue)) {
     return exportsValue.flatMap((value) =>
-      collectExportTargets(value, ignoredConditionNames),
+      collectExportTargets(value, ignoredConditionNames)
     );
   }
 
@@ -55,7 +55,7 @@ function createLegacySyntaxError(exportedPath, error) {
     [
       `Expected \`${exportedPath}\` to stay parseable by legacy bundlers.`,
       `Acorn failed at ${LEGACY_BUNDLER_LABEL}: ${reason}`,
-    ].join('\n'),
+    ].join('\n')
   );
 }
 
@@ -79,17 +79,27 @@ async function assertLegacySyntaxCompatibility(packageRoot, exportedPaths) {
 }
 
 async function collectTarballPaths(packageRoot) {
-  const { stdout } = await execFileAsync('npm', ['pack', '--dry-run', '--json'], {
-    cwd: packageRoot,
-    env: {
-      ...process.env,
-      npm_config_cache: join(tmpdir(), 'pvorona-npm-cache', String(process.pid)),
-    },
-  });
+  const { stdout } = await execFileAsync(
+    'npm',
+    ['pack', '--dry-run', '--json'],
+    {
+      cwd: packageRoot,
+      env: {
+        ...process.env,
+        npm_config_cache: join(
+          tmpdir(),
+          'pvorona-npm-cache',
+          String(process.pid)
+        ),
+      },
+    }
+  );
 
   const [packResult] = JSON.parse(stdout);
   if (!packResult || !Array.isArray(packResult.files)) {
-    throw new TypeError('Expected `npm pack --dry-run --json` to return file metadata.');
+    throw new TypeError(
+      'Expected `npm pack --dry-run --json` to return file metadata.'
+    );
   }
 
   return new Set(packResult.files.map((file) => file.path));
@@ -102,15 +112,16 @@ function createExpectedExportsError(expectedExports, actualExports) {
       JSON.stringify(expectedExports, null, 2),
       'Received:',
       JSON.stringify(actualExports, null, 2),
-    ].join('\n'),
+    ].join('\n')
   );
 }
 
 function createMissingTarballPathsError(missingPaths) {
   return new Error(
-    ['Missing exported paths in the tarball:', ...missingPaths.map((path) => `- ${path}`)].join(
-      '\n',
-    ),
+    [
+      'Missing exported paths in the tarball:',
+      ...missingPaths.map((path) => `- ${path}`),
+    ].join('\n')
   );
 }
 
@@ -138,13 +149,15 @@ export async function runPackageSurfaceCheck({
       ...new Set(
         collectExportTargets(
           expectedExports ?? packageJson.exports,
-          new Set(ignoredConditionNames),
-        ),
+          new Set(ignoredConditionNames)
+        )
       ),
     ].sort();
 
     const tarballPaths = await collectTarballPaths(packageRoot);
-    const missingPaths = exportedPaths.filter((path) => !tarballPaths.has(path));
+    const missingPaths = exportedPaths.filter(
+      (path) => !tarballPaths.has(path)
+    );
     if (missingPaths.length > 0) {
       throw createMissingTarballPathsError(missingPaths);
     }

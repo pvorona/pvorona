@@ -356,9 +356,9 @@ const readUnionValueWithCustomMessage = () => {
 
   return result.getOrThrow((reason) => `normalized: ${reason}`);
 };
-expectType<
-  Equal<ReturnType<typeof readUnionValueWithCustomMessage>, number>
->(true);
+expectType<Equal<ReturnType<typeof readUnionValueWithCustomMessage>, number>>(
+  true
+);
 
 const readUnionValueWithDirectMessage = () => {
   const result: Failable<number, string> =
@@ -418,13 +418,16 @@ type ConsumerPromiseFailableOf<T> = PromiseFailable<T>;
 type ConsumerNumberOrPromiseNumber = number | Promise<number>;
 declare const unionSyncOrPromise: () => ConsumerNumberOrPromiseNumber;
 const wrappedAsyncLiteral = failable(async () => 123);
-expectType<Equal<typeof wrappedAsyncLiteral, Failable<Promise<number>, unknown>>>(
-  true
-);
+expectType<
+  Equal<typeof wrappedAsyncLiteral, Failable<Promise<number>, unknown>>
+>(true);
 
 const wrappedPromiseReturningCallback = failable(() => Promise.resolve(123));
 expectType<
-  Equal<typeof wrappedPromiseReturningCallback, Failable<Promise<number>, unknown>>
+  Equal<
+    typeof wrappedPromiseReturningCallback,
+    Failable<Promise<number>, unknown>
+  >
 >(true);
 
 const wrappedUnionSyncOrPromise = failable(unionSyncOrPromise);
@@ -453,9 +456,12 @@ const fixedReasonFailure = failable(() => {
 }, 'invalid_config');
 expectType<Equal<typeof fixedReasonFailure, Failure<'invalid_config'>>>(true);
 
-const normalizedCustomFailure = failable(() => {
-  throw { code: 'boom' };
-}, (reason) => ({ code: 'invalid_config', cause: reason }));
+const normalizedCustomFailure = failable(
+  () => {
+    throw { code: 'boom' };
+  },
+  (reason) => ({ code: 'invalid_config', cause: reason })
+);
 expectType<
   Equal<
     typeof normalizedCustomFailure,
@@ -466,10 +472,10 @@ expectType<
   >
 >(true);
 
-const normalizedRejectedValue = failable(
-  Promise.reject('boom'),
-  (reason) => ({ code: 'request_failed', cause: reason })
-);
+const normalizedRejectedValue = failable(Promise.reject('boom'), (reason) => ({
+  code: 'request_failed',
+  cause: reason,
+}));
 expectType<
   Equal<
     typeof normalizedRejectedValue,

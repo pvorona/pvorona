@@ -33,7 +33,9 @@ function callDurationWithParts(parts: DurationParts): Duration {
 }
 
 function callDurationWithUnknownParts(parts: Record<string, number>): Duration {
-  return (duration as unknown as (parts: Record<string, number>) => Duration)(parts);
+  return (duration as unknown as (parts: Record<string, number>) => Duration)(
+    parts
+  );
 }
 
 describe('duration factories', () => {
@@ -222,46 +224,44 @@ describe('runtime contract', () => {
 
   it('rejects invalid duration parts inputs', () => {
     expect(() => callDurationWithUnknownParts({})).toThrow(TypeError);
-    expect(() => callDurationWithUnknownParts({ minute: 1 })).toThrow(TypeError);
+    expect(() => callDurationWithUnknownParts({ minute: 1 })).toThrow(
+      TypeError
+    );
     expect(() => callDurationWithUnknownParts({ ms: 5 })).toThrow(TypeError);
-    expect(() => callDurationWithUnknownParts({ hours: 1, minutes: -30 })).toThrow(
-      TypeError,
-    );
+    expect(() =>
+      callDurationWithUnknownParts({ hours: 1, minutes: -30 })
+    ).toThrow(TypeError);
     expect(() => callDurationWithUnknownParts({ hours: Number.NaN })).toThrow(
-      TypeError,
+      TypeError
     );
-    expect(() => callDurationWithUnknownParts({ hours: Infinity })).toThrow(TypeError);
+    expect(() => callDurationWithUnknownParts({ hours: Infinity })).toThrow(
+      TypeError
+    );
   });
 
   it.each([
     ['addTo', addTo],
     ['subtractFrom', subtractFrom],
-  ] as const)(
-    '%s rejects invalid dates',
-    (_, helper) => {
-      expect(() => helper(new Date('invalid'), seconds(1))).toThrow(TypeError);
-    },
-  );
+  ] as const)('%s rejects invalid dates', (_, helper) => {
+    expect(() => helper(new Date('invalid'), seconds(1))).toThrow(TypeError);
+  });
 
   it.each([
     ['addTo', addTo],
     ['subtractFrom', subtractFrom],
-  ] as const)(
-    '%s rejects infinite durations',
-    (_, helper) => {
-      expect(() => helper(new Date(0), infinite)).toThrow(TypeError);
-    },
-  );
+  ] as const)('%s rejects infinite durations', (_, helper) => {
+    expect(() => helper(new Date(0), infinite)).toThrow(TypeError);
+  });
 
   it('addTo rejects out-of-range result timestamps', () => {
-    expect(() => addTo(new Date(8_640_000_000_000_000), milliseconds(1))).toThrow(
-      TypeError,
-    );
+    expect(() =>
+      addTo(new Date(8_640_000_000_000_000), milliseconds(1))
+    ).toThrow(TypeError);
   });
 
   it('subtractFrom rejects out-of-range result timestamps', () => {
     expect(() =>
-      subtractFrom(new Date(-8_640_000_000_000_000), milliseconds(1)),
+      subtractFrom(new Date(-8_640_000_000_000_000), milliseconds(1))
     ).toThrow(TypeError);
   });
 
@@ -330,4 +330,3 @@ describe('unit shortcuts', () => {
     expect(d.toSeconds()).toBe(secondsExpected);
   });
 });
-

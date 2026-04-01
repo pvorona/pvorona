@@ -58,7 +58,10 @@ Example (wrapping):
 ```ts
 import { throwError } from '@pvorona/throw-error';
 
-export function invariant(condition: unknown, message: string): asserts condition {
+export function invariant(
+  condition: unknown,
+  message: string
+): asserts condition {
   if (condition) return;
   throwError(new Error(message), invariant);
 }

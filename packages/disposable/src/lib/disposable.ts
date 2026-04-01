@@ -142,7 +142,9 @@ export function createDisposable(): Disposable {
     }
 
     completionPromise = Promise.allSettled(
-      pendingThenables.map((pendingThenable) => Promise.resolve(pendingThenable))
+      pendingThenables.map((pendingThenable) =>
+        Promise.resolve(pendingThenable)
+      )
     ).then((settledThenables) => {
       const asyncErrors = settledThenables.flatMap((settledThenable) =>
         settledThenable.status === 'rejected' ? [settledThenable.reason] : []

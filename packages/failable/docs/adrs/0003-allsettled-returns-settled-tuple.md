@@ -42,7 +42,7 @@ const [left, right] = settled.data;
 Inside `run(...)` this also allowed:
 
 ```ts
-const [left, right] = yield* await allSettled(p1, p2);
+const [left, right] = yield * (await allSettled(p1, p2));
 ```
 
 Benefits:

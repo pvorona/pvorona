@@ -3,7 +3,7 @@ import { ensureNotNull } from './ensureNotNull.js';
 test('ensureNotNull', () => {
   expect(() =>
     // @ts-expect-error "Must not be null only type"
-    ensureNotNull(null),
+    ensureNotNull(null)
   ).toThrow();
 
   // @ts-expect-error "Must include null"

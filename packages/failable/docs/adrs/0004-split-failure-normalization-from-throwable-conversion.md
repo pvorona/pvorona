@@ -83,10 +83,10 @@ const responseResult = await failable(fetch(url));
 const pendingResponseResult = failable(() => fetch(url));
 // Failable<Promise<Response>, unknown>
 
-const userResult = await failable(
-  fetchUser(),
-  (reason) => ({ code: 'request_failed', cause: reason })
-);
+const userResult = await failable(fetchUser(), (reason) => ({
+  code: 'request_failed',
+  cause: reason,
+}));
 // Failable<User, { readonly code: 'request_failed'; readonly cause: unknown }>
 
 const statusResult = failable(() => readStatus(), 'invalid_status');
@@ -184,15 +184,15 @@ Use:
 Use bare functions for the second argument shape:
 
 ```ts
-failable(promise, toReason)
-result.getOrThrow(toError)
+failable(promise, toReason);
+result.getOrThrow(toError);
 ```
 
 Do not use named options objects such as:
 
 ```ts
-failable(promise, { toReason })
-result.getOrThrow({ toError })
+failable(promise, { toReason });
+result.getOrThrow({ toError });
 ```
 
 Rationale:
@@ -255,10 +255,16 @@ await failable(Promise.resolve(existingWire));
 failable(existingFailure, (reason) => ({ code: 'wrapped', cause: reason }));
 // invalid
 
-failable(() => existingFailure, (reason) => ({ code: 'wrapped', cause: reason }));
+failable(
+  () => existingFailure,
+  (reason) => ({ code: 'wrapped', cause: reason })
+);
 // invalid
 
-failable(Promise.resolve(existingWire), (reason) => ({ code: 'wrapped', cause: reason }));
+failable(Promise.resolve(existingWire), (reason) => ({
+  code: 'wrapped',
+  cause: reason,
+}));
 // invalid
 ```
 

@@ -43,7 +43,7 @@ export function createPackageViteConfig({
 }: CreatePackageViteConfigOptions) {
   const packageId = packageName.replace(/^@pvorona\//, '');
   const globals = Object.fromEntries(
-    externals.map((external) => [external, toGlobalName(external)]),
+    externals.map((external) => [external, toGlobalName(external)])
   );
 
   return defineConfig(() => ({

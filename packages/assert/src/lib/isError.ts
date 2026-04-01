@@ -12,7 +12,7 @@ type isErrorConstraint<T> = DisplayDiagnostics<
 >;
 
 export function isError<T extends V, V = isErrorConstraint<T>>(
-  value: T,
+  value: T
 ): value is  // @ts-expect-error TS can't express this predicate precisely for all `T`
   | Extract<T, globalThis.Error>
   | ([unknown] extends [T] ? globalThis.Error : never) {

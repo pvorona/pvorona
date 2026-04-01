@@ -1,5 +1,11 @@
 import { faker } from '@faker-js/faker';
-import { failable, failure, isFailableLike, success, toFailableLike } from './failable.js';
+import {
+  failable,
+  failure,
+  isFailableLike,
+  success,
+  toFailableLike,
+} from './failable.js';
 
 function structuredCloneViaMessageChannel<T>(value: T): Promise<T> {
   return new Promise((resolve, reject) => {

@@ -5,8 +5,9 @@ import {
   type Reference,
 } from '@pvorona/reference';
 
-const storedUndefined: Reference<string | undefined> =
-  createReference<string | undefined>(undefined);
+const storedUndefined: Reference<string | undefined> = createReference<
+  string | undefined
+>(undefined);
 const emptyToken = createUnsetReference<string>();
 const tokenValue: string = emptyToken.getOrSet(() => 'abc');
 

@@ -52,7 +52,7 @@ export function resolveFailure(failure: AssertionFailure) {
 export function assert(
   condition: boolean,
   failure?: AssertionFailure,
-  functionToSkipStackFrames: /* eslint-disable-line @typescript-eslint/no-unsafe-function-type */ Function = assert,
+  functionToSkipStackFrames: /* eslint-disable-line @typescript-eslint/no-unsafe-function-type */ Function = assert
 ): asserts condition {
   if (condition) {
     return;

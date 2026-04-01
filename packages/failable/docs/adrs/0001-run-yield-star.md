@@ -32,9 +32,9 @@ The short answer is:
 ### 1. Keep the current delegation protocol
 
 ```ts
-const value = yield* success(123);
+const value = yield * success(123);
 
-const data = yield* await failable(fetch(url));
+const data = yield * (await failable(fetch(url)));
 ```
 
 This is the current design. Each hydrated `Failable` exposes iterators used only

@@ -9,7 +9,9 @@ type FunctionValue =
 
 type MessageOrFactory = string | (() => string);
 
-type NonFunctionalValue<T> = Extract<T, FunctionValue> extends never ? T : never;
+type NonFunctionalValue<T> = Extract<T, FunctionValue> extends never
+  ? T
+  : never;
 
 type Getter<T> = () => T;
 
@@ -21,9 +23,9 @@ type ReadonlyReferenceShape<T> = Readonly<{
   getOr: {
     <U>(value: NonFunctionalValue<U>): T | NonFunctionalValue<U>;
     <U>(getter: Getter<NonFunctionalValue<U>>): T | NonFunctionalValue<U>;
-    <U>(
-      valueOrGetter: NonFunctionalValue<U> | Getter<NonFunctionalValue<U>>,
-    ): T | NonFunctionalValue<U>;
+    <U>(valueOrGetter: NonFunctionalValue<U> | Getter<NonFunctionalValue<U>>):
+      | T
+      | NonFunctionalValue<U>;
   };
   getOrThrow: (messageOrFactory?: MessageOrFactory) => T;
 }>;
@@ -34,9 +36,9 @@ type ReferenceShape<T> = Readonly<{
   getOr: {
     <U>(value: NonFunctionalValue<U>): T | NonFunctionalValue<U>;
     <U>(getter: Getter<NonFunctionalValue<U>>): T | NonFunctionalValue<U>;
-    <U>(
-      valueOrGetter: NonFunctionalValue<U> | Getter<NonFunctionalValue<U>>,
-    ): T | NonFunctionalValue<U>;
+    <U>(valueOrGetter: NonFunctionalValue<U> | Getter<NonFunctionalValue<U>>):
+      | T
+      | NonFunctionalValue<U>;
   };
   getOrThrow: (messageOrFactory?: MessageOrFactory) => T;
   getOrSet: {
@@ -69,13 +71,13 @@ export type ReadonlyReference<T> = Readonly<{
     <U>(
       valueOrGetter:
         | (Extract<U, FunctionValue> extends never ? U : never)
-        | (() => Extract<U, FunctionValue> extends never ? U : never),
+        | (() => Extract<U, FunctionValue> extends never ? U : never)
     ):
       | (Extract<T, FunctionValue> extends never ? T : never)
       | (Extract<U, FunctionValue> extends never ? U : never);
   };
   getOrThrow: (
-    messageOrFactory?: string | (() => string),
+    messageOrFactory?: string | (() => string)
   ) => Extract<T, FunctionValue> extends never ? T : never;
 }>;
 
@@ -100,23 +102,28 @@ export type Reference<T> = Readonly<{
     <U>(
       valueOrGetter:
         | (Extract<U, FunctionValue> extends never ? U : never)
-        | (() => Extract<U, FunctionValue> extends never ? U : never),
+        | (() => Extract<U, FunctionValue> extends never ? U : never)
     ):
       | (Extract<T, FunctionValue> extends never ? T : never)
       | (Extract<U, FunctionValue> extends never ? U : never);
   };
   getOrThrow: (
-    messageOrFactory?: string | (() => string),
+    messageOrFactory?: string | (() => string)
   ) => Extract<T, FunctionValue> extends never ? T : never;
   getOrSet: {
-    (value: Extract<T, FunctionValue> extends never ? T : never):
-      Extract<T, FunctionValue> extends never ? T : never;
-    (getter: () => Extract<T, FunctionValue> extends never ? T : never):
-      Extract<T, FunctionValue> extends never ? T : never;
+    (value: Extract<T, FunctionValue> extends never ? T : never): Extract<
+      T,
+      FunctionValue
+    > extends never
+      ? T
+      : never;
+    (
+      getter: () => Extract<T, FunctionValue> extends never ? T : never
+    ): Extract<T, FunctionValue> extends never ? T : never;
     (
       valueOrGetter:
         | (Extract<T, FunctionValue> extends never ? T : never)
-        | (() => Extract<T, FunctionValue> extends never ? T : never),
+        | (() => Extract<T, FunctionValue> extends never ? T : never)
     ): Extract<T, FunctionValue> extends never ? T : never;
   };
   set: (value: Extract<T, FunctionValue> extends never ? T : never) => void;
@@ -129,16 +136,16 @@ function hasStoredValue<T>(current: T | typeof UNSET): current is T {
 }
 
 function assertNonFunctionalValue<T>(
-  value: T,
+  value: T
 ): asserts value is NonFunctionalValue<T> {
   assert(
     !isFunction(value),
-    'Reference values cannot be functions; functions are reserved for lazy getters and initializers',
+    'Reference values cannot be functions; functions are reserved for lazy getters and initializers'
   );
 }
 
 function isClassConstructor(
-  value: unknown,
+  value: unknown
 ): value is abstract new (...args: never[]) => unknown {
   if (!isFunction(value)) return false;
 
@@ -146,20 +153,22 @@ function isClassConstructor(
 }
 
 function resolveReferenceValue<T>(
-  valueOrGetter: ValueOrGetter<T>,
+  valueOrGetter: ValueOrGetter<T>
 ): NonFunctionalValue<T> {
   if (isClassConstructor(valueOrGetter)) {
     assertNonFunctionalValue(valueOrGetter);
   }
 
-  const value = resolveValueOrGetter(valueOrGetter as never) as NonFunctionalValue<T>;
+  const value = resolveValueOrGetter(
+    valueOrGetter as never
+  ) as NonFunctionalValue<T>;
 
   assertNonFunctionalValue(value);
 
   return value;
 }
 function createReferenceInternal<T>(
-  initialValue: T | typeof UNSET,
+  initialValue: T | typeof UNSET
 ): ReferenceShape<T> {
   let current: T | typeof UNSET = initialValue;
 
@@ -168,7 +177,7 @@ function createReferenceInternal<T>(
   }
 
   const getOr: ReadonlyReferenceShape<T>['getOr'] = <U>(
-    valueOrGetter: ValueOrGetter<NonFunctionalValue<U>>,
+    valueOrGetter: ValueOrGetter<NonFunctionalValue<U>>
   ): T | NonFunctionalValue<U> => {
     if (hasStoredValue(current)) return current;
 
@@ -182,7 +191,7 @@ function createReferenceInternal<T>(
   };
 
   const getOrSet: ReferenceShape<T>['getOrSet'] = (
-    valueOrGetter: ValueOrGetter<T>,
+    valueOrGetter: ValueOrGetter<T>
   ): T => {
     if (hasStoredValue(current)) return current;
 
@@ -236,7 +245,7 @@ function createReferenceInternal<T>(
  */
 export function createReference<T>(
   this: Extract<T, FunctionValue> extends never ? void : never,
-  initialValue: T,
+  initialValue: T
 ): Reference<T> {
   assertNonFunctionalValue(initialValue);
 
@@ -251,7 +260,7 @@ export function createReference<T>(
  * function inputs are reserved for lazy getters and lazy initializers.
  */
 export function createUnsetReference<T>(
-  this: Extract<T, FunctionValue> extends never ? void : never,
+  this: Extract<T, FunctionValue> extends never ? void : never
 ): Reference<T> {
   return createReferenceInternal<NonFunctionalValue<T>>(UNSET);
 }

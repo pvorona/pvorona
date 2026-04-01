@@ -2,13 +2,17 @@ import { hasOwnPropertyValue } from './hasOwnPropertyValue.js';
 
 test('hasOwnPropertyValue', () => {
   expect(hasOwnPropertyValue({ status: 'success' }, 'status', 'success')).toBe(
-    true,
+    true
   );
   expect(hasOwnPropertyValue({ status: 'failure' }, 'status', 'success')).toBe(
-    false,
+    false
   );
   expect(
-    hasOwnPropertyValue(Object.create({ status: 'success' }), 'status', 'success'),
+    hasOwnPropertyValue(
+      Object.create({ status: 'success' }),
+      'status',
+      'success'
+    )
   ).toBe(false);
   expect(
     hasOwnPropertyValue(
@@ -18,8 +22,8 @@ test('hasOwnPropertyValue', () => {
         },
       },
       'status',
-      'success',
-    ),
+      'success'
+    )
   ).toBe(false);
   expect(
     hasOwnPropertyValue(
@@ -29,8 +33,8 @@ test('hasOwnPropertyValue', () => {
         },
       },
       'status',
-      undefined,
-    ),
+      undefined
+    )
   ).toBe(false);
 
   const unknownValue = { status: 'success' as const } as unknown;

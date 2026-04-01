@@ -13,6 +13,7 @@
 ### Task 1: Extend `assert(...)` with a unified `failure` parameter
 
 **Files:**
+
 - Modify: `packages/assert/src/lib/assert.spec.ts`
 - Modify: `packages/assert/src/lib/assert.ts`
 - Delete: `packages/assert/src/lib/getMessage.ts`
@@ -103,7 +104,7 @@ export type AssertFailure = undefined | string | Error | (() => string | Error);
 export function assert(
   condition: boolean,
   failure?: AssertFailure,
-  functionToSkipStackFrames: Function = assert,
+  functionToSkipStackFrames: Function = assert
 ): asserts condition {
   if (condition) return;
 
@@ -123,6 +124,7 @@ export function assert(
 Keep the implementation in `assert.ts` unless the file becomes hard to scan. Do not change `AssertionError.ts`.
 
 The JSDoc should explicitly cover:
+
 - the supported `AssertFailure` shapes
 - that the function form is lazy
 - that `assert(...)` may throw either `AssertionError` or the caller-provided `Error`
@@ -137,6 +139,7 @@ Expected: all `@pvorona/assert` tests pass, including the new `Error` and `() =>
 **Step 5: Commit**
 
 Run:
+
 - `git add packages/assert/src/lib/assert.ts packages/assert/src/lib/assert.spec.ts`
 - `git rm packages/assert/src/lib/getMessage.ts`
 - `git commit -m "Allow unified \`AssertFailure\` in \`assert(...)\`"`
@@ -146,6 +149,7 @@ Run:
 ### Task 2: Document the unified `failure` parameter and verify the package
 
 **Files:**
+
 - Modify: `packages/assert/README.md`
 - Test: `packages/assert/src/lib/assert.spec.ts`
 - Test: `packages/assert/src/index.ts`
@@ -179,12 +183,14 @@ assert(user != null, () => new MissingUserError('User is required'));
 **Step 2: Run the package verification**
 
 Run:
+
 - `git diff --check`
 - `npm exec nx run @pvorona/assert:typecheck`
 - `npm exec nx run @pvorona/assert:test`
 - `npm exec nx run @pvorona/assert:lint`
 
 Expected:
+
 - `git diff --check` reports no whitespace or merge-marker issues
 - `@pvorona/assert:typecheck` passes with the new `failure` parameter types
 - `@pvorona/assert:test` passes
@@ -193,6 +199,6 @@ Expected:
 **Step 3: Commit**
 
 Run:
+
 - `git add packages/assert/README.md`
 - `git commit -m "Document \`AssertFailure\` and unified \`assert(...)\` inputs"`
-

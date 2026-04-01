@@ -31,9 +31,7 @@ The typed error lets the caller decide what to do for each failure reason.
 ```ts
 import { failure, success, type Failable } from '@pvorona/failable';
 
-type ReadPortError =
-  | { code: 'missing' }
-  | { code: 'invalid'; raw: string };
+type ReadPortError = { code: 'missing' } | { code: 'invalid'; raw: string };
 
 function readPort(raw: string | undefined): Failable<number, ReadPortError> {
   if (raw === undefined) return failure({ code: 'missing' });
@@ -64,21 +62,21 @@ if (result.isFailure) {
 
 ## Choose The Right API
 
-| Need | Use |
-| --- | --- |
-| Return a successful or failed result from your own code | `success(...)` / `failure(...)` |
-| Read the value or provide a fallback | `getOr(...)` / `getOrElse(...)` |
-| Recover to `Success<T>` | `or(...)` / `orElse(...)` |
-| Map both branches to one output | `match(onSuccess, onFailure)` |
-| Throw an `Error` from a failure | `getOrThrow(toError?)` / `throwIfFailure(result, toError?)` |
-| Capture a throwing or rejecting boundary | `failable(...)` |
-| Compose multiple `Failable` steps | `run(...)` |
-| Combine multiple `Failable` sources | `all(...)`, `allSettled(...)`, `race(...)` |
-| Transform a successful value only | `map(...)` |
-| Transform a failure value only | `mapError(...)` |
-| Chain another `Failable` step | `flatMap(...)` |
-| Cross a structured-clone boundary | `toFailableLike(...)` + `failable(...)` |
-| Validate `unknown` input | `isFailable(...)`, `isSuccess(...)`, `isFailure(...)`, `isFailableLike(...)` |
+| Need                                                    | Use                                                                          |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Return a successful or failed result from your own code | `success(...)` / `failure(...)`                                              |
+| Read the value or provide a fallback                    | `getOr(...)` / `getOrElse(...)`                                              |
+| Recover to `Success<T>`                                 | `or(...)` / `orElse(...)`                                                    |
+| Map both branches to one output                         | `match(onSuccess, onFailure)`                                                |
+| Throw an `Error` from a failure                         | `getOrThrow(toError?)` / `throwIfFailure(result, toError?)`                  |
+| Capture a throwing or rejecting boundary                | `failable(...)`                                                              |
+| Compose multiple `Failable` steps                       | `run(...)`                                                                   |
+| Combine multiple `Failable` sources                     | `all(...)`, `allSettled(...)`, `race(...)`                                   |
+| Transform a successful value only                       | `map(...)`                                                                   |
+| Transform a failure value only                          | `mapError(...)`                                                              |
+| Chain another `Failable` step                           | `flatMap(...)`                                                               |
+| Cross a structured-clone boundary                       | `toFailableLike(...)` + `failable(...)`                                      |
+| Validate `unknown` input                                | `isFailable(...)`, `isSuccess(...)`, `isFailure(...)`, `isFailableLike(...)` |
 
 ## Unwrapping And Recovery
 
@@ -168,9 +166,7 @@ Building on `readPort` from [Basic Usage](#basic-usage):
 ```ts
 import { failure, success, type Failable } from '@pvorona/failable';
 
-type ReadPortError =
-  | { code: 'missing' }
-  | { code: 'invalid'; raw: string };
+type ReadPortError = { code: 'missing' } | { code: 'invalid'; raw: string };
 
 type ApplicationPortError =
   | ReadPortError
@@ -188,7 +184,7 @@ function readPort(raw: string | undefined): Failable<number, ReadPortError> {
 }
 
 function ensureApplicationPort(
-  port: number,
+  port: number
 ): Failable<number, ApplicationPortError> {
   if (port < 3000 || port > 3999) {
     return failure({ code: 'not_application_port', port });
@@ -198,11 +194,11 @@ function ensureApplicationPort(
 }
 
 const appPortResult = readPort(process.env.PORT).flatMap((port) =>
-  ensureApplicationPort(port),
+  ensureApplicationPort(port)
 );
 
 const labelResult = appPortResult.map(
-  (port) => `Application listening on ${port}`,
+  (port) => `Application listening on ${port}`
 );
 
 const invalidRangeCode = readPort('8080')
@@ -247,10 +243,9 @@ Pass a promise directly when you want rejection capture:
 import { failable } from '@pvorona/failable';
 import { readFile } from 'node:fs/promises';
 
-const fileResult = await failable(
-  readFile('config.json', 'utf8'),
-  { code: 'config_read_failed' }
-);
+const fileResult = await failable(readFile('config.json', 'utf8'), {
+  code: 'config_read_failed',
+});
 
 const config = fileResult.getOr('{}');
 ```
@@ -300,7 +295,7 @@ type ConfigError =
 
 function readEnv(
   key: string,
-  env: Record<string, string | undefined>,
+  env: Record<string, string | undefined>
 ): Failable<string, ConfigError> {
   const raw = env[key];
   if (raw === undefined) return failure({ code: 'missing', key });
@@ -318,7 +313,7 @@ function parsePort(raw: string): Failable<number, ConfigError> {
 }
 
 function loadConfig(
-  env: Record<string, string | undefined>,
+  env: Record<string, string | undefined>
 ): Failable<{ host: string; port: number }, ConfigError> {
   const hostResult = readEnv('HOST', env);
   if (hostResult.isFailure) return hostResult;
@@ -339,7 +334,7 @@ With `run(...)`, the same flow stays linear:
 import { run, success, type Failable } from '@pvorona/failable';
 
 function loadConfig(
-  env: Record<string, string | undefined>,
+  env: Record<string, string | undefined>
 ): Failable<{ host: string; port: number }, ConfigError> {
   return run(function* () {
     const host = yield* readEnv('HOST', env);
@@ -408,7 +403,7 @@ async function getUserProfile(userId: string) {
 }
 
 async function loadUserPage(
-  userId: string,
+  userId: string
 ): Promise<Failable<{ user: User; profile: Profile }, ApiError>> {
   return await run(async function* () {
     const [user, profile] = yield* await all(
@@ -449,29 +444,17 @@ you want to combine multiple sources outside `run(...)` or inside async
 builders.
 
 ```ts
-import {
-  all,
-  allSettled,
-  failure,
-  race,
-  success,
-} from '@pvorona/failable';
+import { all, allSettled, failure, race, success } from '@pvorona/failable';
 
 const syncTuple = all(success(1), success('two'));
-const mixedTuple = await all(
-  success(1),
-  Promise.resolve(success('two'))
-);
+const mixedTuple = await all(success(1), Promise.resolve(success('two')));
 
 const settled = await allSettled(
   Promise.resolve(success(1)),
   Promise.resolve(failure('missing-profile'))
 );
 
-const syncWinner = race(
-  success('cached'),
-  success('stale')
-);
+const syncWinner = race(success('cached'), success('stale'));
 
 const mixedWinner = await race(
   success('cached'),
@@ -506,11 +489,7 @@ process. If you need a structured-clone-friendly shape, convert to
 side:
 
 ```ts
-import {
-  failure,
-  failable,
-  toFailableLike,
-} from '@pvorona/failable';
+import { failure, failable, toFailableLike } from '@pvorona/failable';
 
 const result = failure({ code: 'missing' });
 

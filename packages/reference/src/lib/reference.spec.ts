@@ -162,11 +162,11 @@ describe('Reference', () => {
   describe('function guards', () => {
     it('throws when createReference receives a function from a JS or any caller', () => {
       const createReferenceFromUntyped = createReference as (
-        value: unknown,
+        value: unknown
       ) => unknown;
 
       expect(() => createReferenceFromUntyped(() => 'value')).toThrow(
-        /function/i,
+        /function/i
       );
     });
 
@@ -174,11 +174,11 @@ describe('Reference', () => {
       class ExampleClass {}
 
       const createReferenceFromUntyped = createReference as (
-        value: unknown,
+        value: unknown
       ) => unknown;
 
       expect(() => createReferenceFromUntyped(ExampleClass)).toThrow(
-        /function/i,
+        /function/i
       );
     });
 
@@ -202,18 +202,16 @@ describe('Reference', () => {
       const ref = createUnsetReference<string>();
       const getOrFromUntyped = ref.getOr as (valueOrGetter: unknown) => unknown;
 
-      expect(() => getOrFromUntyped(() => (() => 'value'))).toThrow(
-        /function/i,
-      );
+      expect(() => getOrFromUntyped(() => () => 'value')).toThrow(/function/i);
     });
     it('throws when a lazy initializer resolves to a function', () => {
       const ref = createUnsetReference<string>();
       const getOrSetFromUntyped = ref.getOrSet as (
-        valueOrGetter: unknown,
+        valueOrGetter: unknown
       ) => unknown;
 
-      expect(() => getOrSetFromUntyped(() => (() => 'value'))).toThrow(
-        /function/i,
+      expect(() => getOrSetFromUntyped(() => () => 'value')).toThrow(
+        /function/i
       );
     });
 
@@ -222,7 +220,7 @@ describe('Reference', () => {
 
       const ref = createUnsetReference<string>();
       const getOrSetFromUntyped = ref.getOrSet as (
-        valueOrGetter: unknown,
+        valueOrGetter: unknown
       ) => unknown;
 
       expect(() => getOrSetFromUntyped(ExampleClass)).toThrow(/function/i);
@@ -319,10 +317,12 @@ void (() => {
   createUnsetReference<typeof ExampleClass>();
 
   // @ts-expect-error Functional references are rejected at the type level.
-  const invalidReference: Reference<() => void> = createReference(functionValue);
+  const invalidReference: Reference<() => void> =
+    createReference(functionValue);
 
   // @ts-expect-error Constructor-valued references are rejected at the type level.
-  const invalidConstructorReference: Reference<typeof ExampleClass> = createReference(ExampleClass);
+  const invalidConstructorReference: Reference<typeof ExampleClass> =
+    createReference(ExampleClass);
 
   // @ts-expect-error Passing a stored function to set is not supported.
   invalidReference.set(functionValue);

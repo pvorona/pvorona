@@ -1,13 +1,12 @@
 import { isNumber } from './isNumber.js';
 
-type Equal<Left, Right> =
-  (<T>() => T extends Left ? 1 : 2) extends
-  (<T>() => T extends Right ? 1 : 2)
-    ? (<T>() => T extends Right ? 1 : 2) extends
-        (<T>() => T extends Left ? 1 : 2)
-      ? true
-      : false
-    : false;
+type Equal<Left, Right> = (<T>() => T extends Left ? 1 : 2) extends <
+  T
+>() => T extends Right ? 1 : 2
+  ? (<T>() => T extends Right ? 1 : 2) extends <T>() => T extends Left ? 1 : 2
+    ? true
+    : false
+  : false;
 
 function expectType<Condition extends true>(condition: Condition): void {
   void condition;
@@ -64,9 +63,7 @@ test('isNumber', () => {
   }
 
   const explicitGenericNumber = 1 as string | number;
-  if (
-    isNumber<string | number, string | number>(explicitGenericNumber)
-  ) {
+  if (isNumber<string | number, string | number>(explicitGenericNumber)) {
     expectTypeOf(explicitGenericNumber).toEqualTypeOf<number>();
   } else {
     expectTypeOf(explicitGenericNumber).toEqualTypeOf<string>();

@@ -4,7 +4,7 @@ import { resolveFailure, type AssertionFailure } from './assert.js';
 export function ensureNever(
   value: never,
   failureOrNotThrow: AssertionFailure | true = () =>
-    `Expected ${String(value)} to be never`,
+    `Expected ${String(value)} to be never`
 ): never {
   if (failureOrNotThrow === true) {
     return value;

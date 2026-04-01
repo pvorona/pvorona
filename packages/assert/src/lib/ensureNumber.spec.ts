@@ -3,31 +3,31 @@ import { ensureNumber } from './ensureNumber.js';
 test('ensureNumber', () => {
   expect(() =>
     // @ts-expect-error "Must include number or number literal"
-    ensureNumber(true),
+    ensureNumber(true)
   ).toThrow();
   expect(() =>
     // @ts-expect-error "Must include number or number literal"
-    ensureNumber(''),
+    ensureNumber('')
   ).toThrow();
   expect(() =>
     // @ts-expect-error "Must include number or number literal"
-    ensureNumber(Symbol()),
+    ensureNumber(Symbol())
   ).toThrow();
   expect(() =>
     // @ts-expect-error "Must include number or number literal"
-    ensureNumber(0n),
+    ensureNumber(0n)
   ).toThrow();
   expect(() =>
     // @ts-expect-error "Must include number or number literal"
-    ensureNumber(undefined),
+    ensureNumber(undefined)
   ).toThrow();
   expect(() =>
     // @ts-expect-error "Must include number or number literal"
-    ensureNumber(null),
+    ensureNumber(null)
   ).toThrow();
   expect(() =>
     // @ts-expect-error "Must include number or number literal"
-    ensureNumber({ a: 1 }),
+    ensureNumber({ a: 1 })
   ).toThrow();
 
   const a1 = ensureNumber(1 as number[] | number);
@@ -44,9 +44,9 @@ test('ensureNumber', () => {
 
   expect(ensureNumber(Number.NaN as string | number)).toBeNaN();
   expect(ensureNumber(Number.POSITIVE_INFINITY as string | number)).toBe(
-    Number.POSITIVE_INFINITY,
+    Number.POSITIVE_INFINITY
   );
   expect(ensureNumber(Number.NEGATIVE_INFINITY as string | number)).toBe(
-    Number.NEGATIVE_INFINITY,
+    Number.NEGATIVE_INFINITY
   );
 });

@@ -9,31 +9,31 @@ test('ensureString', () => {
 
   expect(
     // @ts-expect-error "Must include string or string literal"
-    () => ensureString(1),
+    () => ensureString(1)
   ).toThrow();
   expect(() =>
     // @ts-expect-error "Must include string or string literal"
-    ensureString(true),
+    ensureString(true)
   ).toThrow();
   expect(() =>
     // @ts-expect-error "Must include string or string literal"
-    ensureString(Symbol()),
+    ensureString(Symbol())
   ).toThrow();
   expect(() =>
     // @ts-expect-error "Must include string or string literal"
-    ensureString(0n),
+    ensureString(0n)
   ).toThrow();
   expect(() =>
     // @ts-expect-error "Must include string or string literal"
-    ensureString(undefined),
+    ensureString(undefined)
   ).toThrow();
   expect(() =>
     // @ts-expect-error "Must include string or string literal"
-    ensureString(null),
+    ensureString(null)
   ).toThrow();
   expect(() =>
     // @ts-expect-error "Must include string or string literal"
-    ensureString({ a: 1 }),
+    ensureString({ a: 1 })
   ).toThrow();
 
   const a1 = ensureString('1' as number[] | string);
@@ -49,7 +49,7 @@ test('ensureString', () => {
   expectTypeOf(a4).toEqualTypeOf<string>();
 
   const a5 = ensureString(
-    'string1' as [number, number] | 'string1' | 'string2',
+    'string1' as [number, number] | 'string1' | 'string2'
   );
   expectTypeOf(a5).toEqualTypeOf<'string1' | 'string2'>();
 });

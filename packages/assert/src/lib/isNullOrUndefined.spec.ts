@@ -66,10 +66,9 @@ test('isNullOrUndefined', () => {
 
   const explicitGenericNullish = undefined as string | null | undefined;
   if (
-    isNullOrUndefined<
-      string | null | undefined,
-      string | null | undefined
-    >(explicitGenericNullish)
+    isNullOrUndefined<string | null | undefined, string | null | undefined>(
+      explicitGenericNullish
+    )
   ) {
     expectTypeOf(explicitGenericNullish).toEqualTypeOf<null | undefined>();
   } else {

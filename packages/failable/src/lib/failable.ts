@@ -150,9 +150,10 @@ type FailableMap<Result, Reason> = {
 };
 
 type FailableMapError<Result, Reason> = {
-  <OutputError>(
-    transform: (reason: Reason) => OutputError
-  ): Failable<Result, OutputError>;
+  <OutputError>(transform: (reason: Reason) => OutputError): Failable<
+    Result,
+    OutputError
+  >;
 };
 
 type FailableFlatMap<Result, Reason> = {
@@ -836,8 +837,9 @@ type FailableSource<Result, Reason> =
  * Reject obvious bare `Promise.reject(...)` inputs (`PromiseLike<never>`) while
  * preserving the caller's original tuple types for valid sources.
  */
-type GuardedFailableSourceInput<Source> =
-  Source extends PromiseLike<infer Resolved>
+type GuardedFailableSourceInput<Source> = Source extends PromiseLike<
+  infer Resolved
+>
   ? [Resolved] extends [never]
     ? never
     : Source extends PromiseLike<Failable<unknown, unknown>>
@@ -848,15 +850,11 @@ type GuardedFailableSourceInput<Source> =
   : never;
 
 type AllSettledSources<Sources extends readonly unknown[]> = {
-  readonly [Index in keyof Sources]: GuardedFailableSourceInput<
-    Sources[Index]
-  >;
+  readonly [Index in keyof Sources]: GuardedFailableSourceInput<Sources[Index]>;
 };
 
 type RaceSources<Sources extends readonly unknown[]> = {
-  readonly [Index in keyof Sources]: GuardedFailableSourceInput<
-    Sources[Index]
-  >;
+  readonly [Index in keyof Sources]: GuardedFailableSourceInput<Sources[Index]>;
 };
 
 type FailableSourceError<Source> = Source extends Success<unknown>
@@ -960,11 +958,12 @@ type RaceError<Sources> = Sources extends readonly (infer Source)[]
   ? FailableSourceError<Source>
   : never;
 
-type RaceReturn<Sources extends readonly unknown[]> = Sources extends readonly []
-  ? Promise<Failable<RaceData<Sources>, RaceError<Sources>>>
-  : TupleHasAsync<Sources> extends true
-  ? Promise<Failable<RaceData<Sources>, RaceError<Sources>>>
-  : Failable<RaceData<Sources>, RaceError<Sources>>;
+type RaceReturn<Sources extends readonly unknown[]> =
+  Sources extends readonly []
+    ? Promise<Failable<RaceData<Sources>, RaceError<Sources>>>
+    : TupleHasAsync<Sources> extends true
+    ? Promise<Failable<RaceData<Sources>, RaceError<Sources>>>
+    : Failable<RaceData<Sources>, RaceError<Sources>>;
 
 function toValidatedFailable(source: unknown): Failable<unknown, unknown> {
   if (isFailable(source)) return source;
@@ -1331,7 +1330,8 @@ export function failable<
   PromiseSource extends PromiseLike<unknown>,
   const Reason
 >(
-  promise: PromiseSource & DisallowToReasonForResultLike<Awaited<PromiseSource>>,
+  promise: PromiseSource &
+    DisallowToReasonForResultLike<Awaited<PromiseSource>>,
   toReason: FailableToReasonInput<Reason>
 ): Promise<CaptureResult<Awaited<PromiseSource>, Reason>>;
 export function failable<
@@ -1378,10 +1378,7 @@ function fromFunction<
   Callback extends () => CallbackResult,
   Reason,
   CallbackResult = ReturnType<Callback>
->(
-  callback: Callback,
-  toReason?: FailableToReasonInput<Reason>
-) {
+>(callback: Callback, toReason?: FailableToReasonInput<Reason>) {
   try {
     const data = callback();
 

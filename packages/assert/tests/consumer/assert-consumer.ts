@@ -13,14 +13,13 @@ import {
   type AssertionFailure,
 } from '@pvorona/assert';
 
-type Equal<Left, Right> =
-  (<T>() => T extends Left ? 1 : 2) extends
-  (<T>() => T extends Right ? 1 : 2)
-    ? (<T>() => T extends Right ? 1 : 2) extends
-        (<T>() => T extends Left ? 1 : 2)
-      ? true
-      : false
-    : false;
+type Equal<Left, Right> = (<T>() => T extends Left ? 1 : 2) extends <
+  T
+>() => T extends Right ? 1 : 2
+  ? (<T>() => T extends Right ? 1 : 2) extends <T>() => T extends Left ? 1 : 2
+    ? true
+    : false
+  : false;
 
 function expectType<Condition extends true>(condition: Condition): void {
   void condition;
@@ -28,18 +27,20 @@ function expectType<Condition extends true>(condition: Condition): void {
 
 type ConsumerModule = typeof import('@pvorona/assert');
 expectType<
-  Equal<'resolveValueOrGetter' extends keyof ConsumerModule ? true : false, false>
+  Equal<
+    'resolveValueOrGetter' extends keyof ConsumerModule ? true : false,
+    false
+  >
 >(true);
 expectType<
-  Equal<'ensureNonEmptyArray' extends keyof ConsumerModule ? true : false, false>
+  Equal<
+    'ensureNonEmptyArray' extends keyof ConsumerModule ? true : false,
+    false
+  >
 >(true);
 
 const envPort =
-  Math.random() > 0.5
-    ? '3000'
-    : Math.random() > 0.5
-      ? null
-      : undefined;
+  Math.random() > 0.5 ? '3000' : Math.random() > 0.5 ? null : undefined;
 const port = ensureNotNullOrUndefined(envPort);
 const requiredPort: string = port;
 
@@ -93,16 +94,16 @@ if (isNull<string | null, string | null>(legacyGenericNull)) {
   expectType<Equal<typeof legacyGenericNull, string>>(true);
 }
 
-const boundaryUndefined = (Math.random() > 0.5 ? undefined : 'value') as unknown;
+const boundaryUndefined = (
+  Math.random() > 0.5 ? undefined : 'value'
+) as unknown;
 if (isUndefined(boundaryUndefined)) {
   expectType<Equal<typeof boundaryUndefined, undefined>>(true);
 }
 
 const legacyGenericUndefined = undefined as string | undefined;
 if (
-  isUndefined<string | undefined, string | undefined>(
-    legacyGenericUndefined,
-  )
+  isUndefined<string | undefined, string | undefined>(legacyGenericUndefined)
 ) {
   expectType<Equal<typeof legacyGenericUndefined, undefined>>(true);
 } else {
@@ -116,17 +117,18 @@ if (isNullOrUndefined(boundaryNullish)) {
 
 const legacyGenericNullish = undefined as string | null | undefined;
 if (
-  isNullOrUndefined<
-    string | null | undefined,
-    string | null | undefined
-  >(legacyGenericNullish)
+  isNullOrUndefined<string | null | undefined, string | null | undefined>(
+    legacyGenericNullish
+  )
 ) {
   expectType<Equal<typeof legacyGenericNullish, null | undefined>>(true);
 } else {
   expectType<Equal<typeof legacyGenericNullish, string>>(true);
 }
 
-const boundarySymbol = (Math.random() > 0.5 ? Symbol('status') : 'status') as unknown;
+const boundarySymbol = (
+  Math.random() > 0.5 ? Symbol('status') : 'status'
+) as unknown;
 if (isSymbol(boundarySymbol)) {
   expectType<Equal<typeof boundarySymbol, symbol>>(true);
 }
