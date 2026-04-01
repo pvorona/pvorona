@@ -2,7 +2,6 @@ export {
   all,
   allSettled,
   FailableStatus,
-  NormalizedErrors,
   failable,
   failure,
   isFailable,
@@ -17,7 +16,6 @@ export {
 } from './lib/failable.js';
 
 export type {
-  FailableNormalizeErrorOptions,
   Failable,
   FailableLike,
   FailableLikeFailure,

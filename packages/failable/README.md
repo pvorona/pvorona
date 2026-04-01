@@ -70,7 +70,7 @@ if (result.isFailure) {
 | Read the value or provide a fallback | `getOr(...)` / `getOrElse(...)` |
 | Recover to `Success<T>` | `or(...)` / `orElse(...)` |
 | Map both branches to one output | `match(onSuccess, onFailure)` |
-| Throw an `Error` from a failure | `getOrThrow(normalizeOption?)` / `throwIfFailure(result, normalizeOption?)` |
+| Throw an `Error` from a failure | `getOrThrow(toError?)` / `throwIfFailure(result, toError?)` |
 | Capture a throwing or rejecting boundary | `failable(...)` |
 | Compose multiple `Failable` steps | `run(...)` |
 | Combine multiple `Failable` sources | `all(...)`, `allSettled(...)`, `race(...)` |
@@ -92,20 +92,20 @@ you want something shorter, use the helper that matches the job:
 - `result.orElse(() => fallback)`: lazy recovery to `Success<T>`
 - `result.orElse((error) => fallback)`: lazy recovery to `Success<T>` derived from the failure
 - `result.match(onSuccess, onFailure)`: map both branches to one output
-- `result.getOrThrow(normalizeOption?)`: return the success value or throw an `Error` derived from the failure
-- `throwIfFailure(result, normalizeOption?)`: throw an `Error` derived from the failure and narrow the same variable
+- `result.getOrThrow(toError?)`: return the success value or throw an `Error` derived from the failure
+- `throwIfFailure(result, toError?)`: throw an `Error` derived from the failure and narrow the same variable
 
 Both throw helpers preserve existing `Error` instances unchanged by default.
-Other failure values are normalized with the built-in rules: arrays become
-`AggregateError`; plain objects become `Error` with `cause`; primitives and
-`undefined` become `Error(String(value), { cause: value })`.
+Other failure values become:
 
-Pass `NormalizedErrors` or a custom `normalizeError(...)` when you need a
-specific `Error` shape at the throw boundary. Normalize earlier with
-`failable(...)` only when you need that normalized `Error` inside the
-`Failure` channel before anything throws. If built-in message derivation
-itself fails, normalization still returns an `Error` with message
-`Unstringifiable error value` and `cause` set to the original raw value.
+- `new Error(\`Expected value to be Success. Received Failure(${String(reason)}).\`, { cause: reason })`
+- or `new Error('Expected value to be Success. Received Failure(Unstringifiable error value).', { cause: reason })` when string coercion itself throws
+
+Pass `toError` when you need a specific throwable shape at the throw boundary.
+You can pass either:
+
+- a callback that returns an `Error` or a string message
+- or a string message directly
 
 Use the lazy forms when the fallback is expensive or has side effects. Failure
 callbacks receive the stored error, so `() => ...` can ignore it and
@@ -141,13 +141,13 @@ throwIfFailure(result);
 console.log(result.data * 2);
 ```
 
-When you want a specific `Error` shape only at the throw site, pass the
-normalize option there:
+When you want a specific `Error` shape only at the throw site, pass `toError`
+there:
 
 ```ts
-import { NormalizedErrors } from '@pvorona/failable';
-
-const port = readPort(process.env.PORT).getOrThrow(NormalizedErrors);
+const port = readPort(process.env.PORT).getOrThrow(
+  (reason) => new Error(`Invalid port (${reason.code})`)
+);
 ```
 
 ## Transform And Chain With `map(...)`, `mapError(...)`, And `flatMap(...)`
@@ -223,31 +223,33 @@ rejected value into `Failure`, so the rest of your code can stay in normal
 Use the callback form for synchronous code that can throw:
 
 ```ts
-import { failable, NormalizedErrors } from '@pvorona/failable';
+import { failable } from '@pvorona/failable';
 
 const rawConfig = '{"theme":"dark"}';
-const configResult = failable(() => JSON.parse(rawConfig), NormalizedErrors);
+const configResult = failable(
+  () => JSON.parse(rawConfig),
+  (reason) => ({ code: 'invalid_config', cause: reason })
+);
 
 if (configResult.isFailure) {
-  console.error(configResult.error.message);
+  console.error(configResult.error.code, configResult.error.cause);
 } else {
   console.log(configResult.data);
 }
 ```
 
-`NormalizedErrors` is the built-in shortcut when you want `.error` to be an
-`Error`, including when the thrown or rejected non-`Error` value cannot be
-stringified safely.
+If you do not pass a second argument, the thrown or rejected value stays in the
+failure channel unchanged as `unknown`.
 
 Pass a promise directly when you want rejection capture:
 
 ```ts
-import { failable, NormalizedErrors } from '@pvorona/failable';
+import { failable } from '@pvorona/failable';
 import { readFile } from 'node:fs/promises';
 
 const fileResult = await failable(
   readFile('config.json', 'utf8'),
-  NormalizedErrors
+  { code: 'config_read_failed' }
 );
 
 const config = fileResult.getOr('{}');
@@ -259,15 +261,14 @@ const config = fileResult.getOr('{}');
 - rehydrate a `FailableLike`
 - capture sync throws from a callback
 - capture promise rejections from a promise passed directly
-- normalize failures with `NormalizedErrors` or a custom `normalizeError(...)`
+- map captured reasons with `toReason`
+- store a constant reason with a non-function second argument
 
 By default, the thrown or rejected value becomes `.error` unchanged.
 
-Pass the promise itself when you want rejection capture. In TypeScript,
-obviously promise-returning callbacks like `async () => ...` and
-`() => Promise.resolve(...)` are rejected. JS callers, plus `any`/`unknown`-typed
-callbacks, receive a `Failure<Error>` telling them to pass the promise directly
-instead.
+Pass the promise itself when you want rejection capture. If you call
+`failable(() => promise)`, only synchronous throws from the callback itself are
+captured. The returned promise stays in the success channel.
 
 ## Compose Existing `Failable` Steps With `run(...)`
 
@@ -541,10 +542,10 @@ if (isFailable(candidate) && candidate.isFailure) {
 - `type Success<T>` / `type Failure<E>`: hydrated result variants
 - `type FailableLike<T, E>`: structured-clone-friendly wire shape
 - `success()` / `success(data)` / `failure()` / `failure(error)`: create hydrated results
-- `throwIfFailure(result, normalizeOption?)` / `result.getOrThrow(normalizeOption?)`:
+- `throwIfFailure(result, toError?)` / `result.getOrThrow(toError?)`:
   throw an `Error`, preserving existing `Error` instances unchanged by default
-- `failable(...)`: preserve, rehydrate, capture, or normalize failures at
-  a boundary
+- `failable(...)`: preserve, rehydrate, capture raw failures, or map them with
+  `toReason` / a constant reason at a boundary
 - `run(...)`: compose `Failable` steps without nested branching
 - `result.map(...)`: transform success data; failures pass through unchanged
 - `result.flatMap(...)`: chain another `Failable`; failures short-circuit
@@ -552,6 +553,4 @@ if (isFailable(candidate) && candidate.isFailure) {
 - `isFailableLike(...)`: validate a wire shape
 - `isFailable(...)`, `isSuccess(...)`, `isFailure(...)`: validate hydrated
   results
-- `NormalizedErrors`: built-in `Error` normalization for `failable(...)` and
-  throw-boundary helpers
 - `FailableStatus`: runtime success/failure status values

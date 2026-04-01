@@ -8,13 +8,11 @@ import {
   isFailableLike,
   isFailure,
   isSuccess,
-  NormalizedErrors,
   race,
   run,
   success,
   throwIfFailure,
   toFailableLike,
-  type FailableNormalizeErrorOptions,
   type Failable,
   type FailableLike,
   type FailableLikeFailure,
@@ -48,7 +46,6 @@ type ExpectedRuntimeExportName =
   | 'all'
   | 'allSettled'
   | 'FailableStatus'
-  | 'NormalizedErrors'
   | 'failable'
   | 'failure'
   | 'isFailable'
@@ -134,19 +131,17 @@ const status: FailableStatus = ok.status;
 void status;
 void FailableStatus.Success;
 
-const normalizeOptions = {
-  normalizeError(error: unknown) {
-    return error instanceof Error
-      ? error
-      : new Error('normalized', { cause: error });
-  },
-} satisfies FailableNormalizeErrorOptions;
+const toError = (error: unknown) =>
+  error instanceof Error ? error : new Error('normalized', { cause: error });
 
-const okGetOrThrowNormalized = ok.getOrThrow(NormalizedErrors);
-expectType<Equal<typeof okGetOrThrowNormalized, 123>>(true);
-
-const okGetOrThrowCustom = ok.getOrThrow(normalizeOptions);
+const okGetOrThrowCustom = ok.getOrThrow(toError);
 expectType<Equal<typeof okGetOrThrowCustom, 123>>(true);
+
+const okGetOrThrowDirectMessage = ok.getOrThrow('normalized');
+expectType<Equal<typeof okGetOrThrowDirectMessage, 123>>(true);
+
+const okGetOrThrowMessage = ok.getOrThrow(() => 'normalized');
+expectType<Equal<typeof okGetOrThrowMessage, 123>>(true);
 
 const problem = failure('boom');
 const voidProblem = failure();
@@ -174,11 +169,17 @@ expectType<Equal<typeof problemGetOrElseFromError, number>>(true);
 const problemGetOrThrow = () => problem.getOrThrow();
 expectType<Equal<ReturnType<typeof problemGetOrThrow>, never>>(true);
 
-const problemGetOrThrowNormalized = () => problem.getOrThrow(NormalizedErrors);
-expectType<Equal<ReturnType<typeof problemGetOrThrowNormalized>, never>>(true);
-
-const problemGetOrThrowCustom = () => problem.getOrThrow(normalizeOptions);
+const problemGetOrThrowCustom = () => problem.getOrThrow(toError);
 expectType<Equal<ReturnType<typeof problemGetOrThrowCustom>, never>>(true);
+
+const problemGetOrThrowDirectMessage = () => problem.getOrThrow('normalized');
+expectType<Equal<ReturnType<typeof problemGetOrThrowDirectMessage>, never>>(
+  true
+);
+
+const problemGetOrThrowMessage = () =>
+  problem.getOrThrow((reason) => `normalized: ${reason}`);
+expectType<Equal<ReturnType<typeof problemGetOrThrowMessage>, never>>(true);
 
 const problemMatch = problem.match(
   () => 'unexpected',
@@ -339,40 +340,52 @@ const readUnionValue = () => {
 };
 expectType<Equal<ReturnType<typeof readUnionValue>, number>>(true);
 
-const readUnionValueWithNormalizedErrors = () => {
+const readUnionValueWithCustomError = () => {
   const result: Failable<number, string> =
     Math.random() > 0.5 ? success(123) : failure('boom');
 
-  return result.getOrThrow(NormalizedErrors);
+  return result.getOrThrow(toError);
 };
-expectType<
-  Equal<ReturnType<typeof readUnionValueWithNormalizedErrors>, number>
->(true);
+expectType<Equal<ReturnType<typeof readUnionValueWithCustomError>, number>>(
+  true
+);
 
-const readUnionValueWithCustomNormalization = () => {
+const readUnionValueWithCustomMessage = () => {
   const result: Failable<number, string> =
     Math.random() > 0.5 ? success(123) : failure('boom');
 
-  return result.getOrThrow(normalizeOptions);
+  return result.getOrThrow((reason) => `normalized: ${reason}`);
 };
 expectType<
-  Equal<ReturnType<typeof readUnionValueWithCustomNormalization>, number>
+  Equal<ReturnType<typeof readUnionValueWithCustomMessage>, number>
 >(true);
 
-const normalizedArgUnion = success(123) as Failable<number, string>;
-throwIfFailure(normalizedArgUnion, NormalizedErrors);
-throwIfFailure(normalizedArgUnion, normalizeOptions);
+const readUnionValueWithDirectMessage = () => {
+  const result: Failable<number, string> =
+    Math.random() > 0.5 ? success(123) : failure('boom');
+
+  return result.getOrThrow('normalized');
+};
+expectType<Equal<ReturnType<typeof readUnionValueWithDirectMessage>, number>>(
+  true
+);
+
+const throwableArgUnion = success(123) as Failable<number, string>;
+throwIfFailure(throwableArgUnion, toError);
+throwIfFailure(throwableArgUnion, 'normalized');
+throwIfFailure(throwableArgUnion, (reason) => `normalized: ${reason}`);
 
 const mappedArgUnion = success(123) as Failable<
   number,
   { readonly code: 'boom' }
 >;
-// @ts-expect-error `throwIfFailure(...)` does not accept mapper callbacks.
 throwIfFailure(mappedArgUnion, () => new Error('boom'));
+throwIfFailure(mappedArgUnion, ({ code }) => code);
 
 const mappedProblem = failure({ code: 'boom' });
-// @ts-expect-error `getOrThrow()` does not accept mapper callbacks.
 mappedProblem.getOrThrow(() => new Error('boom'));
+mappedProblem.getOrThrow('boom');
+mappedProblem.getOrThrow(({ code }) => code);
 
 const successWire = toFailableLike(ok);
 
@@ -404,14 +417,23 @@ type ConsumerPromiseFailableOf<T> = PromiseFailable<T>;
 
 type ConsumerNumberOrPromiseNumber = number | Promise<number>;
 declare const unionSyncOrPromise: () => ConsumerNumberOrPromiseNumber;
-// @ts-expect-error `failable(() => ...)` accepts sync callbacks only.
-failable(async () => 123);
+const wrappedAsyncLiteral = failable(async () => 123);
+expectType<Equal<typeof wrappedAsyncLiteral, Failable<Promise<number>, unknown>>>(
+  true
+);
 
-// @ts-expect-error `failable(() => ...)` accepts sync callbacks only.
-failable(() => Promise.resolve(123));
+const wrappedPromiseReturningCallback = failable(() => Promise.resolve(123));
+expectType<
+  Equal<typeof wrappedPromiseReturningCallback, Failable<Promise<number>, unknown>>
+>(true);
 
-// @ts-expect-error `failable(() => ...)` accepts sync callbacks only.
-failable(unionSyncOrPromise);
+const wrappedUnionSyncOrPromise = failable(unionSyncOrPromise);
+expectType<
+  Equal<
+    typeof wrappedUnionSyncOrPromise,
+    Failable<number, unknown> | Failable<Promise<number>, unknown>
+  >
+>(true);
 
 declare const unknownReturner: () => unknown;
 const wrappedUnknownReturner = failable(unknownReturner);
@@ -426,24 +448,48 @@ expectType<
 >(true);
 void wrappedDirectPromise;
 
-const normalizedExplicitFailure = failable(
-  failure(['first', 'second']),
-  NormalizedErrors
-);
-expectType<Equal<typeof normalizedExplicitFailure, Failure<Error>>>(true);
+const fixedReasonFailure = failable(() => {
+  throw { code: 'boom' };
+}, 'invalid_config');
+expectType<Equal<typeof fixedReasonFailure, Failure<'invalid_config'>>>(true);
 
 const normalizedCustomFailure = failable(() => {
   throw { code: 'boom' };
-}, normalizeOptions);
-expectType<Equal<typeof normalizedCustomFailure, Failure<Error>>>(true);
+}, (reason) => ({ code: 'invalid_config', cause: reason }));
+expectType<
+  Equal<
+    typeof normalizedCustomFailure,
+    Failure<{
+      readonly code: 'invalid_config';
+      readonly cause: unknown;
+    }>
+  >
+>(true);
 
 const normalizedRejectedValue = failable(
   Promise.reject('boom'),
-  normalizeOptions
+  (reason) => ({ code: 'request_failed', cause: reason })
 );
-expectType<Equal<typeof normalizedRejectedValue, Promise<Failure<Error>>>>(
-  true
-);
+expectType<
+  Equal<
+    typeof normalizedRejectedValue,
+    Promise<
+      Failure<{
+        readonly code: 'request_failed';
+        readonly cause: unknown;
+      }>
+    >
+  >
+>(true);
+
+// @ts-expect-error existing Failable inputs do not accept `toReason`.
+failable(failure(['first', 'second']), 'invalid_config');
+
+// @ts-expect-error returned hydrated `Failure` values do not accept `toReason`.
+failable(() => failure('boom'), 'invalid_config');
+
+// @ts-expect-error resolved hydrated `Failure` values do not accept `toReason`.
+failable(Promise.resolve(failure('boom')), 'invalid_config');
 
 const helperResult = (): Failable<'helper-data', 'helper-error'> =>
   success('helper-data');
@@ -840,19 +886,25 @@ void readOkData;
 void ensureProblem;
 void readEnsuredUnionData;
 void readUnionValue;
-void okGetOrThrowNormalized;
 void okGetOrThrowCustom;
-void problemGetOrThrowNormalized;
+void okGetOrThrowDirectMessage;
+void okGetOrThrowMessage;
 void problemGetOrThrowCustom;
-void readUnionValueWithNormalizedErrors;
-void readUnionValueWithCustomNormalization;
-void normalizedArgUnion;
+void problemGetOrThrowDirectMessage;
+void problemGetOrThrowMessage;
+void readUnionValueWithCustomError;
+void readUnionValueWithCustomMessage;
+void readUnionValueWithDirectMessage;
+void throwableArgUnion;
 void mappedArgUnion;
 void mappedProblem;
 void wrappedSyncLiteral;
+void wrappedAsyncLiteral;
+void wrappedPromiseReturningCallback;
+void wrappedUnionSyncOrPromise;
 void wrappedUnknownReturner;
 void wrappedDirectPromise;
-void normalizedExplicitFailure;
+void fixedReasonFailure;
 void normalizedCustomFailure;
 void normalizedRejectedValue;
 void runSuccess;

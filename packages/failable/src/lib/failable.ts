@@ -15,17 +15,19 @@ export const FailableStatus = Object.freeze({
 
 export type FailableStatus = ValueOf<typeof FailableStatus>;
 
-export const NormalizedErrors = Object.freeze({
-  mode: 'normalized-errors',
-} as const);
-
-export type FailableNormalizeErrorOptions = {
-  readonly normalizeError: (reason: unknown) => Error;
+type FailableToReason<Reason> = (reason: unknown) => Reason;
+type FailableToError<Reason> = (reason: Reason) => Error | string;
+type FailableToErrorInput<Reason> = FailableToError<Reason> | string;
+type NonFunctionValue<Value> = Value extends (...args: never[]) => unknown
+  ? never
+  : Value;
+type FailableToReasonInput<Reason> =
+  | FailableToReason<Reason>
+  | NonFunctionValue<Reason>;
+type GetOrThrow<Result, Reason> = {
+  (): Result;
+  (toError: FailableToErrorInput<Reason>): Result;
 };
-
-type FailableNormalizeErrorInput =
-  | typeof NormalizedErrors
-  | FailableNormalizeErrorOptions;
 
 type LazyFallback<Reason, Output> = (reason: Reason) => Output;
 
@@ -209,7 +211,7 @@ export type Success<Result> = {
   ) => Success<Result>;
   readonly getOr: <Fallback>(fallback: Fallback) => Result;
   readonly getOrElse: <Output>(fallback: LazyFallback<never, Output>) => Result;
-  readonly getOrThrow: (normalize?: FailableNormalizeErrorInput) => Result;
+  readonly getOrThrow: GetOrThrow<Result, never>;
   readonly match: SuccessMatch<Result>;
   readonly map: SuccessMap<Result>;
   readonly mapError: SuccessMapError<Result>;
@@ -236,7 +238,7 @@ export type Failure<Reason> = {
   readonly getOrElse: <Output>(
     fallback: LazyFallback<Reason, Output>
   ) => Output;
-  readonly getOrThrow: (normalize?: FailableNormalizeErrorInput) => never;
+  readonly getOrThrow: GetOrThrow<never, Reason>;
   readonly match: FailureMatch<Reason>;
   readonly map: FailureMap<Reason>;
   readonly mapError: FailureMapError<Reason>;
@@ -296,31 +298,31 @@ const BASE_FAILABLE = {
   },
 } as const;
 
-function toThrownError(
-  reason: unknown,
-  normalize?: FailableNormalizeErrorInput
+function toThrownError<Reason>(
+  reason: Reason,
+  toError?: FailableToErrorInput<Reason>
 ): Error {
-  if (normalize === undefined) {
-    return normalizeUnknownError(reason);
+  if (toError === undefined) {
+    return defaultToError(reason);
   }
 
-  const normalizeError = resolveNormalizeError(normalize);
-  if (normalizeError === null) {
-    return normalizeUnknownError(reason);
+  if (typeof toError === 'string') {
+    return new Error(toError, { cause: reason });
   }
 
-  if (reason instanceof Error && isNormalizedErrorsPreset(normalize)) {
-    return reason;
+  const throwable = toError(reason);
+  if (throwable instanceof Error) {
+    return throwable;
   }
 
-  return normalizeError(reason);
+  return new Error(throwable, { cause: reason });
 }
 
-function throwNormalizedFailure(
-  reason: unknown,
-  normalize?: FailableNormalizeErrorInput
+function throwNormalizedFailure<Reason>(
+  reason: Reason,
+  toError?: FailableToErrorInput<Reason>
 ): never {
-  throw toThrownError(reason, normalize);
+  throw toThrownError(reason, toError);
 }
 
 const BASE_SUCCESS = (() => {
@@ -343,9 +345,9 @@ const BASE_SUCCESS = (() => {
     return this.data;
   };
   node.getOrThrow = function getOrThrowSuccess(
-    _normalize?: FailableNormalizeErrorInput
+    _toError?: FailableToErrorInput<never>
   ) {
-    void _normalize;
+    void _toError;
     return this.data;
   };
   node.match = function matchSuccess(
@@ -394,9 +396,9 @@ const BASE_FAILURE = (() => {
     return fallback(this.error);
   };
   node.getOrThrow = function getOrThrowFailure(
-    normalize?: FailableNormalizeErrorInput
+    toError?: FailableToErrorInput<unknown>
   ) {
-    throwNormalizedFailure(this.error, normalize);
+    throwNormalizedFailure(this.error, toError);
   };
   node.match = function matchFailure(
     this: InternalFailure<unknown>,
@@ -440,10 +442,10 @@ const BASE_FAILURE = (() => {
  * - `failable(() => value)`: capture synchronous throws from throwy code.
  * - `await failable(promise)`: capture async rejections when you already hold a promise.
  * - `run(...)`: compose steps that already return `Failable`.
- * - `throwIfFailure(result, normalize?)`: keep using the same `result`
- *   variable after narrowing, with optional throw-boundary normalization.
- * - `result.getOrThrow(normalize?)`: unwrap the success value in
- *   expression or return position, with optional throw-boundary normalization.
+ * - `throwIfFailure(result, toError?)`: keep using the same `result`
+ *   variable after narrowing, with optional throw-boundary conversion.
+ * - `result.getOrThrow(toError?)`: unwrap the success value in expression or
+ *   return position, with optional throw-boundary conversion.
  *
  * Design goals:
  * - Prefer explicit, typed results over exceptions.
@@ -469,10 +471,10 @@ const BASE_FAILURE = (() => {
  *   preserves/rehydrates returned `Failable` / `FailableLike`.
  * - `failable(promise)` captures rejection values into `Failure` and preserves/rehydrates resolved
  *   `Failable` / `FailableLike`.
- * - `failable(input, NormalizedErrors)` normalizes failures into `Error` shapes while preserving
- *   existing `Error` instances unchanged.
- * - `failable(input, { normalizeError })` runs custom failure normalization for failures,
- *   including existing `Error` instances.
+ * - `failable(input, toReason)` captures thrown or rejected values into a
+ *   caller-defined reason shape.
+ * - `failable(input, fixedReason)` captures thrown or rejected values into the
+ *   same fixed reason every time.
  *
  * Gotchas:
  * - `isFailableLike` is intentionally strict: only `{ status, data }` or `{ status, error }`
@@ -480,18 +482,14 @@ const BASE_FAILURE = (() => {
  * - `or(...)` and `getOr(...)` are eager (fallback is evaluated before the call). Use branching for
  *   lazy fallbacks.
  * - Without normalization options, whatever you throw/reject becomes `.error` unchanged.
- * - `getOrThrow()` and `throwIfFailure(result)` always throw `Error` values. Existing `Error`
- *   instances are preserved unchanged; other failure values use the built-in normalization rules,
- *   including values whose string coercion hooks throw.
- * - Pass `NormalizedErrors` or `{ normalizeError }` directly to `getOrThrow(...)`
- *   or `throwIfFailure(...)` when you need a specific `Error` shape at the
- *   throw boundary.
- * - Normalize earlier with `failable(...)` only when you need that `Error`
- *   shape inside the `Failure` channel before throwing.
- * - `failable(() => somePromise)` is not the supported API. In TypeScript,
- *   obviously promise-returning callbacks are rejected. JS callers, plus
- *   `any`/`unknown`-typed callbacks, receive a `Failure<Error>` telling them
- *   to pass the promise directly instead.
+ * - `getOrThrow()` and `throwIfFailure(result)` always throw `Error` values.
+ *   Existing `Error` instances are preserved unchanged. Other reason values use
+ *   a built-in default `Reason -> Error` conversion.
+ * - Pass a `toError(...)` callback or string message directly to
+ *   `getOrThrow(...)` or `throwIfFailure(...)` when you need a specific
+ *   throwable shape or message.
+ * - `failable(() => somePromise)` captures only synchronous throws from the
+ *   callback itself. The returned promise stays in the success channel.
  *
  * @example
  * const raw = failable(() => JSON.parse(text));
@@ -548,17 +546,29 @@ export function failure<const Reason>(reason?: Reason): Failure<Reason | void> {
 /**
  * Throw an `Error` on failure, or narrow the same result to {@link Success} on return.
  *
- * Use this when you want control-flow narrowing without replacing the original variable.
- * Use `result.getOrThrow()` when you need the success value itself in expression or return position.
- * Existing `Error` instances are thrown unchanged by default. Pass `NormalizedErrors`
- * or `{ normalizeError }` when you need a specific `Error` shape at the throw boundary.
+ * Use this when you want control-flow narrowing without replacing the original
+ * variable. Use `result.getOrThrow()` when you need the success value itself in
+ * expression or return position. Existing `Error` instances are thrown
+ * unchanged by default. Pass `toError` or a direct string message when you
+ * need a specific throwable shape or message at the throw boundary.
  */
 export function throwIfFailure<Result, Reason>(
+  result: Failable<Result, Reason>
+): asserts result is Success<Result>;
+export function throwIfFailure<Result, Reason>(
   result: Failable<Result, Reason>,
-  normalize?: FailableNormalizeErrorInput
+  message: string
+): asserts result is Success<Result>;
+export function throwIfFailure<Result, Reason>(
+  result: Failable<Result, Reason>,
+  toError: FailableToError<Reason>
+): asserts result is Success<Result>;
+export function throwIfFailure<Result, Reason>(
+  result: Failable<Result, Reason>,
+  toError?: FailableToErrorInput<Reason>
 ): asserts result is Success<Result> {
   if (result.status === FailableStatus.Failure) {
-    throwNormalizedFailure(result.error, normalize);
+    throwNormalizedFailure(result.error, toError);
   }
 }
 
@@ -599,19 +609,6 @@ type InferFailableFromValue<Value, Reason = unknown> = [Value] extends [never]
 
 type IsAny<Value> = 0 extends 1 & Value ? true : false;
 
-type HasKnownPromiseLikeReturn<ReturnValue> = IsAny<ReturnValue> extends true
-  ? false
-  : unknown extends ReturnValue
-  ? false
-  : [Extract<ReturnValue, PromiseLike<unknown>>] extends [never]
-  ? false
-  : true;
-
-type FailableSyncOnlyCallback<Callback extends () => unknown> = Callback &
-  (HasKnownPromiseLikeReturn<ReturnType<Callback>> extends true
-    ? { readonly __failablePassPromiseDirectly: never }
-    : unknown);
-
 type InferReturnTypeFromPromise<
   PromiseSource extends PromiseLike<unknown>,
   InputError = unknown
@@ -631,35 +628,32 @@ type InferReturnTypeFromPromise<
   ? Promise<Failable<Data, FailureError>>
   : Promise<Failable<Awaited<PromiseSource>, InputError>>;
 
-type NormalizeFailableResult<Value> = [Value] extends [never]
-  ? Failure<Error>
-  : Value extends Success<infer Data>
-  ? Success<Data>
-  : Value extends Failure<unknown>
-  ? Failure<Error>
-  : Value extends FailableLikeSuccess<infer Data>
-  ? Success<Data>
-  : Value extends FailableLikeFailure<unknown>
-  ? Failure<Error>
-  : Value extends Failable<infer Data, unknown>
-  ? Failable<Data, Error>
-  : Value extends FailableLike<infer Data, unknown>
-  ? Failable<Data, Error>
-  : Failable<Value, Error>;
+type CaptureResult<Value, Reason> = [Value] extends [never]
+  ? Failure<Reason>
+  : Failable<Value, Reason>;
+
+type ResultLikeValue =
+  | FailableLike<unknown, unknown>
+  | Failable<unknown, unknown>;
+
+type HasResultLikeValue<Value> = IsAny<Value> extends true
+  ? false
+  : unknown extends Value
+  ? false
+  : [Extract<Value, ResultLikeValue>] extends [never]
+  ? false
+  : true;
+
+type DisallowToReasonForResultLike<Value> =
+  HasResultLikeValue<Value> extends true
+    ? { readonly __failableToReasonRequiresRawCaptureInput: never }
+    : unknown;
 
 type FailableInput =
   | FailableLike<unknown, unknown>
   | Failable<unknown, unknown>
   | (() => unknown)
   | PromiseLike<unknown>;
-
-const ASYNC_CALLBACK_MESSAGE =
-  '`failable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await failable(promise)`.';
-const ASYNC_CALLBACK_ERROR_TAG = Symbol('AsyncCallbackError');
-
-type AsyncCallbackError = Error & {
-  readonly [ASYNC_CALLBACK_ERROR_TAG]: true;
-};
 
 class RunStep<Result, Reason, Source = Failable<Result, Reason>> {
   public readonly source: Source;
@@ -1309,74 +1303,65 @@ export function failable<Reason>(
 export function failable<Result, Reason>(
   value: FailableLike<Result, Reason>
 ): Failable<Result, Reason>;
-export function failable<Result>(
-  value: Success<Result>,
-  normalize: FailableNormalizeErrorInput
-): Success<Result>;
-export function failable<Reason>(
-  value: Failure<Reason>,
-  normalize: FailableNormalizeErrorInput
-): Failure<Error>;
-export function failable<Result, Reason>(
-  value: Failable<Result, Reason>,
-  normalize: FailableNormalizeErrorInput
-): Failable<Result, Error>;
-export function failable<Result>(
-  value: FailableLikeSuccess<Result>,
-  normalize: FailableNormalizeErrorInput
-): Success<Result>;
-export function failable<Reason>(
-  value: FailableLikeFailure<Reason>,
-  normalize: FailableNormalizeErrorInput
-): Failure<Error>;
-export function failable<Result, Reason>(
-  value: FailableLike<Result, Reason>,
-  normalize: FailableNormalizeErrorInput
-): Failable<Result, Error>;
 /**
  * Capture the boundary you actually have:
  * - `failable(() => value)` for synchronous callbacks that may throw
  * - `await failable(promise)` for promise-based code that may reject
  * - `run(...)` when the steps already return `Failable`
  *
- * In TypeScript, obviously promise-returning callbacks like `async () => ...` and
- * `() => Promise.resolve(...)` are rejected. JS callers, plus `any`/`unknown`-typed
- * callbacks, still rely on the runtime guard and receive a `Failure<Error>` telling
- * them to pass the promise directly instead. That guard error is preserved even when
- * a custom `normalizeError` callback is provided.
+ * When you pass `toReason`, it only applies to raw thrown or rejected values.
+ * Existing `Failable` / `FailableLike` inputs and pass-through return values are
+ * already past the capture boundary and keep their existing reason channel.
  */
-export function failable<PromiseSource extends PromiseLike<unknown>>(
-  promise: PromiseSource,
-  normalize: FailableNormalizeErrorInput
-): Promise<NormalizeFailableResult<Awaited<PromiseSource>>>;
+export function failable<Result>(value: Success<Result>): Success<Result>;
+export function failable<Reason>(value: Failure<Reason>): Failure<Reason>;
+export function failable<Result, Reason>(
+  value: Failable<Result, Reason>
+): Failable<Result, Reason>;
+export function failable<Result>(
+  value: FailableLikeSuccess<Result>
+): Success<Result>;
+export function failable<Reason>(
+  value: FailableLikeFailure<Reason>
+): Failure<Reason>;
+export function failable<Result, Reason>(
+  value: FailableLike<Result, Reason>
+): Failable<Result, Reason>;
+export function failable<
+  PromiseSource extends PromiseLike<unknown>,
+  const Reason
+>(
+  promise: PromiseSource & DisallowToReasonForResultLike<Awaited<PromiseSource>>,
+  toReason: FailableToReasonInput<Reason>
+): Promise<CaptureResult<Awaited<PromiseSource>, Reason>>;
 export function failable<
   PromiseSource extends PromiseLike<unknown>,
   Reason = unknown
 >(promise: PromiseSource): InferReturnTypeFromPromise<PromiseSource, Reason>;
-export function failable<Callback extends () => unknown>(
-  callback: FailableSyncOnlyCallback<Callback>,
-  normalize: FailableNormalizeErrorInput
-): NormalizeFailableResult<ReturnType<Callback>>;
+export function failable<Callback extends () => unknown, const Reason>(
+  callback: Callback & DisallowToReasonForResultLike<ReturnType<Callback>>,
+  toReason: FailableToReasonInput<Reason>
+): CaptureResult<ReturnType<Callback>, Reason>;
 export function failable<Callback extends () => unknown, Reason = unknown>(
-  callback: FailableSyncOnlyCallback<Callback>
+  callback: Callback
 ): InferFailableFromValue<ReturnType<Callback>, Reason>;
 export function failable(
   value: FailableInput,
-  normalize?: FailableNormalizeErrorInput
+  toReason?: FailableToReasonInput<unknown>
 ) {
   if (isFailable(value)) {
-    return normalizeFailableResult(value, normalize);
+    return value;
   }
 
   if (isFailableLike(value)) {
-    return normalizeFailableResult(fromFailableLike(value), normalize);
+    return fromFailableLike(value);
   }
 
   if (isFunction(value)) {
-    return fromFunction(value, normalize);
+    return fromFunction(value, toReason);
   }
 
-  return fromPromise(value, normalize);
+  return fromPromise(value, toReason);
 }
 
 function fromFailableLike<Result, Reason>(
@@ -1389,154 +1374,64 @@ function fromFailableLike<Result, Reason>(
   return failure(failableLike.error);
 }
 
-function createAsyncCallbackError(): AsyncCallbackError {
-  const reason = new Error(ASYNC_CALLBACK_MESSAGE) as AsyncCallbackError;
-
-  Object.defineProperty(reason, ASYNC_CALLBACK_ERROR_TAG, {
-    value: true,
-    enumerable: false,
-    configurable: false,
-    writable: false,
-  });
-
-  return reason;
-}
-
-function isAsyncCallbackError(reason: unknown): reason is AsyncCallbackError {
-  if (!(reason instanceof Error)) return false;
-
-  return (
-    Object.getOwnPropertyDescriptor(reason, ASYNC_CALLBACK_ERROR_TAG)?.value ===
-    true
-  );
-}
-
-function ignorePromiseRejection(value: PromiseLike<unknown>) {
-  void Promise.resolve(value).catch(() => undefined);
-}
-
 function fromFunction<
   Callback extends () => CallbackResult,
   Reason,
   CallbackResult = ReturnType<Callback>
 >(
   callback: Callback,
-  normalize?: FailableNormalizeErrorInput
+  toReason?: FailableToReasonInput<Reason>
 ) {
   try {
     const data = callback();
 
-    if (isPromiseLike(data)) {
-      ignorePromiseRejection(data);
-      return normalizeFailableResult(
-        failure(createAsyncCallbackError()),
-        normalize
-      );
-    }
-
     if (isFailable(data)) {
-      return normalizeFailableResult(data, normalize);
+      return data;
     }
 
     if (isFailableLike(data)) {
-      return normalizeFailableResult(fromFailableLike(data), normalize);
+      return fromFailableLike(data);
     }
 
     return success(data);
   } catch (reason) {
-    return normalizeFailableResult(failure(reason as Reason), normalize);
+    return captureFailure(reason, toReason);
   }
 }
 
 function fromPromise<PromiseSource extends PromiseLike<unknown>>(
   promise: PromiseSource,
-  normalize?: FailableNormalizeErrorInput
+  toReason?: FailableToReasonInput<unknown>
 ) {
   return Promise.resolve(promise).then(
     (data) => {
       if (isFailable(data)) {
-        return normalizeFailableResult(data, normalize);
+        return data;
       }
 
       if (isFailableLike(data)) {
-        return normalizeFailableResult(fromFailableLike(data), normalize);
+        return fromFailableLike(data);
       }
 
       return success(data);
     },
-    (reason) => normalizeFailableResult(failure(reason), normalize)
+    (reason) => captureFailure(reason, toReason)
   );
 }
 
-function normalizeFailableResult<Result, Reason>(
-  result: Failable<Result, Reason>,
-  normalize?: FailableNormalizeErrorInput
+function captureFailure<Reason>(
+  reason: unknown,
+  toReason?: FailableToReasonInput<Reason>
 ) {
-  if (result.status === FailableStatus.Success) return result;
-  if (isAsyncCallbackError(result.error)) return result;
-
-  const normalizeError = resolveNormalizeError(normalize);
-  if (normalizeError === null) return result;
-  if (
-    result.error instanceof Error &&
-    normalize !== undefined &&
-    isNormalizedErrorsPreset(normalize)
-  ) {
-    return result;
+  if (toReason === undefined) {
+    return failure(reason as Reason);
   }
 
-  return failure(normalizeError(result.error));
-}
-
-function resolveNormalizeError(normalize?: FailableNormalizeErrorInput) {
-  if (normalize === undefined) return null;
-  if (isNormalizedErrorsPreset(normalize)) return normalizeUnknownError;
-  if (!isFailableNormalizeErrorOptions(normalize)) return null;
-
-  return normalize.normalizeError;
-}
-
-function isNormalizedErrorsPreset(
-  value: unknown
-): value is typeof NormalizedErrors {
-  if (!isObject(value)) return false;
-  if (Object.keys(value).length !== 1) return false;
-
-  return (
-    Object.getOwnPropertyDescriptor(value, 'mode')?.value ===
-    NormalizedErrors.mode
-  );
-}
-
-function isFailableNormalizeErrorOptions(
-  value: unknown
-): value is FailableNormalizeErrorOptions {
-  if (!isObject(value)) return false;
-
-  return isFunction(value.normalizeError);
-}
-
-function isPlainObjectErrorValue(
-  value: unknown
-): value is Record<string | number | symbol, unknown> {
-  if (!isObject(value)) return false;
-  if (Array.isArray(value)) return false;
-
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
-}
-
-function getSerializedPlainObjectErrorMessage(
-  value: Record<string | number | symbol, unknown>
-): string | null {
-  try {
-    const serialized = JSON.stringify(value);
-    if (typeof serialized === 'string') return serialized;
-  } catch {
-    return null;
+  if (isFunction(toReason)) {
+    return failure(toReason(reason));
   }
 
-  return null;
+  return failure(toReason);
 }
 
 const UNSTRINGIFIABLE_ERROR_MESSAGE = 'Unstringifiable error value';
@@ -1549,45 +1444,13 @@ function tryGetStringErrorMessage(value: unknown): string | null {
   }
 }
 
-function tryGetObjectTagErrorMessage(value: object): string | null {
-  try {
-    return Object.prototype.toString.call(value);
-  } catch {
-    return null;
-  }
-}
-
-function getPlainObjectErrorMessage(
-  value: Record<string | number | symbol, unknown>
-): string {
-  if (Object.getPrototypeOf(value) === null) {
-    const serializedMessage = getSerializedPlainObjectErrorMessage(value);
-    if (serializedMessage !== null) return serializedMessage;
-
-    return tryGetObjectTagErrorMessage(value) ?? UNSTRINGIFIABLE_ERROR_MESSAGE;
-  }
-
-  const message = tryGetStringErrorMessage(value);
-  if (message !== null && message !== '[object Object]') return message;
-
-  const serializedMessage = getSerializedPlainObjectErrorMessage(value);
-  if (serializedMessage !== null) return serializedMessage;
-
-  return message ?? UNSTRINGIFIABLE_ERROR_MESSAGE;
-}
-
-function normalizeUnknownError(reason: unknown): Error {
+function defaultToError(reason: unknown): Error {
   if (reason instanceof Error) return reason;
-  if (Array.isArray(reason)) {
-    return new AggregateError(reason, 'Multiple errors', { cause: reason });
-  }
-
-  if (isPlainObjectErrorValue(reason)) {
-    return new Error(getPlainObjectErrorMessage(reason), { cause: reason });
-  }
 
   return new Error(
-    tryGetStringErrorMessage(reason) ?? UNSTRINGIFIABLE_ERROR_MESSAGE,
+    `Expected value to be Success. Received Failure(${
+      tryGetStringErrorMessage(reason) ?? UNSTRINGIFIABLE_ERROR_MESSAGE
+    }).`,
     { cause: reason }
   );
 }

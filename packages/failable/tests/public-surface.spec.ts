@@ -7,7 +7,6 @@ import {
   FailableStatus,
   isFailure,
   isFailableLike,
-  NormalizedErrors,
   race,
   run,
   success,
@@ -20,7 +19,6 @@ const EXPECTED_RUNTIME_EXPORTS = [
   'all',
   'allSettled',
   'FailableStatus',
-  'NormalizedErrors',
   'failable',
   'failure',
   'isFailable',
@@ -65,12 +63,6 @@ function expectThrowBoundaryToNormalizeFailure(
   runThrowBoundary: () => unknown,
   rawError: unknown,
 ): void {
-  const normalized = failable(failure(rawError), NormalizedErrors);
-
-  if (!isFailure(normalized)) {
-    throw new Error('Expected normalized failure result');
-  }
-
   try {
     runThrowBoundary();
   } catch (error) {
@@ -82,12 +74,18 @@ function expectThrowBoundaryToNormalizeFailure(
     }
 
     const thrown = error as Error & { cause?: unknown };
-    expect(thrown.message).toBe(normalized.error.message);
-    expect(thrown.cause).toBe(normalized.error.cause);
-
-    if (normalized.error instanceof AggregateError) {
-      expect(error).toBeInstanceOf(AggregateError);
-    }
+    expect(thrown.message).toBe(
+      `Expected value to be Success. Received Failure(${
+        (() => {
+          try {
+            return String(rawError);
+          } catch {
+            return 'Unstringifiable error value';
+          }
+        })()
+      }).`
+    );
+    expect(thrown.cause).toBe(rawError);
 
     return;
   }
@@ -179,11 +177,10 @@ async function postToLedger(
     return { transferId: 'tr_123' } as const;
   })();
 
-  return await failable(request, {
-    normalizeError(error) {
-      return new Error('Ledger unavailable', { cause: error });
-    },
-  });
+  return await failable(
+    request,
+    (error: unknown) => new Error('Ledger unavailable', { cause: error })
+  );
 }
 
 async function submitTransfer(
@@ -577,13 +574,43 @@ describe('public surface', () => {
     );
   });
 
-  it('supports throw-boundary normalization with `throwIfFailure(...)`', () => {
+  it('supports string-returning throw-boundary customization with `throwIfFailure(...)`', () => {
     const result = divide(10, 0);
 
-    expectThrowBoundaryToNormalizeFailure(
-      () => throwIfFailure(result, NormalizedErrors),
-      'Cannot divide by zero',
+    expect(() =>
+      throwIfFailure(result, (reason) => `Cannot divide: ${reason}`)
+    ).toThrow('Cannot divide: Cannot divide by zero');
+  });
+
+  it('supports direct string throw-boundary customization with `throwIfFailure(...)`', () => {
+    const result = divide(10, 0);
+
+    expect(() => throwIfFailure(result, 'Cannot divide')).toThrow('Cannot divide');
+  });
+
+  it('supports Error-returning throw-boundary customization with `throwIfFailure(...)`', () => {
+    const result = divide(10, 0);
+
+    expect(() =>
+      throwIfFailure(
+        result,
+        (reason) => new Error(`Cannot divide: ${reason}`, { cause: reason })
+      )
+    ).toThrow('Cannot divide: Cannot divide by zero');
+  });
+
+  it('supports string-returning throw-boundary customization with `getOrThrow()`', () => {
+    const result = divide(10, 0);
+
+    expect(() => result.getOrThrow((reason) => `Cannot divide: ${reason}`)).toThrow(
+      'Cannot divide: Cannot divide by zero',
     );
+  });
+
+  it('supports direct string throw-boundary customization with `getOrThrow()`', () => {
+    const result = divide(10, 0);
+
+    expect(() => result.getOrThrow('Cannot divide')).toThrow('Cannot divide');
   });
 
   it('supports the README `getOrThrow()` example', () => {
@@ -606,10 +633,11 @@ describe('public surface', () => {
   it('supports throw-boundary normalization with `getOrThrow()`', () => {
     const result = divide(10, 0);
 
-    expectThrowBoundaryToNormalizeFailure(
-      () => result.getOrThrow(NormalizedErrors),
-      'Cannot divide by zero',
-    );
+    expect(() =>
+      result.getOrThrow(
+        (reason) => new Error(`Cannot divide: ${reason}`, { cause: reason })
+      )
+    ).toThrow('Cannot divide: Cannot divide by zero');
   });
 
   it('normalizes `failure().getOrThrow()` into an Error value', () => {
@@ -628,7 +656,7 @@ describe('public surface', () => {
       expect(thrown).toBeInstanceOf(Error);
       expect(thrown).not.toBe('coercion boom');
       expect(thrown).toMatchObject({
-        message: 'Unstringifiable error value',
+        message: 'Expected value to be Success. Received Failure(Unstringifiable error value).',
         cause: rawError,
       });
       return;
@@ -668,62 +696,53 @@ describe('public surface', () => {
     });
   });
 
-  it('supports `NormalizedErrors` for plain-object throws without `[object Object]` messages', () => {
+  it('supports constant shorthand for capture-time reasons', () => {
     const rawError = { code: 'bad_request' } as const;
     const result = failable(
       () => {
         throw rawError;
       },
-      NormalizedErrors
+      'invalid_request'
     );
 
     if (!result.isFailure) {
-      throw new Error('Expected `NormalizedErrors` to capture the thrown plain object');
+      throw new Error('Expected capture-time shorthand to store a fixed reason');
     }
 
-    expect(result.error).toBeInstanceOf(Error);
-    expect(result.error.message).not.toBe('[object Object]');
-    expect(result.error).toMatchObject({ cause: rawError });
+    expect(result.error).toBe('invalid_request');
   });
 
-  it('supports `NormalizedErrors` for null-prototype plain-object throws without escaping', () => {
+  it('supports object shorthand for capture-time reasons', () => {
     const rawError = createNullPrototypeObject({ code: 'bad_request' as const });
     const result = failable(
       () => {
         throw rawError;
       },
-      NormalizedErrors
+      { code: 'invalid_request' }
     );
 
     if (!result.isFailure) {
-      throw new Error(
-        'Expected `NormalizedErrors` to keep the null-prototype object inside Failure'
-      );
+      throw new Error('Expected capture-time shorthand to store a fixed object reason');
     }
 
-    expect(result.error).toBeInstanceOf(Error);
-    expect(result.error.message).toBe(JSON.stringify({ code: 'bad_request' }));
-    expect(result.error).toMatchObject({ cause: rawError });
+    expect(result.error).toStrictEqual({ code: 'invalid_request' });
   });
 
-  it('supports `NormalizedErrors` for unstringifiable thrown values', () => {
+  it('supports mapper-based capture-time normalization', () => {
     const rawError = createUnstringifiableErrorValue();
     const result = failable(
       () => {
         throw rawError;
       },
-      NormalizedErrors
+      (reason: unknown) => ({ code: 'invalid_request', cause: reason })
     );
 
     if (!result.isFailure) {
-      throw new Error(
-        'Expected `NormalizedErrors` to keep the unstringifiable value inside Failure'
-      );
+      throw new Error('Expected mapper-based capture-time normalization to run');
     }
 
-    expect(result.error).toBeInstanceOf(Error);
-    expect(result.error).toMatchObject({
-      message: 'Unstringifiable error value',
+    expect(result.error).toStrictEqual({
+      code: 'invalid_request',
       cause: rawError,
     });
   });
@@ -744,22 +763,16 @@ describe('public surface', () => {
     expect(asyncResult.data).toBe(5);
   });
 
-  it('exposes the exact sync-callback misuse guidance for `failable(() => promise)`', () => {
+  it('keeps `failable(() => promise)` in the success channel', async () => {
     const result = failable(
       (() => Promise.resolve(5)) as unknown as () => number
     );
 
-    if (!result.isFailure) {
-      throw new Error('Expected `failable(() => promise)` to return a Failure');
+    if (!result.isSuccess) {
+      throw new Error('Expected `failable(() => promise)` to return a Success');
     }
 
-    if (!(result.error instanceof Error)) {
-      throw new Error('Expected `failable(() => promise)` to capture an Error');
-    }
-
-    expect(result.error.message).toBe(
-      '`failable(() => ...)` only accepts synchronous callbacks. This callback returned a Promise. Pass the promise directly instead: `await failable(promise)`.'
-    );
+    await expect(result.data).resolves.toBe(5);
   });
 
   it('supports the README `run(...)` example', () => {
