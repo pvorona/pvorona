@@ -4050,160 +4050,1104 @@ describe('failable()', () => {
 });
 
 describe('E2E', () => {
-  it('manual managing and async run() are equivalent', async () => {
-    const originalFetch = globalThis.fetch;
-    const fetchMock = vi.fn(async (input: string | URL | Request) => {
-      const url = input.toString();
+  it('implements a production-like checkout flow with and without failable', async () => {
+    type CheckoutFailure =
+      | { kind: 'invalid-request'; details: string }
+      | { kind: 'customer-not-found'; customerId: string }
+      | { kind: 'customer-inactive'; customerId: string }
+      | {
+          kind: 'inventory-mismatch';
+          sku: string;
+          requested: number;
+          available: number;
+        }
+      | { kind: 'promotion-not-found'; code: string }
+      | { kind: 'promotion-expired'; code: string }
+      | {
+          kind: 'promotion-not-applicable';
+          code: string;
+          minSubtotalCents: number;
+          subtotalCents: number;
+        }
+      | {
+          kind: 'payment-rejected';
+          paymentToken: string;
+          reason: string;
+        }
+      | { kind: 'risk-check-failed'; customerId: string; reason: string }
+      | { kind: 'service-failed'; service: string; reason: string };
 
-      if (url.endsWith('/profile')) {
-        return new Response(
-          JSON.stringify({
-            id: '10',
-            name: 'Ada Lovelace',
-            pictureUrl: 'https://example.com/ada.png',
-          })
+    type PlainResult<T, E> = { ok: true; value: T } | { ok: false; error: E };
+
+    type CheckoutRequest = {
+      orderId: string;
+      customerId: string;
+      destinationCountry: 'US' | 'DE';
+      paymentToken: string;
+      couponCode?: string;
+      items: Array<{ sku: string; quantity: number }>;
+    };
+
+    type CustomerRecord = {
+      id: string;
+      accountStatus: 'active' | 'suspended';
+      riskBand: 'low' | 'high';
+      homeCountry: 'US' | 'DE';
+    };
+
+    type InventoryRecord = {
+      sku: string;
+      available: number;
+      unitPriceCents: number;
+    };
+
+    type PromotionRecord = {
+      code: string;
+      percentOff: number;
+      minSubtotalCents: number;
+      expiresAt: string;
+    };
+
+    type PaymentRecord = {
+      authorizationId: string;
+      amountAuthorizedCents: number;
+    };
+
+    type ReservationRecord = {
+      reservationId: string;
+    };
+
+    type ShipmentRecord = {
+      trackingCode: string;
+    };
+
+    type CheckoutTotals = {
+      items: Array<{
+        sku: string;
+        quantity: number;
+        unitPriceCents: number;
+        lineTotalCents: number;
+      }>;
+      subtotalCents: number;
+      discountCents: number;
+      shippingCents: number;
+      taxCents: number;
+      totalCents: number;
+    };
+
+    type CheckoutOutcome = {
+      orderId: string;
+      customerId: string;
+      totals: CheckoutTotals;
+      paymentAuthorizationId: string;
+      reservationId: string;
+      trackingCode: string;
+    };
+
+    const expected: PlainResult<CheckoutOutcome, CheckoutFailure> = {
+      ok: true,
+      value: {
+        orderId: 'order-2026-01',
+        customerId: 'cust-77',
+        totals: {
+          items: [
+            {
+              sku: 'SKU-LAMP',
+              quantity: 3,
+              unitPriceCents: 3999,
+              lineTotalCents: 11997,
+            },
+            {
+              sku: 'SKU-CHAIR',
+              quantity: 1,
+              unitPriceCents: 7999,
+              lineTotalCents: 7999,
+            },
+          ],
+          subtotalCents: 19996,
+          discountCents: 2000,
+          shippingCents: 950,
+          taxCents: 1563,
+          totalCents: 20509,
+        },
+        paymentAuthorizationId: 'auth-order-2026-01',
+        reservationId: 'res-order-2026-01',
+        trackingCode: 'track-cust-77-order-2026-01',
+      },
+    };
+
+    function toPlain<T, E>(result: Failable<T, E>): PlainResult<T, E> {
+      return result.isSuccess
+        ? { ok: true, value: result.data }
+        : { ok: false, error: result.error };
+    }
+
+    async function toPlainResult<T>(
+      action: () => Promise<T>
+    ): Promise<PlainResult<T, CheckoutFailure>> {
+      try {
+        return {
+          ok: true,
+          value: await action(),
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          error: toCheckoutFailure(error),
+        };
+      }
+    }
+
+    abstract class CheckoutError extends Error {
+      protected constructor(message: string) {
+        super(message);
+        this.name = new.target.name;
+      }
+    }
+
+    class InvalidRequestError extends CheckoutError {
+      constructor(readonly details: string) {
+        super(details);
+      }
+    }
+
+    class CustomerNotFoundError extends CheckoutError {
+      constructor(readonly customerId: string) {
+        super(`customer not found: ${customerId}`);
+      }
+    }
+
+    class CustomerInactiveError extends CheckoutError {
+      constructor(readonly customerId: string) {
+        super(`customer account is inactive: ${customerId}`);
+      }
+    }
+
+    class InventoryMismatchError extends CheckoutError {
+      constructor(
+        readonly sku: string,
+        readonly requested: number,
+        readonly available: number
+      ) {
+        super(
+          `inventory mismatch for ${sku}: requested ${requested}, available ${available}`
+        );
+      }
+    }
+
+    class PromotionNotFoundError extends CheckoutError {
+      constructor(readonly code: string) {
+        super(`promotion not found: ${code}`);
+      }
+    }
+
+    class PromotionExpiredError extends CheckoutError {
+      constructor(readonly code: string) {
+        super(`promotion expired: ${code}`);
+      }
+    }
+
+    class PromotionNotApplicableError extends CheckoutError {
+      constructor(
+        readonly code: string,
+        readonly minSubtotalCents: number,
+        readonly subtotalCents: number
+      ) {
+        super(
+          `promotion ${code} requires minimum ${minSubtotalCents}, got ${subtotalCents}`
+        );
+      }
+    }
+
+    class PaymentRejectedError extends CheckoutError {
+      constructor(readonly paymentToken: string, readonly reason: string) {
+        super(`payment rejected for ${paymentToken}: ${reason}`);
+      }
+    }
+
+    class RiskCheckFailedError extends CheckoutError {
+      constructor(readonly customerId: string, readonly reason: string) {
+        super(`risk check failed for ${customerId}: ${reason}`);
+      }
+    }
+
+    class ServiceFailedError extends CheckoutError {
+      constructor(readonly service: string, readonly reason: string) {
+        super(`${service} service failed: ${reason}`);
+      }
+    }
+
+    function formatReason(reason: unknown): string {
+      return reason instanceof Error
+        ? reason.message || reason.name
+        : String(reason);
+    }
+
+    function toCheckoutFailure(error: unknown): CheckoutFailure {
+      if (error instanceof InvalidRequestError) {
+        return {
+          kind: 'invalid-request',
+          details: error.details,
+        };
+      }
+
+      if (error instanceof CustomerNotFoundError) {
+        return {
+          kind: 'customer-not-found',
+          customerId: error.customerId,
+        };
+      }
+
+      if (error instanceof CustomerInactiveError) {
+        return {
+          kind: 'customer-inactive',
+          customerId: error.customerId,
+        };
+      }
+
+      if (error instanceof InventoryMismatchError) {
+        return {
+          kind: 'inventory-mismatch',
+          sku: error.sku,
+          requested: error.requested,
+          available: error.available,
+        };
+      }
+
+      if (error instanceof PromotionNotFoundError) {
+        return {
+          kind: 'promotion-not-found',
+          code: error.code,
+        };
+      }
+
+      if (error instanceof PromotionExpiredError) {
+        return {
+          kind: 'promotion-expired',
+          code: error.code,
+        };
+      }
+
+      if (error instanceof PromotionNotApplicableError) {
+        return {
+          kind: 'promotion-not-applicable',
+          code: error.code,
+          minSubtotalCents: error.minSubtotalCents,
+          subtotalCents: error.subtotalCents,
+        };
+      }
+
+      if (error instanceof PaymentRejectedError) {
+        return {
+          kind: 'payment-rejected',
+          paymentToken: error.paymentToken,
+          reason: error.reason,
+        };
+      }
+
+      if (error instanceof RiskCheckFailedError) {
+        return {
+          kind: 'risk-check-failed',
+          customerId: error.customerId,
+          reason: error.reason,
+        };
+      }
+
+      if (error instanceof ServiceFailedError) {
+        return {
+          kind: 'service-failed',
+          service: error.service,
+          reason: error.reason,
+        };
+      }
+
+      if (error instanceof Error) {
+        return {
+          kind: 'service-failed',
+          service: 'checkout',
+          reason: error.message || error.name,
+        };
+      }
+
+      return {
+        kind: 'service-failed',
+        service: 'checkout',
+        reason: formatReason(error),
+      };
+    }
+
+    const serviceFailed = (
+      service: string,
+      reason: unknown
+    ): CheckoutFailure => ({
+      kind: 'service-failed',
+      service,
+      reason: formatReason(reason),
+    });
+
+    function serviceError(
+      service: string,
+      reason: unknown
+    ): ServiceFailedError {
+      return new ServiceFailedError(service, formatReason(reason));
+    }
+
+    function parseCheckoutPayload(rawPayload: string): CheckoutRequest {
+      let parsed: unknown;
+
+      try {
+        parsed = JSON.parse(rawPayload);
+      } catch {
+        throw new InvalidRequestError('Payload must be valid JSON');
+      }
+
+      if (typeof parsed !== 'object' || parsed === null) {
+        throw new InvalidRequestError('Payload must be an object');
+      }
+
+      const payload = parsed as Record<string, unknown>;
+      const orderId =
+        typeof payload.orderId === 'string' ? payload.orderId.trim() : '';
+      const customerId =
+        typeof payload.customerId === 'string' ? payload.customerId.trim() : '';
+      const destinationCountry =
+        payload.destinationCountry === 'US' ||
+        payload.destinationCountry === 'DE'
+          ? payload.destinationCountry
+          : undefined;
+      const paymentToken =
+        typeof payload.paymentToken === 'string'
+          ? payload.paymentToken.trim()
+          : '';
+      const rawItems = Array.isArray(payload.items)
+        ? (payload.items as unknown[])
+        : [];
+      const rawCoupon =
+        typeof payload.couponCode === 'string'
+          ? payload.couponCode.trim()
+          : undefined;
+
+      if (orderId.length === 0) {
+        throw new InvalidRequestError('orderId is required');
+      }
+
+      if (customerId.length === 0) {
+        throw new InvalidRequestError('customerId is required');
+      }
+
+      if (!destinationCountry) {
+        throw new InvalidRequestError('destinationCountry must be US or DE');
+      }
+
+      if (paymentToken.length === 0) {
+        throw new InvalidRequestError('paymentToken is required');
+      }
+
+      if (rawItems.length === 0) {
+        throw new InvalidRequestError('items must contain at least one row');
+      }
+
+      const merged = new Map<string, number>();
+
+      for (const rawItem of rawItems) {
+        if (typeof rawItem !== 'object' || rawItem === null) {
+          throw new InvalidRequestError('Each item must be an object');
+        }
+
+        const item = rawItem as Record<string, unknown>;
+        const sku = typeof item.sku === 'string' ? item.sku.trim() : '';
+        const quantity = Number(item.quantity);
+
+        if (sku.length === 0 || !Number.isInteger(quantity) || quantity <= 0) {
+          throw new InvalidRequestError(
+            'Each item requires a non-empty sku and integer quantity > 0'
+          );
+        }
+
+        merged.set(sku, (merged.get(sku) ?? 0) + quantity);
+      }
+
+      if (merged.size === 0) {
+        throw new InvalidRequestError(
+          'At least one non-empty line item is required'
         );
       }
 
-      return new Response(
-        JSON.stringify({
-          id: '10',
-          email: 'ada@example.com',
-        })
+      const items = [...merged].map(([sku, quantity]) => ({ sku, quantity }));
+
+      return {
+        orderId,
+        customerId,
+        destinationCountry,
+        paymentToken,
+        couponCode: rawCoupon && rawCoupon.length > 0 ? rawCoupon : undefined,
+        items,
+      };
+    }
+
+    function calculateTotals(
+      request: CheckoutRequest,
+      customer: CustomerRecord,
+      inventory: InventoryRecord[],
+      promotion: PromotionRecord | null
+    ): CheckoutTotals {
+      if (customer.accountStatus !== 'active') {
+        throw new CustomerInactiveError(customer.id);
+      }
+
+      const catalogBySku = new Map<string, InventoryRecord>(
+        inventory.map((item) => [item.sku, item])
       );
+      const items: Array<{
+        sku: string;
+        quantity: number;
+        unitPriceCents: number;
+        lineTotalCents: number;
+      }> = [];
+
+      for (const requestedLine of request.items) {
+        const catalogLine = catalogBySku.get(requestedLine.sku);
+
+        if (!catalogLine) {
+          throw new InventoryMismatchError(
+            requestedLine.sku,
+            requestedLine.quantity,
+            0
+          );
+        }
+
+        if (catalogLine.available < requestedLine.quantity) {
+          throw new InventoryMismatchError(
+            requestedLine.sku,
+            requestedLine.quantity,
+            catalogLine.available
+          );
+        }
+
+        const lineTotalCents =
+          catalogLine.unitPriceCents * requestedLine.quantity;
+        items.push({
+          sku: requestedLine.sku,
+          quantity: requestedLine.quantity,
+          unitPriceCents: catalogLine.unitPriceCents,
+          lineTotalCents,
+        });
+      }
+
+      const subtotalCents = items.reduce(
+        (sum, item) => sum + item.lineTotalCents,
+        0
+      );
+      let discountCents = 0;
+
+      if (promotion) {
+        if (new Date(promotion.expiresAt) < new Date()) {
+          throw new PromotionExpiredError(promotion.code);
+        }
+
+        if (subtotalCents < promotion.minSubtotalCents) {
+          throw new PromotionNotApplicableError(
+            promotion.code,
+            promotion.minSubtotalCents,
+            subtotalCents
+          );
+        }
+
+        discountCents = Math.round(
+          (subtotalCents * promotion.percentOff) / 100
+        );
+      }
+
+      const shippingCents = request.destinationCountry === 'DE' ? 1800 : 950;
+      const taxableBaseCents = subtotalCents - discountCents + shippingCents;
+      const taxRate = request.destinationCountry === 'DE' ? 0.19 : 0.0825;
+      const taxCents = Math.round(taxableBaseCents * taxRate);
+      const totalCents = taxableBaseCents + taxCents;
+
+      if (customer.riskBand === 'high' && totalCents > 150000) {
+        throw new RiskCheckFailedError(
+          customer.id,
+          'high-risk order exceeds policy threshold'
+        );
+      }
+
+      return {
+        items,
+        subtotalCents,
+        discountCents,
+        shippingCents,
+        taxCents,
+        totalCents,
+      };
+    }
+
+    const payload = JSON.stringify({
+      orderId: 'order-2026-01',
+      customerId: 'cust-77',
+      destinationCountry: 'US',
+      paymentToken: 'pm-ok',
+      couponCode: 'WELCOME10',
+      items: [
+        { sku: 'SKU-LAMP', quantity: 2 },
+        { sku: 'SKU-CHAIR', quantity: 1 },
+        { sku: 'SKU-LAMP', quantity: 1 },
+      ],
     });
+
+    const customers: Record<string, CustomerRecord> = {
+      'cust-77': {
+        id: 'cust-77',
+        accountStatus: 'active',
+        riskBand: 'low',
+        homeCountry: 'US',
+      },
+    };
+
+    const inventoryCatalog: Record<string, InventoryRecord> = {
+      'SKU-LAMP': {
+        sku: 'SKU-LAMP',
+        available: 10,
+        unitPriceCents: 3999,
+      },
+      'SKU-CHAIR': {
+        sku: 'SKU-CHAIR',
+        available: 4,
+        unitPriceCents: 7999,
+      },
+    };
+
+    const promotions: Record<string, PromotionRecord> = {
+      WELCOME10: {
+        code: 'WELCOME10',
+        percentOff: 10,
+        minSubtotalCents: 10000,
+        expiresAt: '2099-01-01T00:00:00.000Z',
+      },
+    };
+
+    function readBody(body: RequestInit['body']): Record<string, unknown> {
+      if (typeof body !== 'string') return {};
+
+      try {
+        return JSON.parse(body) as Record<string, unknown>;
+      } catch {
+        return {};
+      }
+    }
+
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = input.toString();
+        const method = (init?.method ?? 'GET').toUpperCase();
+
+        if (url.startsWith('https://api.shop.test/customers/')) {
+          const customerId = url.replace(
+            'https://api.shop.test/customers/',
+            ''
+          );
+          const customer = customers[customerId];
+
+          if (!customer) {
+            return new Response('not-found', { status: 404 });
+          }
+
+          return new Response(JSON.stringify(customer));
+        }
+
+        if (
+          url === 'https://api.shop.test/inventory/availability' &&
+          method === 'POST'
+        ) {
+          const body = readBody(init?.body);
+          const rawSkus = Array.isArray(body.skus) ? body.skus : [];
+          const items = rawSkus.map((sku) => {
+            const normalizedSku = String(sku);
+            return (
+              inventoryCatalog[normalizedSku] ?? {
+                sku: normalizedSku,
+                available: 0,
+                unitPriceCents: 0,
+              }
+            );
+          });
+
+          return new Response(JSON.stringify(items));
+        }
+
+        if (url.startsWith('https://api.shop.test/promotions/')) {
+          const code = url.replace('https://api.shop.test/promotions/', '');
+          const promotion = promotions[code];
+
+          if (!promotion) {
+            return new Response('not-found', { status: 404 });
+          }
+
+          return new Response(JSON.stringify(promotion));
+        }
+
+        if (
+          url === 'https://api.shop.test/payments/authorize' &&
+          method === 'POST'
+        ) {
+          const body = readBody(init?.body);
+          const paymentToken = String(body.paymentToken ?? '');
+          const orderId = String(body.orderId ?? '');
+          const totalCents = Number(body.totalCents ?? NaN);
+
+          if (paymentToken === 'pm-rejected') {
+            return new Response(JSON.stringify({ code: 'card_declined' }), {
+              status: 402,
+            });
+          }
+
+          if (!Number.isFinite(totalCents) || totalCents <= 0) {
+            return new Response(JSON.stringify({ code: 'invalid_total' }), {
+              status: 422,
+            });
+          }
+
+          return new Response(
+            JSON.stringify({
+              authorizationId: `auth-${orderId}`,
+              amountAuthorizedCents: totalCents,
+            })
+          );
+        }
+
+        if (
+          url === 'https://api.shop.test/inventory/reservations' &&
+          method === 'POST'
+        ) {
+          const body = readBody(init?.body);
+          const orderId = String(body.orderId ?? 'missing');
+
+          return new Response(
+            JSON.stringify({
+              reservationId: `res-${orderId}`,
+            })
+          );
+        }
+
+        if (url === 'https://api.shop.test/shipments' && method === 'POST') {
+          const body = readBody(init?.body);
+          const orderId = String(body.orderId ?? 'missing');
+          const customerId = String(body.customerId ?? 'missing');
+
+          return new Response(
+            JSON.stringify({
+              trackingCode: `track-${customerId}-${orderId}`,
+            })
+          );
+        }
+
+        return new Response('not-found', { status: 404 });
+      }
+    );
+
     globalThis.fetch = fetchMock as typeof fetch;
 
     try {
-      async function getUser(userId: string) {
-        const fetchResult = await failable(
-          fetch(`https://api.example.com/users/${userId}`)
+      async function getCustomerWithoutFailable(
+        customerId: string
+      ): Promise<CustomerRecord> {
+        const response = await fetch(
+          `https://api.shop.test/customers/${customerId}`
         );
 
-        if (fetchResult.isFailure) {
-          return failure({
-            reason: 'network_error',
-            cause: fetchResult.error,
-          } as const);
+        if (!response.ok) {
+          if (response.status === 404) {
+            throw new CustomerNotFoundError(customerId);
+          }
+
+          throw serviceError('customers', `HTTP ${response.status}`);
         }
 
-        if (!fetchResult.data.ok) {
-          return failure({
-            reason: 'http_error',
-            cause: fetchResult.data,
-          } as const);
-        }
-
-        const parseJsonResult = await failable(fetchResult.data.json());
-
-        if (parseJsonResult.isFailure) {
-          return failure({
-            reason: 'json_parse_error',
-            cause: parseJsonResult.error,
-          } as const);
-        }
-
-        return success(parseJsonResult.data as { id: string; email: string });
+        return (await response.json()) as CustomerRecord;
       }
 
-      async function getUserProfile(userId: string) {
-        const fetchResult = await failable(
-          fetch(`https://api.example.com/users/${userId}/profile`)
-        );
-
-        if (fetchResult.isFailure) {
-          return failure({
-            reason: 'network_error',
-            cause: fetchResult.error,
-          } as const);
-        }
-
-        if (!fetchResult.data.ok) {
-          return failure({
-            reason: 'http_error',
-            cause: fetchResult.data,
-          } as const);
-        }
-
-        const parseJsonResult = await failable(fetchResult.data.json());
-
-        if (parseJsonResult.isFailure) {
-          return failure({
-            reason: 'json_parse_error',
-            cause: parseJsonResult.error,
-          } as const);
-        }
-
-        return success(
-          parseJsonResult.data as {
-            id: string;
-            name: string;
-            pictureUrl: string;
+      async function getInventoryWithoutFailable(
+        items: CheckoutRequest['items']
+      ): Promise<InventoryRecord[]> {
+        const response = await fetch(
+          'https://api.shop.test/inventory/availability',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              skus: items.map((item) => item.sku),
+            }),
           }
         );
-      }
 
-      const getUserId = (): Failable<string, 'missing-user-id'> =>
-        success('10');
-
-      async function withoutRun() {
-        const getUserIdResult = getUserId();
-
-        if (getUserIdResult.isFailure) {
-          return getUserIdResult;
+        if (!response.ok) {
+          throw serviceError('inventory', `HTTP ${response.status}`);
         }
 
-        const userId = getUserIdResult.data;
+        return (await response.json()) as InventoryRecord[];
+      }
 
-        const [getUserResult, getProfileResult] = await Promise.all([
-          getUser(userId),
-          getUserProfile(userId),
+      async function getPromotionWithoutFailable(
+        couponCode: string | undefined
+      ): Promise<PromotionRecord | null> {
+        if (!couponCode) {
+          return null;
+        }
+
+        const response = await fetch(
+          `https://api.shop.test/promotions/${couponCode}`
+        );
+
+        if (!response.ok) {
+          throw new PromotionNotFoundError(couponCode);
+        }
+
+        return (await response.json()) as PromotionRecord;
+      }
+
+      async function authorizePaymentWithoutFailable(
+        request: CheckoutRequest,
+        totals: CheckoutTotals
+      ): Promise<PaymentRecord> {
+        const response = await fetch(
+          'https://api.shop.test/payments/authorize',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              orderId: request.orderId,
+              paymentToken: request.paymentToken,
+              totalCents: totals.totalCents,
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          if (response.status === 402) {
+            const body = (await response.json().catch(() => ({}))) as {
+              code?: string;
+            };
+
+            throw new PaymentRejectedError(
+              request.paymentToken,
+              body.code ?? 'declined'
+            );
+          }
+
+          throw serviceError('payments', `HTTP ${response.status}`);
+        }
+
+        return (await response.json()) as PaymentRecord;
+      }
+
+      async function reserveInventoryWithoutFailable(
+        request: CheckoutRequest,
+        payment: PaymentRecord
+      ): Promise<ReservationRecord> {
+        const response = await fetch(
+          'https://api.shop.test/inventory/reservations',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              orderId: request.orderId,
+              customerId: request.customerId,
+              paymentAuthorizationId: payment.authorizationId,
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          throw serviceError(
+            'inventory-reservation',
+            `HTTP ${response.status}`
+          );
+        }
+
+        return (await response.json()) as ReservationRecord;
+      }
+
+      async function createShipmentWithoutFailable(
+        request: CheckoutRequest,
+        payment: PaymentRecord
+      ): Promise<ShipmentRecord> {
+        const response = await fetch('https://api.shop.test/shipments', {
+          method: 'POST',
+          body: JSON.stringify({
+            orderId: request.orderId,
+            customerId: request.customerId,
+            paymentAuthorizationId: payment.authorizationId,
+          }),
+        });
+
+        if (!response.ok) {
+          throw serviceError('shipments', `HTTP ${response.status}`);
+        }
+
+        return (await response.json()) as ShipmentRecord;
+      }
+
+      async function checkoutWithoutFailable(): Promise<CheckoutOutcome> {
+        const request = parseCheckoutPayload(payload);
+        const [customer, inventory, promotion] = await Promise.all([
+          getCustomerWithoutFailable(request.customerId),
+          getInventoryWithoutFailable(request.items),
+          getPromotionWithoutFailable(request.couponCode),
+        ]);
+        const totals = calculateTotals(request, customer, inventory, promotion);
+        const payment = await authorizePaymentWithoutFailable(request, totals);
+        const [reservation, shipment] = await Promise.all([
+          reserveInventoryWithoutFailable(request, payment),
+          createShipmentWithoutFailable(request, payment),
         ]);
 
-        if (getUserResult.isFailure) {
-          return getUserResult;
-        }
-
-        if (getProfileResult.isFailure) {
-          return getProfileResult;
-        }
-
-        return success({
-          user: getUserResult.data,
-          profile: getProfileResult.data,
-        });
+        return {
+          orderId: request.orderId,
+          customerId: request.customerId,
+          totals,
+          paymentAuthorizationId: payment.authorizationId,
+          reservationId: reservation.reservationId,
+          trackingCode: shipment.trackingCode,
+        };
       }
 
-      async function withRun() {
+      async function getCustomerWithFailable(
+        customerId: string
+      ): Promise<Failable<CustomerRecord, CheckoutFailure>> {
         return run(async function* () {
-          const userId = yield* getUserId();
-          const [userResult, profileResult] = await Promise.all([
-            getUser(userId),
-            getUserProfile(userId),
-          ]);
-          const user = yield* userResult;
-          const profile = yield* profileResult;
-          return success({ user, profile });
-        });
-      }
-
-      async function withRunAll() {
-        return run(async function* () {
-          const userId = yield* getUserId();
-          const [user, profile] = yield* await all(
-            getUser(userId),
-            getUserProfile(userId)
+          const response = yield* await failable(
+            fetch(`https://api.shop.test/customers/${customerId}`),
+            (error) => serviceFailed('customers', error)
           );
-          return success({ user, profile });
+
+          if (!response.ok) {
+            if (response.status === 404) {
+              return failure({
+                kind: 'customer-not-found',
+                customerId,
+              });
+            }
+
+            return failure(
+              serviceFailed('customers', `HTTP ${response.status}`)
+            );
+          }
+
+          const customer = yield* await failable(
+            response.json() as Promise<CustomerRecord>,
+            (error) => serviceFailed('customers', error)
+          );
+
+          return success(customer);
         });
       }
 
-      const result1 = await withoutRun();
-      const result2 = await withRun();
-      const result3 = await withRunAll();
+      async function getInventoryWithFailable(
+        items: CheckoutRequest['items']
+      ): Promise<Failable<InventoryRecord[], CheckoutFailure>> {
+        return run(async function* () {
+          const response = yield* await failable(
+            fetch('https://api.shop.test/inventory/availability', {
+              method: 'POST',
+              body: JSON.stringify({ skus: items.map((item) => item.sku) }),
+            }),
+            (error) => serviceFailed('inventory', error)
+          );
 
-      expect(result1).toStrictEqual(result2);
-      expect(result1).toStrictEqual(result3);
+          if (!response.ok) {
+            return failure(
+              serviceFailed('inventory', `HTTP ${response.status}`)
+            );
+          }
+
+          const inventory = yield* await failable(
+            response.json() as Promise<InventoryRecord[]>,
+            (error) => serviceFailed('inventory', error)
+          );
+
+          return success(inventory);
+        });
+      }
+
+      async function getPromotionWithFailable(
+        couponCode: string | undefined
+      ): Promise<Failable<PromotionRecord | null, CheckoutFailure>> {
+        if (!couponCode) return success(null);
+
+        return run(async function* () {
+          const response = yield* await failable(
+            fetch(`https://api.shop.test/promotions/${couponCode}`),
+            (error) => serviceFailed('promotions', error)
+          );
+
+          if (!response.ok) {
+            return failure({
+              kind: 'promotion-not-found',
+              code: couponCode,
+            });
+          }
+
+          const promotion = yield* await failable(
+            response.json() as Promise<PromotionRecord>,
+            (error) => serviceFailed('promotions', error)
+          );
+
+          return success(promotion);
+        });
+      }
+
+      async function authorizePaymentWithFailable(
+        request: CheckoutRequest,
+        totals: CheckoutTotals
+      ): Promise<Failable<PaymentRecord, CheckoutFailure>> {
+        return run(async function* () {
+          const response = yield* await failable(
+            fetch('https://api.shop.test/payments/authorize', {
+              method: 'POST',
+              body: JSON.stringify({
+                orderId: request.orderId,
+                paymentToken: request.paymentToken,
+                totalCents: totals.totalCents,
+              }),
+            }),
+            (error) => serviceFailed('payments', error)
+          );
+
+          if (!response.ok) {
+            if (response.status === 402) {
+              const body = (await response
+                .json()
+                .catch(() => ({ code: 'declined' }))) as {
+                code?: string;
+              };
+
+              return failure({
+                kind: 'payment-rejected',
+                paymentToken: request.paymentToken,
+                reason: body.code ?? 'declined',
+              });
+            }
+
+            return failure(
+              serviceFailed('payments', `HTTP ${response.status}`)
+            );
+          }
+
+          const payment = yield* await failable(
+            response.json() as Promise<PaymentRecord>,
+            (error) => serviceFailed('payments', error)
+          );
+
+          return success(payment);
+        });
+      }
+
+      async function reserveInventoryWithFailable(
+        request: CheckoutRequest,
+        payment: PaymentRecord
+      ): Promise<Failable<ReservationRecord, CheckoutFailure>> {
+        return run(async function* () {
+          const response = yield* await failable(
+            fetch('https://api.shop.test/inventory/reservations', {
+              method: 'POST',
+              body: JSON.stringify({
+                orderId: request.orderId,
+                customerId: request.customerId,
+                paymentAuthorizationId: payment.authorizationId,
+              }),
+            }),
+            (error) => serviceFailed('inventory-reservation', error)
+          );
+
+          if (!response.ok) {
+            return failure(
+              serviceFailed('inventory-reservation', `HTTP ${response.status}`)
+            );
+          }
+
+          const reservation = yield* await failable(
+            response.json() as Promise<ReservationRecord>,
+            (error) => serviceFailed('inventory-reservation', error)
+          );
+
+          return success(reservation);
+        });
+      }
+
+      async function createShipmentWithFailable(
+        request: CheckoutRequest,
+        payment: PaymentRecord
+      ): Promise<Failable<ShipmentRecord, CheckoutFailure>> {
+        return run(async function* () {
+          const response = yield* await failable(
+            fetch('https://api.shop.test/shipments', {
+              method: 'POST',
+              body: JSON.stringify({
+                orderId: request.orderId,
+                customerId: request.customerId,
+                paymentAuthorizationId: payment.authorizationId,
+              }),
+            }),
+            (error) => serviceFailed('shipments', error)
+          );
+
+          if (!response.ok) {
+            return failure(
+              serviceFailed('shipments', `HTTP ${response.status}`)
+            );
+          }
+
+          const shipment = yield* await failable(
+            response.json() as Promise<ShipmentRecord>,
+            (error) => serviceFailed('shipments', error)
+          );
+
+          return success(shipment);
+        });
+      }
+
+      async function checkoutWithFailable(): Promise<
+        Failable<CheckoutOutcome, CheckoutFailure>
+      > {
+        return run(async function* () {
+          const request = yield* failable(
+            () => parseCheckoutPayload(payload),
+            toCheckoutFailure
+          );
+
+          const [customer, inventory, promotion] = yield* await all(
+            getCustomerWithFailable(request.customerId),
+            getInventoryWithFailable(request.items),
+            getPromotionWithFailable(request.couponCode)
+          );
+
+          const totals = yield* failable(
+            () => calculateTotals(request, customer, inventory, promotion),
+            toCheckoutFailure
+          );
+
+          const payment = yield* await authorizePaymentWithFailable(
+            request,
+            totals
+          );
+          const [reservation, shipment] = yield* await all(
+            reserveInventoryWithFailable(request, payment),
+            createShipmentWithFailable(request, payment)
+          );
+
+          return success({
+            orderId: request.orderId,
+            customerId: request.customerId,
+            totals,
+            paymentAuthorizationId: payment.authorizationId,
+            reservationId: reservation.reservationId,
+            trackingCode: shipment.trackingCode,
+          });
+        });
+      }
+
+      const manualResult = await toPlainResult(checkoutWithoutFailable);
+      const failableResult = toPlain(await checkoutWithFailable());
+
+      expect(manualResult).toStrictEqual(failableResult);
+      expect(manualResult).toStrictEqual(expected);
     } finally {
       globalThis.fetch = originalFetch;
     }
