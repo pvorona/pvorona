@@ -1,6 +1,6 @@
 {
   "name": "@pvorona/failable",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "Typed success/failure results for expected failures in TypeScript.",
   "keywords": [
     "failable",
@@ -44,7 +44,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@pvorona/assert": "~1.0.2",
+    "@pvorona/assert": "~1.0.4",
     "@pvorona/not-implemented": "~0.0.4"
   }
 }

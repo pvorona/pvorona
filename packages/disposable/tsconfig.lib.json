@@ -15,9 +15,6 @@
       "path": "../noop/tsconfig.lib.json"
     },
     {
-      "path": "../failable/tsconfig.lib.json"
-    },
-    {
       "path": "../assert/tsconfig.lib.json"
     }
   ],
